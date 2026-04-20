@@ -1945,6 +1945,25 @@
     </div>
   </div>
 
+  <!-- Department Dashboard Modal (#2393) -->
+  <div class="modal-overlay" id="departmentDashboardModal" style="display:none;">
+    <div class="modal" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 id="deptDashTitle" style="margin:0;">部署ダッシュボード</h2>
+        <button type="button" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;" onclick="closeDepartmentDashboard()">&times;</button>
+      </div>
+
+      <div id="deptDashContent">
+        <div class="empty-state">読み込み中...</div>
+      </div>
+
+      <div class="modal-footer" style="margin-top:16px;">
+        <button type="button" class="btn btn-secondary" onclick="closeDepartmentDashboard()">閉じる</button>
+        <button type="button" class="btn" onclick="showAddAgentForm()" style="background:var(--green);">➕ エージェント追加</button>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <!-- Keyboard Shortcuts Panel (#1633) -->
@@ -5814,6 +5833,115 @@ document.getElementById('departmentForm')?.addEventListener('submit', async (e) 
     }
   }
 });
+
+// ══════════════════════════════════════════════
+// Department Dashboard (#2393)
+// ══════════════════════════════════════════════
+
+async function openDepartmentDashboard(deptId) {
+  const modal = document.getElementById('departmentDashboardModal');
+  const content = document.getElementById('deptDashContent');
+  content.innerHTML = '<div class="empty-state">読み込み中...</div>';
+  modal.style.display = 'flex';
+
+  try {
+    const [deptRes, agentsRes] = await Promise.all([
+      fetch(`/api/departments/${deptId}`),
+      fetch(`/api/departments/${deptId}/agents-managed`)
+    ]);
+
+    if (!deptRes.ok || !agentsRes.ok) {
+      throw new Error('データ取得に失敗しました');
+    }
+
+    const dept = await deptRes.json();
+    const agents = await agentsRes.json();
+
+    document.getElementById('deptDashTitle').textContent = `${dept.name} - ダッシュボード`;
+    window.currentDeptId = deptId;
+    renderDepartmentDashboard(dept, agents);
+  } catch (e) {
+    content.innerHTML = `<div class="empty-state" style="color:var(--red)">エラー: ${e.message}</div>`;
+  }
+}
+
+function closeDepartmentDashboard() {
+  document.getElementById('departmentDashboardModal').style.display = 'none';
+  window.currentDeptId = null;
+}
+
+function renderDepartmentDashboard(dept, agents) {
+  const content = document.getElementById('deptDashContent');
+
+  if (!agents || agents.length === 0) {
+    content.innerHTML = `
+      <div style="padding:20px;">
+        <div style="font-size:13px;color:var(--text-muted);text-align:center;">
+          実行中のエージェントはありません
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const agentCards = agents.map(a => {
+    const started = a.started_at ? new Date(a.started_at).toLocaleString('ja-JP') : '不明';
+    const statusColor = a.status === 'running' ? 'var(--green)' : 'var(--red)';
+    return `
+      <div class="agent-card" style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div>
+            <div style="font-weight:600;color:var(--text);">${escHtml(a.role || 'Agent')}</div>
+            <div style="font-size:12px;color:var(--text-muted);">ID: ${a.id} | セッション: ${escHtml(a.session_id || 'N/A')}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span style="font-size:12px;color:${statusColor};font-weight:600;">${a.status === 'running' ? '稼働中' : '停止'}</span>
+            ${a.status === 'running' ? `<button class="btn" style="background:var(--red);padding:4px 12px;font-size:12px;" onclick="stopAgent(${a.id}, ${window.currentDeptId})">停止</button>` : ''}
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);">起動: ${started}</div>
+      </div>
+    `;
+  }).join('');
+
+  content.innerHTML = `
+    <div style="padding:12px 0;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text);">
+        実行中のエージェント (${agents.length})
+      </div>
+      ${agentCards}
+    </div>
+  `;
+}
+
+async function stopAgent(agentId, deptId) {
+  if (!confirm('このエージェントを停止しますか？')) return;
+
+  try {
+    const res = await fetch(`/api/agents/${agentId}/stop`, { method: 'POST' });
+    if (!res.ok) throw new Error('停止に失敗しました');
+
+    const toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = '✓ エージェントを停止しました';
+      toast.className = 'show success';
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    await openDepartmentDashboard(deptId);
+  } catch (e) {
+    const toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = `✗ エラー: ${e.message}`;
+      toast.className = 'show error';
+      setTimeout(() => toast.classList.remove('show'), 5000);
+    }
+  }
+}
+
+function showAddAgentForm() {
+  alert('エージェント追加フォーム（次のリリースで実装予定）');
+}
 
 </script>
 </body>
