@@ -390,3 +390,83 @@ def table(request):
         pass
 
     return []
+
+
+# ==========================================
+# WebSocket テスト用フィクスチャ
+# ==========================================
+
+import subprocess
+import threading
+from contextlib import contextmanager
+
+
+@pytest.fixture(scope='function')
+def flask_app():
+    """Flask アプリケーションインスタンス"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / 'dashboard'))
+    from app import app as flask_app
+    flask_app.config['TESTING'] = True
+    return flask_app
+
+
+@pytest.fixture(scope='function')
+def app_client(flask_app):
+    """Flask テストクライアント"""
+    return flask_app.test_client()
+
+
+@pytest.fixture(scope='function')
+def browser_context():
+    """Playwright ブラウザコンテキスト"""
+    try:
+        from playwright.sync_api import sync_playwright
+        playwright = sync_playwright().start()
+        browser = playwright.chromium.launch(headless=True)
+        context = browser.new_context()
+        yield context
+        context.close()
+        browser.close()
+        playwright.stop()
+    except ImportError:
+        pytest.skip("Playwright not installed")
+
+
+@pytest.fixture(scope='function')
+def tmux_session():
+    """tmux セッション（テスト用）"""
+    import uuid
+    session_name = f"test-{uuid.uuid4().hex[:8]}"
+
+    # テスト用セッション作成
+    subprocess.run(
+        ['tmux', 'new-session', '-d', '-s', session_name],
+        check=True
+    )
+
+    yield session_name
+
+    # クリーンアップ
+    subprocess.run(
+        ['tmux', 'kill-session', '-t', session_name],
+        check=False
+    )
+
+
+@pytest.fixture(scope='function')
+def running_server(flask_app):
+    """Flask development server を起動"""
+    import threading
+    import time
+
+    def run_server():
+        flask_app.run(host='127.0.0.1', port=8000, debug=False, use_reloader=False)
+
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
+    time.sleep(2)  # サーバー起動待機
+
+    yield
+
+    # サーバーは daemon スレッドで実行されているため、自動クリーンアップ
