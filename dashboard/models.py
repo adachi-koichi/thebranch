@@ -48,6 +48,7 @@ class UserRoleResponse(BaseModel):
 
 class UserDetailResponse(UserResponse):
     roles: List[UserRoleResponse] = []
+    onboarding_completed: int = 0
 
 
 class AgentConfig(BaseModel):
@@ -190,3 +191,18 @@ class MissionResponse(BaseModel):
 
 class MissionDetailResponse(MissionResponse):
     tasks: List[dict] = []
+
+
+class OnboardingRequest(BaseModel):
+    dept_name: str
+    dept_type: str
+    agent_role: str
+    agent_tasks: str
+    agent_model: str = "claude-sonnet-4-6"
+
+
+class OnboardingCompleteResponse(BaseModel):
+    success: bool
+    dept_id: int
+    agent_id: int
+    message: str = "ウィザード完了。エージェント起動中..."

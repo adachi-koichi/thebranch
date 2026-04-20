@@ -1331,6 +1331,80 @@ async def websocket_panes(websocket: WebSocket):
 
 
 # ──────────────────────────────────────────────
+# WebSocket: エージェント状態リアルタイム更新 (#2400)
+# ──────────────────────────────────────────────
+
+_agent_snapshot: dict[str, dict] = {}
+
+async def _detect_agent_changes() -> tuple[list, list]:
+    """
+    エージェント状態の変化を検出し、全エージェント + 変化イベントを返す
+    Returns: (agents, changes)
+    - agents: 全エージェント最新状態の辞書リスト
+    - changes: 状態変化があったエージェントの変化イベント
+    """
+    global _agent_snapshot
+
+    agents = await get_agents_data()
+    changes = []
+
+    current: dict[str, dict] = {a.get("sessionId", a.get("pid", "unknown")): a for a in agents}
+
+    for agent_id, agent in current.items():
+        if agent_id in _agent_snapshot:
+            prev = _agent_snapshot[agent_id]
+            if prev.get("tmux_pane") != agent.get("tmux_pane"):
+                change = {
+                    "agent_id": agent_id,
+                    "previous_pane": prev.get("tmux_pane"),
+                    "current_pane": agent.get("tmux_pane"),
+                    "timestamp": datetime.now().isoformat()
+                }
+                changes.append(change)
+        else:
+            changes.append({
+                "agent_id": agent_id,
+                "event": "started",
+                "timestamp": datetime.now().isoformat()
+            })
+
+    for agent_id in _agent_snapshot:
+        if agent_id not in current:
+            changes.append({
+                "agent_id": agent_id,
+                "event": "stopped",
+                "timestamp": datetime.now().isoformat()
+            })
+
+    _agent_snapshot = current
+    return agents, changes
+
+
+@app.websocket("/ws/agents")
+async def websocket_agents(websocket: WebSocket):
+    """エージェント状態をリアルタイム配信。3秒ごとに差分チェック"""
+    await websocket.accept()
+    try:
+        last_snapshot: str | None = None
+        while True:
+            agents, changes = await _detect_agent_changes()
+            snapshot = json.dumps(agents, ensure_ascii=False, sort_keys=True)
+
+            if snapshot != last_snapshot or changes:
+                payload = {
+                    "type": "agents_update",
+                    "agents": agents,
+                    "changes": changes if changes else []
+                }
+                await websocket.send_text(json.dumps(payload, ensure_ascii=False))
+                last_snapshot = snapshot
+
+            await asyncio.sleep(3)
+    except WebSocketDisconnect:
+        pass
+
+
+# ──────────────────────────────────────────────
 # Costs
 # ──────────────────────────────────────────────
 
@@ -3378,7 +3452,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
     async with aiosqlite.connect(str(auth.DB_PATH)) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "SELECT id, username, email, created_at, updated_at FROM users WHERE id = ?",
+            "SELECT id, username, email, created_at, updated_at, COALESCE(onboarding_completed, 0) as onboarding_completed FROM users WHERE id = ?",
             (user_id,),
         )
         user_row = await cursor.fetchone()
@@ -4424,6 +4498,62 @@ async def publish_template(template_id: int):
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# Onboarding
+# ──────────────────────────────────────────────
+
+@app.post("/api/onboarding/complete", status_code=201, response_model=models.OnboardingCompleteResponse)
+async def complete_onboarding(
+    req: models.OnboardingRequest,
+    authorization: Optional[str] = Header(None)
+):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    user_id = await auth.verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    await ensure_db_initialized()
+
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            # Create department
+            slug = req.dept_name.lower().replace(" ", "-")
+            cursor = await db.execute(
+                "INSERT INTO departments (name, slug, description, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))",
+                (req.dept_name, slug, f"{req.dept_name} (AI-powered)", "active", user_id)
+            )
+            await db.commit()
+            dept_id = cursor.lastrowid
+
+            # Create agent
+            session_id = f"thebranch_onboarding_{user_id}_{dept_id}"
+            cursor = await db.execute(
+                "INSERT INTO agents (department_id, session_id, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))",
+                (dept_id, session_id, req.agent_role, "starting")
+            )
+            await db.commit()
+            agent_id = cursor.lastrowid
+
+            # Update onboarding_completed flag
+            await db.execute(
+                "UPDATE users SET onboarding_completed = 1 WHERE id = ?",
+                (user_id,)
+            )
+            await db.commit()
+
+        return {
+            "success": True,
+            "dept_id": dept_id,
+            "agent_id": agent_id,
+            "message": "ウィザード完了。エージェント起動中..."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ウィザード実行エラー: {str(e)}")
 
 
 # ──────────────────────────────────────────────
