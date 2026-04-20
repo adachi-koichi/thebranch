@@ -4132,6 +4132,124 @@ async def delete_relation(dept_id: int, related_dept_id: int):
 
 
 # ──────────────────────────────────────────────
+# Metrics (#2408)
+# ──────────────────────────────────────────────
+
+@app.get("/api/departments/{dept_id}/metrics")
+async def get_department_metrics(dept_id: int):
+    """Get department metrics including agent uptime and task completion."""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # Verify department exists
+            cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (dept_id,))
+            if not await cursor.fetchone():
+                raise HTTPException(status_code=404, detail="部署が見つかりません")
+
+            # Get agent metrics
+            cursor = await db.execute(
+                """SELECT
+                     COUNT(*) as total_agents,
+                     SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as running_agents,
+                     SUM(CASE WHEN status = 'stopped' THEN 1 ELSE 0 END) as stopped_agents,
+                     SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_agents,
+                     SUM(CASE WHEN status = 'starting' THEN 1 ELSE 0 END) as starting_agents
+                   FROM agents
+                   WHERE department_id = ?""",
+                (dept_id,),
+            )
+            agent_stats = await cursor.fetchone()
+
+            # Calculate agent uptime percentage
+            total_agents = agent_stats["total_agents"] or 0
+            running_agents = agent_stats["running_agents"] or 0
+            uptime_percentage = (running_agents / total_agents * 100) if total_agents > 0 else 0
+
+            # Get task completion metrics
+            cursor = await db.execute(
+                """SELECT
+                     COUNT(*) as total_tasks,
+                     SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
+                     SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks
+                   FROM missions
+                   WHERE agent_id IN (SELECT id FROM agents WHERE department_id = ?)""",
+                (dept_id,),
+            )
+            task_stats = await cursor.fetchone()
+
+            total_tasks = task_stats["total_tasks"] or 0
+            completed_tasks = task_stats["completed_tasks"] or 0
+            task_completion_percentage = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+
+            # Get time series data for last 30 days
+            cursor = await db.execute(
+                """SELECT
+                     DATE(a.created_at) as date,
+                     COUNT(DISTINCT a.id) as agent_count,
+                     SUM(CASE WHEN a.status = 'running' THEN 1 ELSE 0 END) as running_count
+                   FROM agents a
+                   WHERE a.department_id = ?
+                     AND datetime(a.created_at) >= datetime('now', '-30 days')
+                   GROUP BY DATE(a.created_at)
+                   ORDER BY date ASC""",
+                (dept_id,),
+            )
+            time_series = await cursor.fetchall()
+
+            # Get agent logs for activity tracking
+            cursor = await db.execute(
+                """SELECT
+                     COUNT(CASE WHEN al.action = 'started' THEN 1 END) as starts,
+                     COUNT(CASE WHEN al.action = 'stopped' THEN 1 END) as stops,
+                     COUNT(CASE WHEN al.action = 'failed' THEN 1 END) as failures,
+                     COUNT(CASE WHEN al.action = 'message' THEN 1 END) as messages
+                   FROM agent_logs al
+                   WHERE al.agent_id IN (SELECT id FROM agents WHERE department_id = ?)""",
+                (dept_id,),
+            )
+            activity_stats = await cursor.fetchone()
+
+        # Build response
+        return {
+            "department_id": dept_id,
+            "agents": {
+                "total": total_agents,
+                "running": running_agents,
+                "stopped": agent_stats["stopped_agents"] or 0,
+                "failed": agent_stats["failed_agents"] or 0,
+                "starting": agent_stats["starting_agents"] or 0,
+                "uptime_percentage": round(uptime_percentage, 2),
+            },
+            "tasks": {
+                "total": total_tasks,
+                "completed": completed_tasks,
+                "in_progress": task_stats["in_progress_tasks"] or 0,
+                "completion_percentage": round(task_completion_percentage, 2),
+            },
+            "activity": {
+                "starts": activity_stats["starts"] or 0,
+                "stops": activity_stats["stops"] or 0,
+                "failures": activity_stats["failures"] or 0,
+                "messages": activity_stats["messages"] or 0,
+            },
+            "time_series": [
+                {
+                    "date": row["date"],
+                    "agent_count": row["agent_count"],
+                    "running_count": row["running_count"],
+                }
+                for row in time_series
+            ],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"メトリクス取得エラー: {str(e)}")
+
+
+# ──────────────────────────────────────────────
 # Workflow Templates
 # ──────────────────────────────────────────────
 
