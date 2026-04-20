@@ -63,7 +63,7 @@ FROM departments_templates WHERE name = 'Development Department'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO department_template_roles (template_id, role_key, role_label, role_order, responsibility, required_skills, min_members, max_members, supervisor_role_key, created_at)
-SELECT id, 'qa-engineer', 'QAエンジニア', 3, 'テスト自動化・品質保証・バグ報告', '["test_automation", "quality_assurance", "bug_reporting"]', 1, 2, 'tech-lead', datetime('now','localtime')
+SELECT id, 'qa-engineer', 'QAエンジニア', 5, 'テスト自動化・品質保証・バグ報告', '["test_automation", "quality_assurance", "bug_reporting"]', 1, 2, 'tech-lead', datetime('now','localtime')
 FROM departments_templates WHERE name = 'Development Department'
 ON CONFLICT DO NOTHING;
 
