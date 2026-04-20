@@ -386,6 +386,20 @@
     border: 1px solid var(--accent);
   }
 
+  .agent-status-indicator {
+    font-size: 18px;
+    line-height: 1;
+    margin-left: auto;
+    animation: agent-pulse 1.5s infinite ease-in-out;
+  }
+
+  @keyframes agent-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .agent-state-stopped .agent-status-indicator { animation: none; opacity: 0.5; }
+
   .agent-meta {
     font-size: 12px;
     color: var(--text-muted);
@@ -2144,6 +2158,87 @@
   </div>
 </div>
 
+<!-- Onboarding Wizard Modal (#2397) -->
+<div class="modal-overlay" id="onboardingModal">
+  <div class="modal" style="max-width: 500px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <h2 style="margin:0;">THEBRANCH へようこそ</h2>
+      <span id="onboardingStep" style="font-size:12px;color:var(--text-muted);">Step <span id="currentStep">1</span>/3</span>
+    </div>
+
+    <!-- Step 1: Department Info -->
+    <div id="onboardingStep1" style="display:none;">
+      <p style="color:var(--text-muted);margin-bottom:16px;">AIエージェント部署を作成して、自動化を始めましょう</p>
+      <div class="form-group">
+        <label for="onboarding-dept-name">部署名 *</label>
+        <input type="text" id="onboarding-dept-name" placeholder="例: マーケティング部" required>
+      </div>
+      <div class="form-group">
+        <label for="onboarding-dept-type">テンプレート選択 *</label>
+        <select id="onboarding-dept-type" required>
+          <option value="">-- テンプレートを選択してください --</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:24px;">
+        <button type="button" class="btn btn-secondary" onclick="closeOnboarding()" style="flex:1;">キャンセル</button>
+        <button type="button" class="btn btn-primary" onclick="nextOnboardingStep(2)" style="flex:1;">次へ</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Agent Config -->
+    <div id="onboardingStep2" style="display:none;">
+      <p style="color:var(--text-muted);margin-bottom:16px;">最初のAIエージェントを設定してください</p>
+      <div class="form-group">
+        <label for="onboarding-agent-role">エージェントの役割 *</label>
+        <input type="text" id="onboarding-agent-role" placeholder="例: マネージャー、エンジニア" required>
+      </div>
+      <div class="form-group">
+        <label for="onboarding-agent-tasks">主なタスク *</label>
+        <textarea id="onboarding-agent-tasks" placeholder="例: レポート作成、データ分析、進捗管理" required></textarea>
+      </div>
+      <div class="form-group">
+        <label for="onboarding-agent-model">AIモデル</label>
+        <select id="onboarding-agent-model">
+          <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (推奨)</option>
+          <option value="claude-opus-4-7">Claude Opus 4.7</option>
+          <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:24px;">
+        <button type="button" class="btn btn-secondary" onclick="previousOnboardingStep(1)" style="flex:1;">戻る</button>
+        <button type="button" class="btn btn-primary" onclick="nextOnboardingStep(3)" style="flex:1;">次へ</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Confirmation -->
+    <div id="onboardingStep3" style="display:none;">
+      <p style="color:var(--text-muted);margin-bottom:16px;">以下の内容で部署とエージェントを作成します</p>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text-muted);">部署名:</span>
+          <span id="confirm-dept-name" style="font-weight:500;"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text-muted);">テンプレート:</span>
+          <span id="confirm-dept-type" style="font-weight:500;"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text-muted);">エージェント役割:</span>
+          <span id="confirm-agent-role" style="font-weight:500;"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;">
+          <span style="color:var(--text-muted);">AIモデル:</span>
+          <span id="confirm-agent-model" style="font-weight:500;"></span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:24px;">
+        <button type="button" class="btn btn-secondary" onclick="previousOnboardingStep(2)" style="flex:1;">戻る</button>
+        <button type="button" class="btn btn-primary" id="submitOnboardingBtn" onclick="submitOnboarding()" style="flex:1;">完了</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════
 // Utilities
@@ -2746,11 +2841,26 @@ function renderAgents(agents) {
     const projName = a.cwd ? a.cwd.split('/').filter(Boolean).pop() : '(unknown)';
     const tmux = a.tmux_pane || 'N/A';
     const started = a.startedAt ? a.startedAt.replace('T', ' ') : '';
+
+    let state = 'stopped';
+    let stateIcon = '🔴';
+    let stateLabel = 'stopped';
+    if (a.tmux_pane) {
+      state = 'running';
+      stateIcon = '🟢';
+      stateLabel = 'running';
+    } else if (a.pid) {
+      state = 'starting';
+      stateIcon = '🟡';
+      stateLabel = 'starting';
+    }
+
     return `
-      <div class="agent-card">
+      <div class="agent-card agent-state-${state}">
         <div class="agent-header">
           <span class="agent-name">${escHtml(projName)}</span>
           <span class="agent-kind">${escHtml(a.kind || 'unknown')}</span>
+          <span class="agent-status-indicator" title="${stateLabel}">${stateIcon}</span>
         </div>
         <div class="agent-meta">
           PID: ${a.pid ?? 'N/A'} &nbsp;|&nbsp; 起動: ${escHtml(started)} &nbsp;|&nbsp; tmux: ${escHtml(tmux)}
@@ -2764,7 +2874,50 @@ function renderAgents(agents) {
 }
 
 // ══════════════════════════════════════════════
-// SSE
+// WebSocket: Agents リアルタイム更新
+// ══════════════════════════════════════════════
+
+let _agentsWs = null;
+let _agentsWsReconnectTimer = null;
+
+function connectAgentsWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${protocol}//${window.location.host}/ws/agents`;
+
+  _agentsWs = new WebSocket(url);
+
+  _agentsWs.onopen = () => {
+    updateLiveBadge(true);
+    if (_agentsWsReconnectTimer) {
+      clearTimeout(_agentsWsReconnectTimer);
+      _agentsWsReconnectTimer = null;
+    }
+  };
+
+  _agentsWs.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'agents_update' && msg.agents) {
+        renderAgents(msg.agents);
+        updateLiveBadge(true);
+      }
+    } catch (_) {}
+  };
+
+  _agentsWs.onerror = () => {
+    updateLiveBadge(false);
+  };
+
+  _agentsWs.onclose = () => {
+    updateLiveBadge(false);
+    if (!_agentsWsReconnectTimer) {
+      _agentsWsReconnectTimer = setTimeout(connectAgentsWebSocket, 5000);
+    }
+  };
+}
+
+// ══════════════════════════════════════════════
+// SSE (Legacy Fallback)
 // ══════════════════════════════════════════════
 
 function connectSSE() {
@@ -3814,7 +3967,7 @@ function applyClientPriorityFilter() {
 }
 
 fetchTasks();
-connectSSE();
+connectAgentsWebSocket();
 connectTasksWS();
 
 // ══════════════════════════════════════════════
@@ -6403,6 +6556,165 @@ async function loadAgentMission(agentId, deptId) {
     console.error('Mission load error:', e);
   }
 }
+
+// ══════════════════════════════════════════════
+// Onboarding Wizard (#2397)
+// ══════════════════════════════════════════════
+
+async function initializeOnboarding() {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const res = await fetch('/api/auth/me', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) return;
+
+    const user = await res.json();
+    if (user.onboarding_completed === 0) {
+      await loadOnboardingTemplates();
+      openOnboardingModal();
+    }
+  } catch (e) {
+    console.error('Onboarding init error:', e);
+  }
+}
+
+async function loadOnboardingTemplates() {
+  try {
+    const res = await fetch('/api/departments/templates');
+    if (!res.ok) return;
+    const templates = await res.json();
+
+    const select = document.getElementById('onboarding-dept-type');
+    select.innerHTML = '<option value="">-- テンプレートを選択してください --</option>';
+    (templates || []).forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.slug || t.name;
+      opt.textContent = t.name;
+      select.appendChild(opt);
+    });
+  } catch (e) {
+    console.error('Templates load error:', e);
+  }
+}
+
+function openOnboardingModal() {
+  const modal = document.getElementById('onboardingModal');
+  if (modal) {
+    modal.classList.add('open');
+    showOnboardingStep(1);
+  }
+}
+
+function closeOnboarding() {
+  const modal = document.getElementById('onboardingModal');
+  if (modal) modal.classList.remove('open');
+  resetOnboarding();
+}
+
+function resetOnboarding() {
+  document.getElementById('onboarding-dept-name').value = '';
+  document.getElementById('onboarding-dept-type').value = '';
+  document.getElementById('onboarding-agent-role').value = '';
+  document.getElementById('onboarding-agent-tasks').value = '';
+  document.getElementById('onboarding-agent-model').value = 'claude-sonnet-4-6';
+}
+
+function showOnboardingStep(stepNum) {
+  document.getElementById('onboardingStep1').style.display = stepNum === 1 ? 'block' : 'none';
+  document.getElementById('onboardingStep2').style.display = stepNum === 2 ? 'block' : 'none';
+  document.getElementById('onboardingStep3').style.display = stepNum === 3 ? 'block' : 'none';
+  document.getElementById('currentStep').textContent = stepNum;
+}
+
+function nextOnboardingStep(stepNum) {
+  if (stepNum === 2) {
+    const deptName = document.getElementById('onboarding-dept-name').value.trim();
+    const deptType = document.getElementById('onboarding-dept-type').value.trim();
+    if (!deptName || !deptType) {
+      showToast('部署名とテンプレートを選択してください', 'error');
+      return;
+    }
+  } else if (stepNum === 3) {
+    const agentRole = document.getElementById('onboarding-agent-role').value.trim();
+    const agentTasks = document.getElementById('onboarding-agent-tasks').value.trim();
+    if (!agentRole || !agentTasks) {
+      showToast('エージェント役割とタスクを入力してください', 'error');
+      return;
+    }
+
+    // Populate confirmation step
+    document.getElementById('confirm-dept-name').textContent =
+      document.getElementById('onboarding-dept-name').value;
+    document.getElementById('confirm-dept-type').textContent =
+      document.getElementById('onboarding-dept-type').value;
+    document.getElementById('confirm-agent-role').textContent =
+      document.getElementById('onboarding-agent-role').value;
+    document.getElementById('confirm-agent-model').textContent =
+      document.getElementById('onboarding-agent-model').value;
+  }
+
+  showOnboardingStep(stepNum);
+}
+
+function previousOnboardingStep(stepNum) {
+  showOnboardingStep(stepNum);
+}
+
+async function submitOnboarding() {
+  const btn = document.getElementById('submitOnboardingBtn');
+  btn.disabled = true;
+  btn.textContent = '作成中...';
+
+  try {
+    const token = localStorage.getItem('token');
+    const data = {
+      dept_name: document.getElementById('onboarding-dept-name').value,
+      dept_type: document.getElementById('onboarding-dept-type').value,
+      agent_role: document.getElementById('onboarding-agent-role').value,
+      agent_tasks: document.getElementById('onboarding-agent-tasks').value,
+      agent_model: document.getElementById('onboarding-agent-model').value,
+    };
+
+    const res = await fetch('/api/onboarding/complete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      showToast('エラー: ' + err, 'error');
+      btn.disabled = false;
+      btn.textContent = '完了';
+      return;
+    }
+
+    showToast('ウィザード完了。エージェント起動中...', 'success');
+    closeOnboarding();
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) {
+    console.error('Onboarding submit error:', e);
+    showToast('エラーが発生しました: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '完了';
+  }
+}
+
+// Close modal when clicking outside
+document.getElementById('onboardingModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'onboardingModal') {
+    closeOnboarding();
+  }
+});
+
+// Initialize onboarding on page load
+document.addEventListener('DOMContentLoaded', initializeOnboarding);
 
 </script>
 </body>
