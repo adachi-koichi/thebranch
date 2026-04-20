@@ -3388,10 +3388,42 @@ async def add_role(role_req: models.UserRoleCreate, authorization: Optional[str]
 
 
 # ──────────────────────────────────────────────
-# Departments (#2362)
+# Departments (#2362) & Agents (#2391)
 # ──────────────────────────────────────────────
 
 THEBRANCH_DB = DASHBOARD_DIR / "data" / "thebranch.sqlite"
+
+def generate_session_name(dept_id: int, dept_slug: str, role: str) -> str:
+    """Generate tmux session name following v3 format."""
+    return f"thebranch_orchestrator_wf{dept_id:03d}_{role}@main"
+
+async def start_ccc_agent(session_name: str, role: str, dept_id: int) -> tuple[bool, str]:
+    """Start ccc agent in tmux session. Returns (success, session_id_or_error)."""
+    try:
+        ccc_cmd = "ccc"
+        if role == "orchestrator":
+            ccc_cmd = "ccc-orchestrator"
+
+        cmd = [
+            TMUX_BIN, "new-session", "-d", "-s", session_name,
+            "-x", "250", "-y", "50",
+            f"cd $HOME && {ccc_cmd}"
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            return False, f"Failed to create tmux session: {result.stderr}"
+        return True, session_name
+    except Exception as e:
+        return False, str(e)
+
+async def stop_tmux_session(session_name: str) -> bool:
+    """Stop tmux session."""
+    try:
+        cmd = [TMUX_BIN, "kill-session", "-t", session_name]
+        subprocess.run(cmd, capture_output=True, timeout=5)
+        return True
+    except Exception:
+        return False
 
 async def ensure_db_initialized():
     """Initialize database if not exists."""
@@ -3658,6 +3690,113 @@ async def remove_agent_from_department(dept_id: int, agent_id: int):
             (dept_id, agent_id),
         )
         await db.commit()
+
+# ──────────────────────────────────────────────
+# Agents (#2391)
+# ──────────────────────────────────────────────
+
+@app.post("/api/agents", status_code=201)
+async def create_agent(agent_req: models.AgentCreate):
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT id, slug FROM departments WHERE id = ?", (agent_req.department_id,)
+            )
+            dept = await cursor.fetchone()
+            if not dept:
+                raise HTTPException(status_code=404, detail="部署が見つかりません")
+
+            session_name = generate_session_name(agent_req.department_id, dept["slug"], agent_req.role)
+            success, result = await start_ccc_agent(session_name, agent_req.role, agent_req.department_id)
+
+            if not success:
+                raise HTTPException(status_code=500, detail=f"エージェント起動に失敗: {result}")
+
+            cursor = await db.execute(
+                """INSERT INTO agents (department_id, session_id, role, status)
+                   VALUES (?, ?, ?, 'running')""",
+                (agent_req.department_id, result, agent_req.role),
+            )
+            agent_id = cursor.lastrowid
+            await db.commit()
+
+            cursor = await db.execute(
+                """SELECT id, department_id, session_id, role, status, started_at,
+                          stopped_at, error_message, created_at, updated_at FROM agents WHERE id = ?""",
+                (agent_id,),
+            )
+            row = await cursor.fetchone()
+
+        return dict(row) if row else {"error": "Failed to create"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/agents/{agent_id}")
+async def get_agent(agent_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT id, department_id, session_id, role, status, started_at,
+                      stopped_at, error_message, created_at, updated_at FROM agents WHERE id = ?""",
+            (agent_id,),
+        )
+        row = await cursor.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="エージェントが見つかりません")
+    return dict(row)
+
+@app.get("/api/departments/{dept_id}/agents-managed")
+async def list_department_agents_managed(dept_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT id, department_id, session_id, role, status, started_at,
+                      stopped_at, error_message, created_at, updated_at
+               FROM agents WHERE department_id = ? ORDER BY created_at DESC""",
+            (dept_id,),
+        )
+        rows = await cursor.fetchall()
+    return {"data": [dict(r) for r in rows], "total": len(rows)}
+
+@app.post("/api/agents/{agent_id}/stop", status_code=200)
+async def stop_agent(agent_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id, session_id FROM agents WHERE id = ?", (agent_id,)
+        )
+        agent = await cursor.fetchone()
+
+        if not agent:
+            raise HTTPException(status_code=404, detail="エージェントが見つかりません")
+
+        success = await stop_tmux_session(agent["session_id"])
+        if not success:
+            raise HTTPException(status_code=500, detail="セッション停止に失敗しました")
+
+        await db.execute(
+            """UPDATE agents SET status = 'stopped', stopped_at = datetime('now','localtime')
+               WHERE id = ?""",
+            (agent_id,),
+        )
+        await db.commit()
+
+        cursor = await db.execute(
+            """SELECT id, department_id, session_id, role, status, started_at,
+                      stopped_at, error_message, created_at, updated_at FROM agents WHERE id = ?""",
+            (agent_id,),
+        )
+        row = await cursor.fetchone()
+
+    return dict(row) if row else {"error": "Failed to stop"}
 
 @app.post("/api/departments/{dept_id}/teams", status_code=201)
 async def create_team(dept_id: int, team_req: models.TeamCreate):

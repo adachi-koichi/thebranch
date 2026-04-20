@@ -102,6 +102,24 @@ class DepartmentAgentResponse(BaseModel):
     joined_at: str
 
 
+class AgentCreate(BaseModel):
+    department_id: int
+    role: str
+
+
+class AgentResponse(BaseModel):
+    id: int
+    department_id: int
+    session_id: str
+    role: str
+    status: str
+    started_at: str
+    stopped_at: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
 class TeamCreate(BaseModel):
     name: str
     slug: str
