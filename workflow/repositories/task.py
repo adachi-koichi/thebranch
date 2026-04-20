@@ -138,6 +138,11 @@ class TaskRepository(BaseRepository):
     @staticmethod
     def _row_to_dev_task(row) -> DevTask:
         """Convert database row to DevTask"""
+        version = 0
+        try:
+            version = row['version']
+        except (IndexError, KeyError):
+            version = 0
         return DevTask(
             id=row['id'],
             title=row['title'],
@@ -149,7 +154,7 @@ class TaskRepository(BaseRepository):
             status=row['status'],
             priority=row['priority'],
             estimated_hours=row['estimated_hours'],
-            version=row.get('version', 0),
+            version=version,
             created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None,
             started_at=datetime.fromisoformat(row['started_at']) if row['started_at'] else None,
             completed_at=datetime.fromisoformat(row['completed_at']) if row['completed_at'] else None,

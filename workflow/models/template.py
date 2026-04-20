@@ -15,6 +15,7 @@ class TaskDef:
     priority: int = 3
     estimated_hours: int | None = None
     depends_on_key: str | None = None
+    task_order: int = 0
     acceptance_criteria: str | None = None
     tags: list[str] | None = None
     config: dict | None = None
