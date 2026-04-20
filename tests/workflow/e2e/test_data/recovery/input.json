@@ -1,0 +1,26 @@
+{
+  "workflow_name": "error_recovery_workflow",
+  "phases": [
+    {
+      "phase_name": "Planning",
+      "task_count": 3
+    },
+    {
+      "phase_name": "Development",
+      "task_count": 6
+    },
+    {
+      "phase_name": "Testing",
+      "task_count": 8
+    },
+    {
+      "phase_name": "Rollback",
+      "task_count": 4
+    },
+    {
+      "phase_name": "Recovery",
+      "task_count": 5
+    }
+  ],
+  "task_priority": "recovery"
+}

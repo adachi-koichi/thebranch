@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1200" dy="800" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="1600" background="#ffffff" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+
+    <!-- PAGE 1: SETUP WIZARD FLOW -->
+    <mxCell id="p1-title" value="Setup Wizard Flow (5 Steps)" style="text;fontSize=24;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="20" y="20" width="400" height="40" as="geometry"/>
+    </mxCell>
+
+    <!-- Welcome Screen -->
+    <mxCell id="wizard-welcome" value="Welcome" style="rounded=1;fillColor=#1E40AF;strokeColor=#1E40AF;fontColor=#ffffff;fontSize=12;fontStyle=1" vertex="1" parent="1">
+      <mxGeometry x="40" y="80" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="wizard-welcome-text" value="翌朝から営業が動く&#10;[開始する]" style="text;fontSize=10;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="40" y="85" width="120" height="50" as="geometry"/>
+    </mxCell>
+
+    <!-- Step 1: Service Vision -->
+    <mxCell id="wizard-step1" value="Step 1/5&#10;Service Vision" style="rounded=1;fillColor=#1E40AF;strokeColor=#1E40AF;fontColor=#ffffff;fontSize=11;fontStyle=1" vertex="1" parent="1">
+      <mxGeometry x="180" y="80" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="wizard-step1-detail" value="[入力] SaaS 型 EC&#10;[ビジョン] 次世代EC&#10;▓▓░░░░░░░" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="180" y="85" width="120" height="50" as="geometry"/>
+    </mxCell>
+
+    <!-- Step 2: Template Selection -->
+    <mxCell id="wizard-step2" value="Step 2/5&#10;Template" style="rounded=1;fillColor=#1E40AF;strokeColor=#1E40AF;fontColor=#ffffff;fontSize=11;fontStyle=1" vertex="1" parent="1">
+      <mxGeometry x="320" y="80" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="wizard-step2-detail" value="☑ 営業+CS&#10;▓▓▓░░░░░░" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="320" y="85" width="120" height="50" as="geometry"/>
+    </mxCell>
+
+    <!-- Step 3: Agent Confirmation -->
+    <mxCell id="wizard-step3" value="Step 3/5&#10;Agents" style="rounded=1;fillColor=#1E40AF;strokeColor=#1E40AF;fontColor=#ffffff;fontSize=11;fontStyle=1" vertex="1" parent="1">
+      <mxGeometry x="460" y="80" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="wizard-step3-detail" value="✓ SalesBot v1.2&#10;✓ SupportBot v1.1&#10;▓▓▓▓░░░░░░" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="460" y="85" width="120" height="50" as="geometry"/>
+    </mxCell>
+
+    <!-- Step 4: KPI Settings -->
+    <mxCell id="wizard-step4" value="Step 4/5&#10;KPI Settings" style="rounded=1;fillColor=#1E40AF;strokeColor=#1E40AF;fontColor=#ffffff;fontSize=11;fontStyle=1" vertex="1" parent="1">
+      <mxGeometry x="600" y="80" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="wizard-step4-detail" value="Lead: 100/月&#10;成約率: 10%&#10;▓▓▓▓▓░░░░░" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="600" y="85" width="120" height="50" as="geometry"/>
+    </mxCell>
+
+    <!-- Step 5: Complete -->
+    <mxCell id="wizard-step5" value="Step 5/5&#10;Confirm &amp; Run" style="rounded=1;fillColor=#16A34A;strokeColor=#16A34A;fontColor=#ffffff;fontSize=11;fontStyle=1" vertex="1" parent="1">
+      <mxGeometry x="740" y="80" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="wizard-step5-detail" value="準備完了&#10;[開始]&#10;▓▓▓▓▓▓▓▓▓▓" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="740" y="85" width="120" height="50" as="geometry"/>
+    </mxCell>
+
+    <!-- Arrows between steps -->
+    <mxCell id="arrow-welcome-step1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=2;" edge="1" parent="1" source="wizard-welcome" target="wizard-step1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="arrow-step1-step2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=2;" edge="1" parent="1" source="wizard-step1" target="wizard-step2">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="arrow-step2-step3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=2;" edge="1" parent="1" source="wizard-step2" target="wizard-step3">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="arrow-step3-step4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=2;" edge="1" parent="1" source="wizard-step3" target="wizard-step4">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="arrow-step4-step5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=2;" edge="1" parent="1" source="wizard-step4" target="wizard-step5">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Main Dashboard Layout Section -->
+    <mxCell id="dashboard-title" value="Main Dashboard Layout" style="text;fontSize=20;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="20" y="200" width="400" height="30" as="geometry"/>
+    </mxCell>
+
+    <!-- Top Navigation Bar -->
+    <mxCell id="navbar" value="🏢 THEBRANCH    [検索]    🔔(2)  ⚙️  👤" style="rounded=0;fillColor=#1E40AF;strokeColor=#1E40AF;fontColor=#ffffff;fontSize=11;fontStyle=1" vertex="1" parent="1">
+      <mxGeometry x="20" y="240" width="880" height="40" as="geometry"/>
+    </mxCell>
+
+    <!-- Left Sidebar -->
+    <mxCell id="sidebar" value="📊 ダッシュボード&#10;🎯 タスク&#10;📂 部署&#10;🤖 エージェント&#10;⚙️ 設定" style="rounded=0;fillColor=#F3F4F6;strokeColor=#D1D5DB;fontSize=10;align=left" vertex="1" parent="1">
+      <mxGeometry x="20" y="290" width="140" height="200" as="geometry"/>
+    </mxCell>
+
+    <!-- Main Content Area -->
+    <mxCell id="main-content" value="メインダッシュボード" style="rounded=1;fillColor=#FFFFFF;strokeColor=#D1D5DB;fontSize=12;fontStyle=1" vertex="1" parent="1">
+      <mxGeometry x="170" y="290" width="730" height="200" as="geometry"/>
+    </mxCell>
+
+    <!-- KPI Cards -->
+    <mxCell id="kpi-sales" value="営業部&#10;リード 100/1000&#10;▓▓▓░░░░░░ 10%" style="rounded=1;fillColor=#E3F2FD;strokeColor=#1E40AF;fontSize=9" vertex="1" parent="1">
+      <mxGeometry x="180" y="305" width="100" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="kpi-cs" value="CS部&#10;対応時間 2.5h/4h&#10;▓▓▓░░░░░░ 62%" style="rounded=1;fillColor=#E8F5E9;strokeColor=#16A34A;fontSize=9" vertex="1" parent="1">
+      <mxGeometry x="290" y="305" width="100" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="kpi-planning" value="企画部&#10;案件化率 45%/50%&#10;▓▓░░░░░░░ 90%" style="rounded=1;fillColor=#FFF9E6;strokeColor=#D97706;fontSize=9" vertex="1" parent="1">
+      <mxGeometry x="400" y="305" width="100" height="70" as="geometry"/>
+    </mxCell>
+
+    <!-- Highlights Section -->
+    <mxCell id="highlights" value="📈 今週のハイライト&#10;✓ 営業: リード成約 8件 (達成度 89%)&#10;✓ CS: CSAT 85% (達成度 106%)&#10;✓ 企画: 新企画 3件案件化 (達成度 150%)" style="rounded=1;fillColor=#FFFAEB;strokeColor=#D97706;fontSize=9;align=left" vertex="1" parent="1">
+      <mxGeometry x="180" y="390" width="530" height="80" as="geometry"/>
+    </mxCell>
+
+    <!-- FOUNDER USER JOURNEY MAP -->
+    <mxCell id="founder-journey-title" value="Founder User Journey Map (Emotional Curve + Conversion)" style="text;fontSize=18;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="20" y="530" width="880" height="30" as="geometry"/>
+    </mxCell>
+
+    <!-- Journey Phase: Awareness -->
+    <mxCell id="founder-phase1-bg" value="" style="rounded=1;fillColor=#FCE4EC;strokeColor=#EC407A;strokeWidth=2" vertex="1" parent="1">
+      <mxGeometry x="20" y="580" width="150" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase1" value="認識&#10;(Day 0)&#10;&#10;営業が回せない" style="text;fontSize=11;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="25" y="585" width="140" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase1-emotion" value="🔴 懐疑&#10;→&#10;🟡 期待" style="text;fontSize=10;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="25" y="640" width="140" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase1-tactics" value="転換率: 1-2%&#10;ランディング&#10;顧客事例表示" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="25" y="680" width="140" height="45" as="geometry"/>
+    </mxCell>
+
+    <!-- Journey Phase: Consideration -->
+    <mxCell id="founder-phase2-bg" value="" style="rounded=1;fillColor=#F3E5F5;strokeColor=#AB47BC;strokeWidth=2" vertex="1" parent="1">
+      <mxGeometry x="180" y="580" width="150" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase2" value="検討&#10;(Day 0-2)&#10;&#10;詳細調査開始" style="text;fontSize=11;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="185" y="585" width="140" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase2-emotion" value="🟡 疑問&#10;本当に動くか?&#10;&#10;→ 🟡 納得" style="text;fontSize=10;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="185" y="635" width="140" height="45" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase2-tactics" value="転換率: 5-10%&#10;動画デモ&#10;メールシーケンス" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="185" y="685" width="140" height="45" as="geometry"/>
+    </mxCell>
+
+    <!-- Journey Phase: Decision/Onboarding -->
+    <mxCell id="founder-phase3-bg" value="" style="rounded=1;fillColor=#FFF3E0;strokeColor=#F57C00;strokeWidth=2" vertex="1" parent="1">
+      <mxGeometry x="340" y="580" width="150" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase3" value="決定&#10;(Day 3)&#10;&#10;セットアップ完了" style="text;fontSize=11;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="345" y="585" width="140" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase3-emotion" value="🟡 緊張&#10;→&#10;🟢 達成感" style="text;fontSize=10;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="345" y="640" width="140" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase3-tactics" value="転換率: 50%+&#10;ウィザード&#10;プログレスバー&#10;チュートリアル" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="345" y="680" width="140" height="45" as="geometry"/>
+    </mxCell>
+
+    <!-- Journey Phase: Activation -->
+    <mxCell id="founder-phase4-bg" value="" style="rounded=1;fillColor=#E8F5E9;strokeColor=#66BB6A;strokeWidth=2" vertex="1" parent="1">
+      <mxGeometry x="500" y="580" width="150" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase4" value="利用&#10;(Day 4-7)&#10;&#10;初回データ確認" style="text;fontSize=11;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="505" y="585" width="140" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase4-emotion" value="🟡 期待&#10;→&#10;🟢 喜び&#10;驚き" style="text;fontSize=10;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="505" y="635" width="140" height="45" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase4-tactics" value="保持率: 80%+&#10;ダッシュボード&#10;成功報告&#10;トースト通知" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="505" y="685" width="140" height="45" as="geometry"/>
+    </mxCell>
+
+    <!-- Journey Phase: Engagement -->
+    <mxCell id="founder-phase5-bg" value="" style="rounded=1;fillColor=#C8E6C9;strokeColor=#2E7D32;strokeWidth=2" vertex="1" parent="1">
+      <mxGeometry x="660" y="580" width="150" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase5" value="拡張&#10;(Week 2)&#10;&#10;CS部追加&#10;メンバー招待" style="text;fontSize=11;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="665" y="585" width="140" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase5-emotion" value="🟢 信頼&#10;→&#10;🟢 継続確信" style="text;fontSize=10;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="665" y="640" width="140" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="founder-phase5-tactics" value="拡張率: 40-50%&#10;部署追加UI&#10;メンバー招待&#10;月次レポート" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="665" y="685" width="140" height="45" as="geometry"/>
+    </mxCell>
+
+    <!-- MANAGER USER JOURNEY MAP -->
+    <mxCell id="manager-journey-title" value="Manager User Journey Map (Transparency &amp; Approval Focus)" style="text;fontSize=18;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="20" y="760" width="880" height="30" as="geometry"/>
+    </mxCell>
+
+    <!-- Manager Phase 1: Awareness -->
+    <mxCell id="manager-phase1-bg" value="" style="rounded=1;fillColor=#FCE4EC;strokeColor=#EC407A;strokeWidth=2" vertex="1" parent="1">
+      <mxGeometry x="20" y="810" width="150" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase1" value="認識&#10;(Day 0)&#10;&#10;営業を AI で&#10;自動化を検討" style="text;fontSize=11;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="25" y="815" width="140" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase1-emotion" value="🟡 懐疑&#10;→&#10;🟡 条件付期待" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="25" y="870" width="140" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase1-tactics" value="転換率: 5-10%&#10;監査ログ強調&#10;金融機関事例" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="25" y="910" width="140" height="45" as="geometry"/>
+    </mxCell>
+
+    <!-- Manager Phase 2: Consideration -->
+    <mxCell id="manager-phase2-bg" value="" style="rounded=1;fillColor=#F3E5F5;strokeColor=#AB47BC;strokeWidth=2" vertex="1" parent="1">
+      <mxGeometry x="180" y="810" width="150" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase2" value="検討&#10;(Day 0-7)&#10;&#10;コンプライアンス&#10;確認" style="text;fontSize=11;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="185" y="815" width="140" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase2-emotion" value="🟡 条件付期待&#10;監査ログ確認後&#10;→ 🟡 丁寧な不安" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="185" y="865" width="140" height="45" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase2-tactics" value="転換率: 10-20%&#10;コンプライアンス&#10;相談・大手事例" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="185" y="915" width="140" height="45" as="geometry"/>
+    </mxCell>
+
+    <!-- Manager Phase 3: Decision/Setup -->
+    <mxCell id="manager-phase3-bg" value="" style="rounded=1;fillColor=#FFF3E0;strokeColor=#F57C00;strokeWidth=2" vertex="1" parent="1">
+      <mxGeometry x="340" y="810" width="150" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase3" value="決定&#10;(Day 8-14)&#10;&#10;段階的導入&#10;承認フロー設定" style="text;fontSize=11;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="345" y="815" width="140" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase3-emotion" value="🟡 丁寧な不安&#10;→&#10;🟢 安心" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="345" y="870" width="140" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase3-tactics" value="転換率: 60%+&#10;段階的導入&#10;承認フロー可視化" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="345" y="910" width="140" height="45" as="geometry"/>
+    </mxCell>
+
+    <!-- Manager Phase 4: Utilization -->
+    <mxCell id="manager-phase4-bg" value="" style="rounded=1;fillColor=#E8F5E9;strokeColor=#66BB6A;strokeWidth=2" vertex="1" parent="1">
+      <mxGeometry x="500" y="810" width="150" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase4" value="利用&#10;(Week 3)&#10;&#10;承認フロー&#10;リスク検出" style="text;fontSize=11;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="505" y="815" width="140" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase4-emotion" value="🟢 安心&#10;→&#10;🟢 効率化確信" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="505" y="870" width="140" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase4-tactics" value="保持率: 85%+&#10;承認ダッシュボード&#10;監査ログ確認&#10;リスク検出アラート" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="505" y="910" width="140" height="45" as="geometry"/>
+    </mxCell>
+
+    <!-- Manager Phase 5: Expansion -->
+    <mxCell id="manager-phase5-bg" value="" style="rounded=1;fillColor=#C8E6C9;strokeColor=#2E7D32;strokeWidth=2" vertex="1" parent="1">
+      <mxGeometry x="660" y="810" width="150" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase5" value="拡張&#10;(Month 2)&#10;&#10;全社導入&#10;年間ロードマップ" style="text;fontSize=11;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="665" y="815" width="140" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase5-emotion" value="🟢 拡張への&#10;確信" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="665" y="870" width="140" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="manager-phase5-tactics" value="拡張率: 60-70%&#10;全部署展開&#10;部署別管理&#10;年間ロードマップ" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="665" y="910" width="140" height="45" as="geometry"/>
+    </mxCell>
+
+    <!-- Color Legend -->
+    <mxCell id="legend-title" value="Design System &amp; Color Codes" style="text;fontSize=14;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="20" y="1000" width="300" height="25" as="geometry"/>
+    </mxCell>
+    <mxCell id="color-primary" value="■ Primary Blue: #1E40AF (Trust, Professional)" style="text;fontSize=10;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="20" y="1035" width="320" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="color-success" value="■ Success Green: #16A34A (Success, Growth)" style="text;fontSize=10;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="20" y="1060" width="320" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="color-accent" value="■ Accent Gold: #D97706 (Achievements, Value)" style="text;fontSize=10;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="20" y="1085" width="320" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="color-neutral" value="■ Neutral Gray: #6B7280 (Transparency, Stability)" style="text;fontSize=10;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="20" y="1110" width="320" height="20" as="geometry"/>
+    </mxCell>
+
+    <!-- UX Principles -->
+    <mxCell id="ux-principles-title" value="UX Design Principles" style="text;fontSize=14;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="400" y="1000" width="300" height="25" as="geometry"/>
+    </mxCell>
+    <mxCell id="principle-simplicity" value="1. Simplicity: 5-10分でセットアップ完了" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="400" y="1035" width="280" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="principle-transparency" value="2. Transparency: AI判断の理由を明示" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="400" y="1060" width="280" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="principle-scalability" value="3. Scalability: 1人→100人へ自動対応" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="400" y="1085" width="280" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="principle-empowerment" value="4. Empowerment: 専門家の意見をいつでも入手" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="400" y="1110" width="280" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="principle-success" value="5. Immediate Success: 小さな成功も報告" style="text;fontSize=9;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="400" y="1135" width="280" height="20" as="geometry"/>
+    </mxCell>
+
+  </root>
+</mxGraphModel>

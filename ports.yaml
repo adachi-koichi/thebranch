@@ -1,0 +1,88 @@
+reserved:
+- port: 3000
+  reason: Next.js / NestJS default
+- port: 3001
+  reason: Create React App default
+- port: 4173
+  reason: Vite preview default
+- port: 5000
+  reason: Flask default
+- port: 5173
+  reason: Vite dev default
+- port: 5432
+  reason: PostgreSQL default
+- port: 6379
+  reason: Redis default
+- port: 8080
+  reason: Common HTTP proxy default
+- port: 8443
+  reason: HTTPS alternate default
+- port: 8501
+  reason: Streamlit default
+- port: 8502
+  reason: Streamlit second instance
+- port: 8503
+  reason: Streamlit third instance
+- port: 27017
+  reason: MongoDB default
+projects:
+  breast_cancer_research:
+    frontend:
+      port: 3100
+      description: React+Vite フロントエンド
+      url: http://mac-mini-m4-pro.tailf0fcb.ts.net:3100
+    backend:
+      port: 3101
+      description: Node.js+Express バックエンド
+  exp-stock:
+    streamlit:
+      port: 7001
+      description: Streamlit Web アプリ
+      url: http://mac-mini-m4-pro.tailf0fcb.ts.net:7001
+  THEBRANCH:
+    dashboard:
+      port: 7002
+      description: AI Orchestrator ダッシュボード (FastAPI)
+      url: http://mac-mini-m4-pro.tailf0fcb.ts.net:7002
+
+  scraping_suumo:
+    streamlit:
+      port: 7003
+      description: SUUMO物件管理 Streamlit アプリ
+      url: http://mac-mini-m4-pro.tailf0fcb.ts.net:7003
+
+  echo:
+    admin:
+      port: 3000
+      description: echo-admin (Fastify)
+      url: http://mac-mini-m4-pro.tailf0fcb.ts.net:3000/heartbeat
+    frontend:
+      port: 5173
+      description: echo-frontend (Vite)
+      url: http://mac-mini-m4-pro.tailf0fcb.ts.net:5173
+    tracking-demo:
+      port: 5174
+      description: tracking-demo-site
+      url: http://mac-mini-m4-pro.tailf0fcb.ts.net:5174/demo/
+    liff-login:
+      port: 5180
+      description: echo-liff-login
+      url: http://mac-mini-m4-pro.tailf0fcb.ts.net:5180
+    liff-tracking:
+      port: 5181
+      description: echo-liff-tracking-redirect
+      url: http://mac-mini-m4-pro.tailf0fcb.ts.net:5181
+
+  it-governance-plan:
+    notion:
+      description: ITガバナンス計画（Notion管理）
+    viewer:
+      port: 8080
+      description: ドキュメントビューア（MD/HTML/PDF）
+      url: http://mac-mini-m4-pro.tailf0fcb.ts.net:8080
+
+  the-branch:
+    viewer:
+      description: 新規プロジェクトアイデア・スライド管理
+      port: 8081
+      url: http://mac-mini-m4-pro.tailf0fcb.ts.net:8081

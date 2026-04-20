@@ -1,0 +1,1848 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Branch — Pitch Deck 2026</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+/* ===========================================
+   THEME: Bold Type — White × Yellow
+   =========================================== */
+:root {
+  --yellow:      #FFD600;
+  --yellow-pale: #FFFBE6;
+  --yellow-mid:  #FFF3A3;
+  --ink:         #0a0a0a;
+  --ink-mid:     #333333;
+  --ink-dim:     #777777;
+  --ink-faint:   #cccccc;
+  --white:       #ffffff;
+  --off-white:   #fafafa;
+  --code-bg:     #0f1117;
+  --code-green:  #4ade80;
+  --code-blue:   #93c5fd;
+  --code-yellow: #fde68a;
+  --code-comment:#6b7280;
+
+  --font-display: 'Archivo Black', sans-serif;
+  --font-body:    'Space Grotesk', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  --title-size:  clamp(2.2rem, 7vw,   6.5rem);
+  --h2-size:     clamp(1.5rem, 3.8vw, 3.2rem);
+  --h3-size:     clamp(1rem,   2vw,   1.7rem);
+  --body-size:   clamp(0.76rem, 1.25vw, 1.02rem);
+  --small-size:  clamp(0.6rem,  0.88vw, 0.74rem);
+  --label-size:  clamp(0.54rem, 0.76vw, 0.63rem);
+
+  --slide-padding: clamp(1.8rem, 4.5vw, 4.5rem);
+  --content-gap:   clamp(0.8rem, 1.8vw, 1.8rem);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ===========================================
+   VIEWPORT BASE — mandatory
+   =========================================== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow-x: hidden; }
+html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+body { font-family: var(--font-body); background: var(--white); color: var(--ink); }
+
+.slide {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  scroll-snap-align: start;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===========================================
+   REVEAL ANIMATIONS
+   =========================================== */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.65s var(--ease-out-expo),
+              transform 0.65s var(--ease-out-expo);
+}
+.slide.visible .reveal { opacity: 1; transform: translateY(0); }
+.slide.visible .reveal:nth-child(1) { transition-delay: 0.05s; }
+.slide.visible .reveal:nth-child(2) { transition-delay: 0.15s; }
+.slide.visible .reveal:nth-child(3) { transition-delay: 0.25s; }
+.slide.visible .reveal:nth-child(4) { transition-delay: 0.35s; }
+.slide.visible .reveal:nth-child(5) { transition-delay: 0.45s; }
+.slide.visible .reveal:nth-child(6) { transition-delay: 0.55s; }
+.slide.visible .reveal:nth-child(7) { transition-delay: 0.65s; }
+
+.reveal-left {
+  opacity: 0;
+  transform: translateX(-28px);
+  transition: opacity 0.65s var(--ease-out-expo),
+              transform 0.65s var(--ease-out-expo);
+}
+.slide.visible .reveal-left { opacity: 1; transform: translateX(0); }
+.slide.visible .reveal-left:nth-child(1) { transition-delay: 0.1s; }
+.slide.visible .reveal-left:nth-child(2) { transition-delay: 0.2s; }
+.slide.visible .reveal-left:nth-child(3) { transition-delay: 0.3s; }
+.slide.visible .reveal-left:nth-child(4) { transition-delay: 0.4s; }
+.slide.visible .reveal-left:nth-child(5) { transition-delay: 0.5s; }
+.slide.visible .reveal-left:nth-child(6) { transition-delay: 0.6s; }
+
+/* ===========================================
+   GLOBAL COMPONENTS
+   =========================================== */
+
+/* Decorative slide number stamp */
+.slide-num {
+  position: absolute;
+  top: clamp(0.5rem, 2vh, 1.5rem);
+  right: clamp(1.5rem, 4vw, 4rem);
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 12vw, 10rem);
+  color: var(--yellow);
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.55;
+}
+
+/* Common header strip */
+.slide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(0.8rem, 2vh, 1.8rem) var(--slide-padding);
+  border-bottom: 2px solid var(--yellow);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.brand {
+  font-family: var(--font-display);
+  font-size: var(--small-size);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.slide-tag {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: var(--ink-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Yellow label badge */
+.badge {
+  display: inline-block;
+  background: var(--yellow);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--label-size);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  flex-shrink: 0;
+}
+
+/* Yellow footer bar */
+.slide-footer {
+  background: var(--yellow);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(0.6rem, 1.5vh, 1.1rem) var(--slide-padding);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.footer-text {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--body-size);
+  color: var(--ink);
+}
+.footer-sub {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: rgba(0,0,0,0.45);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Highlight text */
+.hl {
+  background: linear-gradient(to bottom, transparent 65%, var(--yellow) 65%);
+}
+
+/* Slide content area */
+.slide-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(1.2rem, 3vh, 3rem) var(--slide-padding);
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  gap: var(--content-gap);
+}
+
+/* Info card with yellow left bar */
+.info-card {
+  border: 1px solid #e8e8e8;
+  padding: clamp(0.9rem, 2.2vh, 1.8rem) clamp(0.9rem, 2vw, 1.4rem);
+  position: relative;
+}
+.info-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 3px; height: 100%;
+  background: var(--yellow);
+}
+.card-label {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-bottom: clamp(0.4rem, 1vh, 0.8rem);
+}
+.card-value {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+/* ===========================================
+   PROGRESS BAR + NAV DOTS
+   =========================================== */
+.progress-bar {
+  position: fixed;
+  top: 0; left: 0;
+  height: 3px;
+  background: var(--yellow);
+  width: 0%;
+  z-index: 9999;
+  transition: width 0.3s ease;
+}
+.nav-dots {
+  position: fixed;
+  right: clamp(0.6rem, 1.5vw, 1.2rem);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(5px, 1vh, 9px);
+  z-index: 9000;
+  list-style: none;
+}
+.nav-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  cursor: pointer;
+  transition: background 0.25s, transform 0.25s;
+  border: none;
+  padding: 0;
+}
+.nav-dot.active {
+  background: var(--ink);
+  transform: scale(1.4);
+}
+
+/* ===========================================
+   01 — TITLE SLIDE
+   =========================================== */
+.title-slide {
+  background: var(--ink);
+  justify-content: flex-end;
+}
+.title-slash {
+  position: absolute;
+  top: 0; right: 0;
+  width: 38%;
+  height: 100%;
+  background: var(--yellow);
+  clip-path: polygon(30% 0, 100% 0, 100% 100%, 0% 100%);
+  z-index: 0;
+}
+.title-inner {
+  position: relative;
+  z-index: 1;
+  padding: 0 var(--slide-padding) clamp(2.5rem, 6vh, 5rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1.5vh, 1.4rem);
+}
+.title-eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: var(--yellow);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.title-main {
+  font-family: var(--font-display);
+  font-size: clamp(3.5rem, 11vw, 9.5rem);
+  color: var(--white);
+  line-height: 0.92;
+  letter-spacing: -0.01em;
+}
+.title-main span { color: var(--yellow); }
+.title-sub {
+  font-family: var(--font-body);
+  font-size: var(--h3-size);
+  color: rgba(255,255,255,0.65);
+  font-weight: 400;
+  max-width: 55ch;
+}
+.title-meta {
+  display: flex;
+  gap: clamp(0.5rem, 1.2vw, 1rem);
+  align-items: center;
+  margin-top: clamp(0.5rem, 1.5vh, 1.2rem);
+  flex-wrap: wrap;
+}
+.title-year {
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 0.1em;
+}
+
+/* ===========================================
+   02 — ELEVATOR PITCH (Yellow bg)
+   =========================================== */
+.pitch-slide { background: var(--yellow); }
+.pitch-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(1.5rem, 4vh, 4rem) var(--slide-padding);
+  gap: clamp(1rem, 2.5vh, 2.5rem);
+}
+.pitch-label {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(0,0,0,0.45);
+}
+.pitch-quote {
+  font-family: var(--font-body);
+  font-size: clamp(1.1rem, 2.4vw, 2rem);
+  color: var(--ink);
+  line-height: 1.55;
+  font-weight: 500;
+  max-width: 70ch;
+}
+.pitch-punchline {
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 3vw, 2.6rem);
+  color: var(--ink);
+  line-height: 1.1;
+  border-top: 3px solid rgba(0,0,0,0.2);
+  padding-top: clamp(0.8rem, 2vh, 1.8rem);
+  max-width: 60ch;
+}
+
+/* ===========================================
+   03 — SERVICE OVERVIEW
+   =========================================== */
+.overview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(1rem, 2.5vw, 2.5rem);
+}
+.overview-tagline {
+  font-family: var(--font-display);
+  font-size: clamp(0.9rem, 1.8vw, 1.55rem);
+  line-height: 1.35;
+  margin-bottom: clamp(0.8rem, 2vh, 1.8rem);
+}
+.overview-tagline em {
+  background: var(--yellow);
+  font-style: normal;
+  padding: 0 4px;
+}
+.concept-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1.2vh, 1.1rem);
+}
+.concept-item {
+  display: flex;
+  gap: clamp(0.6rem, 1vw, 1rem);
+  align-items: flex-start;
+}
+.concept-dot {
+  width: clamp(7px,1.1vw,10px);
+  height: clamp(7px,1.1vw,10px);
+  background: var(--yellow);
+  flex-shrink: 0;
+  margin-top: 0.35em;
+}
+.concept-text {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  line-height: 1.5;
+}
+.concept-text strong { color: var(--ink); font-weight: 700; }
+
+/* ===========================================
+   04 — AI AGENT CONCEPT
+   =========================================== */
+.agent-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.8rem, 1.8vw, 1.8rem);
+}
+.agent-col {
+  border-top: 3px solid var(--yellow);
+  padding-top: clamp(0.8rem, 1.5vh, 1.4rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.4rem, 0.9vh, 0.9rem);
+}
+.agent-col-num {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 3vw, 2.8rem);
+  color: var(--yellow);
+  line-height: 1;
+}
+.agent-col-title {
+  font-family: var(--font-body);
+  font-size: var(--h3-size);
+  font-weight: 700;
+  color: var(--ink);
+}
+.agent-col-desc {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-dim);
+  line-height: 1.55;
+}
+
+/* ===========================================
+   05 — TARGET
+   =========================================== */
+.reason-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1.2vh, 1.1rem);
+}
+.reason-item {
+  display: flex;
+  gap: clamp(0.8rem, 1.5vw, 1.4rem);
+  align-items: flex-start;
+}
+.reason-num {
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 2vw, 1.6rem);
+  color: var(--yellow);
+  line-height: 1;
+  min-width: clamp(1.4rem, 2.5vw, 2.2rem);
+  flex-shrink: 0;
+}
+.reason-text {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  line-height: 1.5;
+  padding-top: 0.1em;
+}
+.reason-text strong { color: var(--ink); }
+
+/* ===========================================
+   06 — USE CASE
+   =========================================== */
+.usecase-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(1rem, 2.5vw, 2.5rem);
+}
+.usecase-team {
+  background: var(--off-white);
+  padding: clamp(1rem, 2.2vh, 2rem) clamp(1rem, 2vw, 1.8rem);
+  position: relative;
+}
+.usecase-team::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 4px;
+  background: var(--yellow);
+}
+.team-title {
+  font-family: var(--font-body);
+  font-size: var(--h3-size);
+  font-weight: 700;
+  margin-bottom: clamp(0.6rem, 1.2vh, 1.1rem);
+}
+.team-items {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 0.8vh, 0.7rem);
+}
+.team-items li {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  padding-left: clamp(0.8rem, 1.2vw, 1.2rem);
+  position: relative;
+}
+.team-items li::before {
+  content: '└';
+  position: absolute;
+  left: 0;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+/* ===========================================
+   07 — BUSINESS MODEL
+   =========================================== */
+.biz-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(1rem, 2.5vw, 2.5rem);
+}
+.price-box {
+  background: var(--ink);
+  color: var(--white);
+  padding: clamp(1.2rem, 2.5vh, 2.2rem) clamp(1.2rem, 2.5vw, 2rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1vh, 1rem);
+}
+.price-label {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--yellow);
+}
+.price-main {
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2.2vw, 1.9rem);
+  color: var(--white);
+  line-height: 1.2;
+}
+.price-desc {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: rgba(255,255,255,0.65);
+  line-height: 1.5;
+}
+.dynamics-box {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1vh, 0.9rem);
+}
+.dynamic-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.5rem, 1vw, 1rem);
+}
+.dynamic-label {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-dim);
+  flex: 1;
+}
+.dynamic-arrow {
+  color: var(--yellow);
+  font-size: 1.2em;
+  flex-shrink: 0;
+}
+.dynamic-result {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* ===========================================
+   08 — AGENT = GIT REPO (dark slide)
+   =========================================== */
+.git-slide { background: var(--code-bg); }
+.git-slide .slide-header { border-bottom-color: #333; }
+.git-slide .brand { color: var(--white); }
+.git-slide .slide-tag { color: #555; }
+.git-slide .slide-num { color: #1a1a1a; opacity: 1; }
+.git-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 5rem);
+  padding: clamp(1.2rem, 3vh, 3rem) var(--slide-padding);
+  overflow: hidden;
+}
+.git-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.8rem, 1.8vh, 1.8rem);
+}
+.git-h2 {
+  font-family: var(--font-display);
+  font-size: var(--h2-size);
+  color: var(--white);
+  line-height: 1.1;
+}
+.git-h2 span { color: var(--yellow); }
+.git-points {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1vh, 1rem);
+}
+.git-points li {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: rgba(255,255,255,0.7);
+  line-height: 1.5;
+  padding-left: clamp(0.8rem, 1.5vw, 1.4rem);
+  position: relative;
+}
+.git-points li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--yellow);
+  font-weight: 700;
+}
+.git-right { flex: 1; }
+.code-block {
+  background: #0d1117;
+  border: 1px solid #333;
+  padding: clamp(1rem, 2.5vh, 2.2rem) clamp(1rem, 2vw, 1.8rem);
+  font-family: var(--font-mono);
+  font-size: clamp(0.62rem, 1.1vw, 0.92rem);
+  line-height: 1.7;
+  overflow: hidden;
+}
+.cm { color: var(--code-comment); }
+.cy { color: var(--code-yellow); }
+.cg { color: var(--code-green); }
+.cb { color: var(--code-blue); }
+.cw { color: rgba(255,255,255,0.9); }
+
+/* ===========================================
+   09 — DATA FLYWHEEL
+   =========================================== */
+.flywheel-flow {
+  display: flex;
+  align-items: stretch;
+  gap: clamp(0.3rem, 0.8vw, 0.8rem);
+}
+.fw-node {
+  flex: 1;
+  min-width: 0;
+  background: var(--off-white);
+  border-top: 3px solid var(--ink-faint);
+  padding: clamp(0.7rem, 1.5vh, 1.3rem) clamp(0.5rem, 1vw, 1rem);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 0.6vh, 0.6rem);
+  justify-content: center;
+}
+.fw-node.accent { border-top-color: var(--yellow); background: var(--yellow-pale); }
+.fw-step {
+  font-family: var(--font-display);
+  font-size: clamp(0.9rem, 1.8vw, 1.5rem);
+  color: var(--yellow);
+  line-height: 1;
+}
+.fw-text {
+  font-family: var(--font-body);
+  font-size: clamp(0.58rem, 0.95vw, 0.78rem);
+  color: var(--ink-mid);
+  line-height: 1.4;
+}
+.fw-arrow {
+  color: var(--ink-faint);
+  font-size: clamp(1rem, 2vw, 1.6rem);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.flywheel-result {
+  background: var(--ink);
+  color: var(--white);
+  padding: clamp(0.8rem, 1.8vh, 1.5rem) var(--slide-padding);
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  line-height: 1.55;
+  flex-shrink: 0;
+}
+.flywheel-result strong { color: var(--yellow); }
+
+/* ===========================================
+   10 — SECURITY
+   =========================================== */
+.security-flow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.8rem, 1.8vw, 1.8rem);
+  align-items: start;
+}
+.sec-step {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1vh, 1rem);
+}
+.sec-num {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  color: var(--yellow);
+  line-height: 1;
+}
+.sec-title {
+  font-family: var(--font-body);
+  font-size: var(--h3-size);
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.sec-desc {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-dim);
+  line-height: 1.55;
+}
+.sec-note {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: var(--ink-dim);
+  border-top: 1px solid #eee;
+  padding-top: clamp(0.6rem, 1.2vh, 1rem);
+  margin-top: auto;
+  font-style: italic;
+}
+
+/* ===========================================
+   11 — COMPETITIVE
+   =========================================== */
+.vs-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.vs-table th {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  text-align: left;
+  padding: clamp(0.5rem, 1vh, 0.9rem) clamp(0.5rem, 1vw, 1rem);
+  border-bottom: 2px solid var(--yellow);
+}
+.vs-table td {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  padding: clamp(0.6rem, 1.2vh, 1.1rem) clamp(0.5rem, 1vw, 1rem);
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
+  line-height: 1.5;
+}
+.vs-table td:first-child { font-weight: 700; color: var(--ink); }
+.vs-table td.branch-win { color: var(--ink); font-weight: 600; }
+.diff-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(0.5rem, 1.2vw, 1.1rem);
+}
+.diff-item {
+  background: var(--yellow-pale);
+  border-left: 3px solid var(--yellow);
+  padding: clamp(0.5rem, 1.1vh, 0.9rem) clamp(0.6rem, 1vw, 1rem);
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink);
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+/* ===========================================
+   12 — ROYALTY MODEL
+   =========================================== */
+.royalty-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.rl-step {
+  display: flex;
+  gap: clamp(0.8rem, 1.5vw, 1.4rem);
+  align-items: center;
+}
+.rl-num {
+  font-family: var(--font-display);
+  font-size: clamp(1.2rem, 2.4vw, 2rem);
+  color: var(--yellow);
+  line-height: 1;
+  min-width: clamp(1.8rem, 3.5vw, 3rem);
+  flex-shrink: 0;
+}
+.rl-content {
+  flex: 1;
+  background: var(--off-white);
+  padding: clamp(0.45rem, 0.9vh, 0.85rem) clamp(0.8rem, 1.5vw, 1.3rem);
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  line-height: 1.4;
+}
+.rl-content strong { color: var(--ink); }
+.rl-arrow {
+  padding-left: clamp(1.8rem, 3.5vw, 3rem);
+  color: var(--yellow);
+  font-size: clamp(0.8rem, 1.2vw, 1rem);
+  font-family: var(--font-mono);
+  line-height: 1.1;
+}
+
+/* ===========================================
+   13 — GTM STRATEGY
+   =========================================== */
+.gtm-phases {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.8rem, 1.8vw, 2rem);
+}
+.gtm-phase {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1vh, 1rem);
+  padding: clamp(1rem, 2.2vh, 2rem) clamp(0.8rem, 1.5vw, 1.4rem);
+  border: 1px solid #eee;
+  position: relative;
+}
+.gtm-phase.active {
+  border-color: var(--yellow);
+  background: var(--yellow-pale);
+}
+.gtm-phase-label {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.gtm-phase.active .gtm-phase-label { color: rgba(0,0,0,0.5); }
+.gtm-phase-num {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  color: var(--ink-faint);
+  line-height: 1;
+  position: absolute;
+  bottom: clamp(0.5rem, 1.2vh, 1rem);
+  right: clamp(0.8rem, 1.5vw, 1.4rem);
+  pointer-events: none;
+}
+.gtm-phase.active .gtm-phase-num { color: rgba(0,0,0,0.1); }
+.gtm-phase-title {
+  font-family: var(--font-body);
+  font-size: var(--h3-size);
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.gtm-items {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 0.7vh, 0.7rem);
+}
+.gtm-items li {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-dim);
+  line-height: 1.45;
+  padding-left: 1em;
+  position: relative;
+}
+.gtm-items li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--yellow);
+}
+
+/* ===========================================
+   14 — CLOSING (dark slide)
+   =========================================== */
+.closing-slide { background: var(--ink); }
+.closing-slide .slide-num { color: #1a1a1a; opacity: 1; }
+.closing-inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(2rem, 5vh, 5rem) var(--slide-padding);
+  text-align: center;
+  gap: clamp(1.2rem, 2.8vh, 2.8rem);
+}
+.closing-eq {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.8rem, 2vw, 2rem);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.closing-term {
+  font-family: var(--font-display);
+  font-size: clamp(1.2rem, 3vw, 2.6rem);
+  color: var(--white);
+  line-height: 1.05;
+}
+.closing-term.yellow { color: var(--yellow); }
+.closing-sep {
+  font-family: var(--font-body);
+  font-size: clamp(1.2rem, 2.5vw, 2rem);
+  color: rgba(255,255,255,0.3);
+  font-weight: 300;
+}
+.closing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.8rem, 1.5vw, 1.5rem);
+  width: 100%;
+  max-width: 800px;
+}
+.closing-cell {
+  text-align: left;
+  border-top: 1px solid #333;
+  padding-top: clamp(0.6rem, 1.2vh, 1.1rem);
+}
+.closing-cell-label {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 0.35em;
+}
+.closing-cell-val {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: rgba(255,255,255,0.8);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.closing-cta {
+  background: var(--yellow);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--h3-size);
+  padding: clamp(0.8rem, 2vh, 1.6rem) clamp(2rem, 5vw, 4rem);
+  letter-spacing: 0.04em;
+}
+
+/* ===========================================
+   INLINE EDITING
+   =========================================== */
+.edit-hotzone {
+  position: fixed;
+  top: 0; left: 0;
+  width: 80px; height: 80px;
+  z-index: 10000;
+  cursor: pointer;
+}
+.edit-toggle {
+  position: fixed;
+  top: 16px; left: 16px;
+  background: var(--yellow);
+  color: var(--ink);
+  border: none;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  cursor: pointer;
+  z-index: 10001;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.edit-toggle.show,
+.edit-toggle.active { opacity: 1; pointer-events: auto; }
+.edit-toggle.active { background: #e03030; color: white; }
+
+[contenteditable="true"] {
+  outline: 2px solid var(--yellow);
+  outline-offset: 3px;
+}
+
+/* ===========================================
+   @media BLOCKS — MUST COME LAST
+   (Same-specificity rules: later wins.)
+   =========================================== */
+/* ── Slide credit (bottom-right of every slide) ── */
+.slide-credit {
+  position: absolute;
+  bottom: clamp(0.5rem, 1.2vh, 1rem);
+  right: clamp(0.8rem, 2vw, 1.6rem);
+  font-family: var(--font-body);
+  font-size: clamp(0.55rem, 0.85vw, 0.72rem);
+  letter-spacing: 0.05em;
+  color: var(--ink-dim);
+  opacity: 0.55;
+  z-index: 10;
+  pointer-events: none;
+  user-select: none;
+}
+.title-slide .slide-credit,
+.closing-slide .slide-credit,
+.git-slide .slide-credit { color: rgba(255,255,255,0.4); }
+
+@media (max-height: 700px) {
+  :root {
+    --slide-padding: clamp(1rem, 3vw, 2.5rem);
+    --title-size: clamp(1.8rem, 5.5vw, 4.5rem);
+    --h2-size: clamp(1.2rem, 3vw, 2.4rem);
+    --content-gap: clamp(0.5rem, 1.2vh, 1.2rem);
+  }
+  .title-main { font-size: clamp(2.8rem, 8vw, 7rem); }
+}
+@media (max-height: 600px) {
+  :root {
+    --slide-padding: clamp(0.8rem, 2.5vw, 1.8rem);
+    --h2-size: clamp(1rem, 2.6vw, 2rem);
+    --body-size: clamp(0.68rem, 1.1vw, 0.9rem);
+    --content-gap: clamp(0.4rem, 0.9vh, 0.9rem);
+  }
+  .slide-num { display: none; }
+  .nav-dots { display: none; }
+}
+@media (max-height: 500px) {
+  :root {
+    --slide-padding: clamp(0.5rem, 2vw, 1.2rem);
+    --h2-size: clamp(0.9rem, 2.2vw, 1.6rem);
+    --body-size: clamp(0.62rem, 1vw, 0.82rem);
+  }
+}
+@media (max-width: 600px) {
+  :root { --title-size: clamp(1.4rem, 7.5vw, 2.8rem); }
+  .title-main { font-size: clamp(2.5rem, 13vw, 5rem); }
+  .title-slash { width: 0; }
+  .overview-grid,
+  .usecase-cols,
+  .biz-grid,
+  .security-flow,
+  .diff-grid,
+  .gtm-phases,
+  .closing-grid { grid-template-columns: 1fr; }
+  .agent-cols { grid-template-columns: 1fr; }
+  .flywheel-flow { flex-direction: column; }
+  .fw-arrow { transform: rotate(90deg); }
+  .closing-eq { flex-direction: column; gap: 0.4rem; }
+  .git-body { flex-direction: column; }
+}
+@media (min-width: 601px) and (max-width: 900px) {
+  .agent-cols { grid-template-columns: repeat(2, 1fr); }
+  .gtm-phases { grid-template-columns: 1fr 1fr; }
+  .closing-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.2s !important;
+  }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- Progress bar -->
+<div class="progress-bar" id="progressBar"></div>
+
+<!-- Navigation dots -->
+<nav class="nav-dots" id="navDots" aria-label="スライドナビゲーション"></nav>
+
+<!-- Inline edit hotzone (top-left corner hover / click) -->
+<div class="edit-hotzone" id="editHotzone"></div>
+<button class="edit-toggle" id="editToggle" title="編集モード (E)">✏ EDIT</button>
+
+<!-- ================================================
+     SLIDE 01 — TITLE
+     ================================================ -->
+<section class="slide title-slide" id="slide-1" aria-label="タイトル">
+  <div class="slide-num">01</div>
+  <div class="title-slash" aria-hidden="true"></div>
+  <div class="title-inner">
+    <p class="title-eyebrow reveal">Pitch Deck 2026</p>
+    <h1 class="title-main reveal">THE<br><span>BRANCH</span></h1>
+    <p class="title-sub reveal">AIエージェントチームを、部署ごと借りる。</p>
+    <div class="title-meta reveal">
+      <span class="badge">ピッチデッキ</span>
+      <span class="title-year">2026 · CONFIDENTIAL</span>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 02 — ELEVATOR PITCH
+     ================================================ -->
+<section class="slide pitch-slide" id="slide-2" aria-label="エレベーターピッチ">
+  <div class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Core Insight</span>
+  </div>
+  <div class="pitch-body">
+    <p class="pitch-label reveal">ELEVATOR PITCH</p>
+    <p class="pitch-quote reveal">
+      採用は1人ずつ。でも仕事は、部署単位で動く。<br>
+      広告運用チームが欲しければ、マネージャー・ライター・<br>
+      配信担当まで<strong>丸ごと借りられる</strong>。<br>
+      明日から稼働、スケールは即日、コストは使った分だけ。
+    </p>
+    <p class="pitch-punchline reveal">外注でも採用でもない——部署ごと、AIで動かす。</p>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 03 — SERVICE OVERVIEW
+     ================================================ -->
+<section class="slide" id="slide-3" aria-label="サービス概要">
+  <div class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">What We Do</span>
+  </div>
+  <div class="slide-num">03</div>
+  <div class="slide-body">
+    <span class="badge reveal">SERVICE</span>
+    <h2 class="reveal" style="font-family:var(--font-display);font-size:var(--h2-size);line-height:1.1;">
+      複数のAIエージェントチームが<br>協調して業務を遂行する<span class="hl"> SaaS</span>
+    </h2>
+    <div class="overview-grid reveal">
+      <div>
+        <p class="overview-tagline">「<em>ブランチ（支社・部署）を借りる</em>」という体験</p>
+        <ul class="concept-list">
+          <li class="concept-item">
+            <div class="concept-dot"></div>
+            <p class="concept-text"><strong>チームごと借りられる</strong> — 企業・部署・支社単位でエージェントチームをアサイン</p>
+          </li>
+          <li class="concept-item">
+            <div class="concept-dot"></div>
+            <p class="concept-text"><strong>インスタンス化</strong> — 既存チームのコピーから新チームを即起動</p>
+          </li>
+          <li class="concept-item">
+            <div class="concept-dot"></div>
+            <p class="concept-text"><strong>Gitで成長を管理</strong> — スキル・ルールはファイルで定義、バージョン管理で永続化</p>
+          </li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <p class="card-label">本質的な定義</p>
+        <p class="card-value">
+          The Branch ＝ <strong>借りられる、AI の部署</strong><br><br>
+          人を1人採用するのではなく、機能する部署ごと動かす。使うほど賢くなり、コピーして即スケール。
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-text">ブランチを借りる体験</span>
+    <span class="footer-sub">SaaS · AI Agents</span>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 04 — AI AGENT CONCEPT
+     ================================================ -->
+<section class="slide" id="slide-4" aria-label="AIエージェントとは">
+  <div class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Core Concept</span>
+  </div>
+  <div class="slide-num">04</div>
+  <div class="slide-body">
+    <span class="badge reveal">AI AGENTS</span>
+    <h2 class="reveal" style="font-family:var(--font-display);font-size:var(--h2-size);line-height:1.1;">
+      AIエージェントとは何か
+    </h2>
+    <div class="agent-cols reveal">
+      <div class="agent-col">
+        <div class="agent-col-num">01</div>
+        <div class="agent-col-title">Web アバター</div>
+        <div class="agent-col-desc">Web画面にアバターとして登場。ユーザーと直接インタラクション。</div>
+      </div>
+      <div class="agent-col">
+        <div class="agent-col-num">02</div>
+        <div class="agent-col-title">Slack で連絡</div>
+        <div class="agent-col-desc">Slack等のコミュニケーションツールで非同期に連絡・報告可能。</div>
+      </div>
+      <div class="agent-col">
+        <div class="agent-col-num">03</div>
+        <div class="agent-col-title">スキル保有</div>
+        <div class="agent-col-desc">各エージェントはスキル・subagentを持つ専門家。細分化するほど専門性が上がる。</div>
+      </div>
+    </div>
+    <div class="info-card reveal">
+      <p class="card-label">チーム構成の原則</p>
+      <p class="card-value">専門エージェントが細分化するほど専門性は高まるが、<strong>マネジメントレイヤー</strong>も必要。方向性・妥当性・整合性を担う役割。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 05 — TARGET: AD AGENCY
+     ================================================ -->
+<section class="slide" id="slide-5" aria-label="ターゲット顧客">
+  <div class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Target Customer</span>
+  </div>
+  <div class="slide-num">05</div>
+  <div class="slide-body">
+    <div class="reveal" style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;">
+      <span class="badge">BEACHHEAD</span>
+      <span style="font-family:var(--font-body);font-size:var(--label-size);color:var(--ink-dim);letter-spacing:0.08em;">→ 将来：中小企業・大企業（両方）</span>
+    </div>
+    <h2 class="reveal" style="font-family:var(--font-display);font-size:var(--h2-size);line-height:1.1;">
+      まず<span class="hl">広告代理店</span>から
+    </h2>
+    <ol class="reason-list">
+      <li class="reason-item reveal">
+        <span class="reason-num">01</span>
+        <p class="reason-text"><strong>ROIが数値で証明しやすい</strong> — ROAS・CPA・CTRで成果を定量化できる</p>
+      </li>
+      <li class="reason-item reveal">
+        <span class="reason-num">02</span>
+        <p class="reason-text"><strong>人件費・採用コストが高く</strong>代替ニーズが強い</p>
+      </li>
+      <li class="reason-item reveal">
+        <span class="reason-num">03</span>
+        <p class="reason-text"><strong>Meta・Google APIが整備済み</strong>でスキル化しやすい</p>
+      </li>
+      <li class="reason-item reveal">
+        <span class="reason-num">04</span>
+        <p class="reason-text"><strong>複数クライアントを抱える</strong>ため横展開が早い</p>
+      </li>
+      <li class="reason-item reveal">
+        <span class="reason-num">05</span>
+        <p class="reason-text"><strong>部署間連携のユースケースが明確</strong> — 広告チーム × 法務チーム</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 06 — USE CASE
+     ================================================ -->
+<section class="slide" id="slide-6" aria-label="ユースケース">
+  <div class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Use Case</span>
+  </div>
+  <div class="slide-num">06</div>
+  <div class="slide-body">
+    <span class="badge reveal">広告代理店での実例</span>
+    <h2 class="reveal" style="font-family:var(--font-display);font-size:var(--h2-size);line-height:1.1;">
+      2チームが連携して動く
+    </h2>
+    <div class="usecase-cols reveal">
+      <div class="usecase-team">
+        <h3 class="team-title">広告運用チーム</h3>
+        <ul class="team-items">
+          <li>広告企画</li>
+          <li>クリエイティブ作成</li>
+          <li>予算に基づく配信設定</li>
+          <li>運用レバーの細かい調整</li>
+        </ul>
+      </div>
+      <div class="usecase-team">
+        <h3 class="team-title">法務チーム</h3>
+        <ul class="team-items">
+          <li>クリエイティブの法的チェック</li>
+          <li>承認フロー管理</li>
+        </ul>
+      </div>
+    </div>
+    <div class="info-card reveal">
+      <p class="card-label">ワークフロー</p>
+      <p class="card-value">タスク依頼→承認フロー（構造化）→担当エージェント間のやりとり→マネージャーが判断。カンバンボードで可視化・進捗管理。クライアントはSlack等で非同期に確認・指示。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 07 — BUSINESS MODEL
+     ================================================ -->
+<section class="slide" id="slide-7" aria-label="ビジネスモデル">
+  <div class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Business Model</span>
+  </div>
+  <div class="slide-num">07</div>
+  <div class="slide-body">
+    <span class="badge reveal">課金体系</span>
+    <h2 class="reveal" style="font-family:var(--font-display);font-size:var(--h2-size);line-height:1.1;">
+      使うほど<span class="hl">安くなる</span>モデル
+    </h2>
+    <div class="biz-grid reveal">
+      <div class="price-box">
+        <p class="price-label">基本課金</p>
+        <p class="price-main">エージェント単位の課金</p>
+        <p class="price-desc">能力・需要・実績で単価が変動。人気エージェントほど高く、早く押さえた企業が有利。</p>
+      </div>
+      <div class="price-box">
+        <p class="price-label">広告配信</p>
+        <p class="price-main">配信量の n %</p>
+        <p class="price-desc">成果連動型。ROASが改善するほど配信額が増え、The Branch の収益も拡大。</p>
+      </div>
+    </div>
+    <div class="dynamics-box reveal">
+      <p style="font-family:var(--font-body);font-size:var(--label-size);font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--ink-dim);">価格ダイナミクス</p>
+      <div class="dynamic-row">
+        <span class="dynamic-label">需要（呼び出し頻度）+ 実績（ROAS改善率）+ 自作スキル数</span>
+        <span class="dynamic-arrow">→</span>
+        <span class="dynamic-result">評価スコア → 単価</span>
+      </div>
+      <div class="dynamic-row">
+        <span class="dynamic-label">早期契約（ロックイン）</span>
+        <span class="dynamic-arrow">→</span>
+        <span class="dynamic-result">単価上昇が緩やか</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 08 — AGENT = GIT REPO
+     ================================================ -->
+<section class="slide git-slide" id="slide-8" aria-label="エージェントの構造">
+  <div class="slide-header">
+    <span class="brand" style="color:var(--white);">The Branch</span>
+    <span class="slide-tag">Tech Architecture</span>
+  </div>
+  <div class="slide-num">08</div>
+  <div class="git-body">
+    <div class="git-left">
+      <h2 class="git-h2 reveal">
+        一人のエージェント<br>＝ 一つの<span>Git リポジトリ</span>
+      </h2>
+      <ul class="git-points">
+        <li class="reveal">スキル・ルールは <code style="color:var(--code-yellow);font-family:var(--font-mono);">.md</code> ファイルで定義</li>
+        <li class="reveal">Git管理でバージョン履歴 ＝ エージェントの成長記録</li>
+        <li class="reveal">自作したスキル・ツールがそのエージェントの評価になる</li>
+        <li class="reveal"><code style="color:var(--code-yellow);font-family:var(--font-mono);">tag: v1.0.0</code> → <code style="color:var(--code-green);font-family:var(--font-mono);">tag: v2.0.0</code> でレベルアップ</li>
+      </ul>
+    </div>
+    <div class="git-right reveal">
+      <div class="code-block">
+        <span class="cm"># 坂本 (エージェント) リポジトリ</span><br>
+        <span class="cw">repo/</span><br>
+        <span class="cw">├── </span><span class="cy">CLAUDE.md</span><span class="cm">         # 人格・役割・ルール定義</span><br>
+        <span class="cw">├── skills/</span><span class="cm">           # 保有スキル一覧</span><br>
+        <span class="cw">│   ├── </span><span class="cg">meta-ads.md</span><br>
+        <span class="cw">│   └── </span><span class="cg">creative-review.md</span><br>
+        <span class="cw">├── tools/</span><span class="cm">            # 自作ツール（評価に反映）</span><br>
+        <span class="cw">└── </span><span class="cy">CHANGELOG.md</span><span class="cm">      # 成長履歴</span><br>
+        <br>
+        <span class="cm"># バージョン管理</span><br>
+        <span class="cb">tag: v1.0.0</span><span class="cm">  ←── 坂本さん v1</span><br>
+        <span class="cg">tag: v2.0.0</span><span class="cm">  ←── 坂本さん v2</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 09 — DATA FLYWHEEL
+     ================================================ -->
+<section class="slide" id="slide-9" aria-label="データフライホイール">
+  <div class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Data Flywheel</span>
+  </div>
+  <div class="slide-num">09</div>
+  <div class="slide-body" style="gap:clamp(0.8rem,2vh,2rem);">
+    <span class="badge reveal">データフライホイール</span>
+    <h2 class="reveal" style="font-family:var(--font-display);font-size:var(--h2-size);line-height:1.1;">
+      使われるほど<span class="hl">賢くなる</span>
+    </h2>
+    <div class="flywheel-flow reveal">
+      <div class="fw-node accent">
+        <div class="fw-step">①</div>
+        <div class="fw-text">クライアントが<br>エージェントを使う</div>
+      </div>
+      <div class="fw-arrow">→</div>
+      <div class="fw-node">
+        <div class="fw-step">②</div>
+        <div class="fw-text">改善パターンが<br>蓄積される</div>
+      </div>
+      <div class="fw-arrow">→</div>
+      <div class="fw-node">
+        <div class="fw-step">③</div>
+        <div class="fw-text">機密情報を<br>自動除去・レビュー</div>
+      </div>
+      <div class="fw-arrow">→</div>
+      <div class="fw-node">
+        <div class="fw-step">④</div>
+        <div class="fw-text">Gitリポジトリに<br>マージ</div>
+      </div>
+      <div class="fw-arrow">→</div>
+      <div class="fw-node accent">
+        <div class="fw-step">⑤</div>
+        <div class="fw-text">評価スコアUP<br>単価UP</div>
+      </div>
+    </div>
+  </div>
+  <div class="flywheel-result reveal">
+    使われるほどエージェントが賢くなり、The Branchの<strong>競合優位性が高まる</strong>。解約してもThe Branchの資産として蓄積され続ける。
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 10 — SECURITY & GOVERNANCE
+     ================================================ -->
+<section class="slide" id="slide-10" aria-label="セキュリティ・ガバナンス">
+  <div class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Security</span>
+  </div>
+  <div class="slide-num">10</div>
+  <div class="slide-body">
+    <span class="badge reveal">セキュリティ・ガバナンス</span>
+    <h2 class="reveal" style="font-family:var(--font-display);font-size:var(--h2-size);line-height:1.1;">
+      自律性と安全性の<span class="hl">両立</span>
+    </h2>
+    <div class="security-flow reveal">
+      <div class="sec-step">
+        <div class="sec-num">01</div>
+        <div class="sec-title">エージェントが<br>スキルを自作</div>
+        <div class="sec-desc">エージェントは自発的・自律的にスキル・ツールを作成する。</div>
+      </div>
+      <div class="sec-step">
+        <div class="sec-num">02</div>
+        <div class="sec-title">チェックエージェントが<br>常時監視</div>
+        <div class="sec-desc">監視役もAIエージェント（メタ構造）。危険な実装を自動検知する。</div>
+      </div>
+      <div class="sec-step">
+        <div class="sec-num">03</div>
+        <div class="sec-title">Slack で<br>即時アラート</div>
+        <div class="sec-desc">派遣先企業とThe Branch運営の両方に通知。人間が最終判断を下す。</div>
+      </div>
+    </div>
+    <p class="sec-note reveal">
+      責任はクライアント企業が持つ（派遣先が責任を持つモデル）。The Branchは派遣会社に相当。
+    </p>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 11 — COMPETITIVE DIFFERENTIATION
+     ================================================ -->
+<section class="slide" id="slide-11" aria-label="競合との差別化">
+  <div class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Competitive Edge</span>
+  </div>
+  <div class="slide-num">11</div>
+  <div class="slide-body" style="gap:clamp(0.6rem,1.4vh,1.4rem);">
+    <span class="badge reveal">競合との差別化</span>
+    <h2 class="reveal" style="font-family:var(--font-display);font-size:var(--h2-size);line-height:1.1;">
+      誰も解決していない<span class="hl">ギャップ</span>
+    </h2>
+    <table class="vs-table reveal">
+      <thead>
+        <tr>
+          <th>競合</th>
+          <th>弱点</th>
+          <th>The Branch の優位性</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AutoGen・CrewAI等</td>
+          <td>開発者ツール。業務編成・チーム結成まではできない</td>
+          <td class="branch-win">ノーコードで部署ごと借りられる</td>
+        </tr>
+        <tr>
+          <td>大手SIer・コンサル</td>
+          <td>高コスト・属人化（人が去ると知識も消える）</td>
+          <td class="branch-win">低コスト・知識はGitに永続する</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="diff-grid reveal">
+      <div class="diff-item">ターンキー提供（チーム編成まで含む）</div>
+      <div class="diff-item">属人化ゼロ — 知識はリポジトリに永続</div>
+      <div class="diff-item">使うほど賢くなる（解約後も資産蓄積）</div>
+      <div class="diff-item">即時スケール — インスタンス化して即起動</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 12 — ROYALTY MODEL
+     ================================================ -->
+<section class="slide" id="slide-12" aria-label="ロイヤリティモデル">
+  <div class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Royalty Model</span>
+  </div>
+  <div class="slide-num">12</div>
+  <div class="slide-body" style="gap:clamp(0.8rem,1.8vh,1.8rem);">
+    <span class="badge reveal">エージェント育成・ロイヤリティ</span>
+    <h2 class="reveal" style="font-family:var(--font-display);font-size:var(--h2-size);line-height:1.1;">
+      育てたエージェントが<span class="hl">収益を生む</span>
+    </h2>
+    <div class="royalty-flow reveal">
+      <div class="rl-step">
+        <span class="rl-num">①</span>
+        <div class="rl-content">顧客が「スキルゼロのエージェント」を<strong>安く借りる</strong></div>
+      </div>
+      <div class="rl-arrow">↓</div>
+      <div class="rl-step">
+        <span class="rl-num">②</span>
+        <div class="rl-content">自社業務を通じて<strong>教育・育成</strong>（単価上昇は緩やか）</div>
+      </div>
+      <div class="rl-arrow">↓</div>
+      <div class="rl-step">
+        <span class="rl-num">③</span>
+        <div class="rl-content">成長したエージェントをThe Branchの<strong>カタログに登録</strong></div>
+      </div>
+      <div class="rl-arrow">↓</div>
+      <div class="rl-step">
+        <span class="rl-num">④</span>
+        <div class="rl-content">他社が採用 → <strong>育成企業のLLMコストが分散・低下</strong></div>
+      </div>
+      <div class="rl-arrow">↓</div>
+      <div class="rl-step">
+        <span class="rl-num">⑤⑥⑦</span>
+        <div class="rl-content">採用社数が増えると利用が<strong>実質無料</strong>→クレジット蓄積→<strong>現金払い戻し</strong></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 13 — GTM STRATEGY
+     ================================================ -->
+<section class="slide" id="slide-13" aria-label="GTM戦略">
+  <div class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Go-to-Market</span>
+  </div>
+  <div class="slide-num">13</div>
+  <div class="slide-body">
+    <span class="badge reveal">GTM戦略</span>
+    <h2 class="reveal" style="font-family:var(--font-display);font-size:var(--h2-size);line-height:1.1;">
+      自社で証明してから<span class="hl">外販</span>する
+    </h2>
+    <div class="gtm-phases reveal">
+      <div class="gtm-phase active">
+        <p class="gtm-phase-label">Phase 1 · NOW</p>
+        <div class="gtm-phase-num">1</div>
+        <h3 class="gtm-phase-title">ドッグフーディング</h3>
+        <ul class="gtm-items">
+          <li>自社EC「へそのや」でThe Branchを実際に使う</li>
+          <li>広告コピー生成 ＋ Meta広告配信設定から開始</li>
+          <li>実績データ・ノウハウを自社で蓄積</li>
+        </ul>
+      </div>
+      <div class="gtm-phase">
+        <p class="gtm-phase-label">Phase 2</p>
+        <div class="gtm-phase-num">2</div>
+        <h3 class="gtm-phase-title">カタログ公開</h3>
+        <ul class="gtm-items">
+          <li>エージェントカタログを外部に開放</li>
+          <li>外部エージェントの登録受付（審査制）</li>
+          <li>売上70% → 登録者 / 30% → The Branch</li>
+        </ul>
+      </div>
+      <div class="gtm-phase">
+        <p class="gtm-phase-label">Phase 3</p>
+        <div class="gtm-phase-num">3</div>
+        <h3 class="gtm-phase-title">外部クライアント獲得</h3>
+        <ul class="gtm-items">
+          <li>広告代理店向けに営業</li>
+          <li>自社ECでの成果をケーススタディに活用</li>
+          <li>The Branch自身がエージェントで動く = 最大のデモ</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================
+     SLIDE 14 — CLOSING
+     ================================================ -->
+<section class="slide closing-slide" id="slide-14" aria-label="クロージング">
+  <div class="slide-num">14</div>
+  <div class="closing-inner">
+    <div class="closing-eq reveal">
+      <span class="closing-term">THE BRANCH</span>
+      <span class="closing-sep">=</span>
+      <span class="closing-term yellow">借りられる、<br>AI の部署</span>
+    </div>
+    <div class="closing-grid reveal">
+      <div class="closing-cell">
+        <div class="closing-cell-label">採用に比べて</div>
+        <div class="closing-cell-val">即日稼働、<br>コストは使った分だけ</div>
+      </div>
+      <div class="closing-cell">
+        <div class="closing-cell-label">外注に比べて</div>
+        <div class="closing-cell-val">内製品質、<br>知識はGitに永続する</div>
+      </div>
+      <div class="closing-cell">
+        <div class="closing-cell-label">SIer に比べて</div>
+        <div class="closing-cell-val">低コスト、<br>使うほど賢くなる</div>
+      </div>
+    </div>
+    <div class="closing-cta reveal">採用でも外注でもない。部署ごと、AIで動かす。</div>
+    <p class="reveal" style="font-family:var(--font-body);font-size:var(--label-size);color:rgba(255,255,255,0.3);letter-spacing:0.15em;text-transform:uppercase;">2026 · The Branch · Confidential</p>
+  </div>
+</section>
+
+<script>
+/* ===========================================
+   SLIDE PRESENTATION CONTROLLER
+   =========================================== */
+class SlidePresentation {
+  constructor() {
+    this.slides = Array.from(document.querySelectorAll('.slide'));
+    this.total = this.slides.length;
+    this.current = 0;
+    this.dots = [];
+
+    this.setupIntersectionObserver();
+    this.setupKeyboardNav();
+    this.setupTouchNav();
+    this.setupWheelNav();
+    this.setupProgressBar();
+    this.setupNavDots();
+  }
+
+  setupIntersectionObserver() {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          const idx = this.slides.indexOf(entry.target);
+          if (idx !== -1) {
+            this.current = idx;
+            this.updateProgressBar();
+            this.updateNavDots();
+          }
+        }
+      });
+    }, { threshold: 0.5 });
+    this.slides.forEach(s => io.observe(s));
+  }
+
+  goTo(idx) {
+    idx = Math.max(0, Math.min(this.total - 1, idx));
+    this.slides[idx].scrollIntoView({ behavior: 'smooth' });
+  }
+
+  setupKeyboardNav() {
+    document.addEventListener('keydown', (e) => {
+      if (document.activeElement && document.activeElement.getAttribute('contenteditable')) return;
+      switch (e.key) {
+        case 'ArrowDown': case 'ArrowRight': case ' ':
+          e.preventDefault(); this.goTo(this.current + 1); break;
+        case 'ArrowUp': case 'ArrowLeft':
+          e.preventDefault(); this.goTo(this.current - 1); break;
+        case 'Home': e.preventDefault(); this.goTo(0); break;
+        case 'End':  e.preventDefault(); this.goTo(this.total - 1); break;
+      }
+    });
+  }
+
+  setupTouchNav() {
+    let startY = 0, startX = 0;
+    document.addEventListener('touchstart', e => {
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+    }, { passive: true });
+    document.addEventListener('touchend', e => {
+      const dy = startY - e.changedTouches[0].clientY;
+      const dx = startX - e.changedTouches[0].clientX;
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 40) {
+        this.goTo(dy > 0 ? this.current + 1 : this.current - 1);
+      }
+    }, { passive: true });
+  }
+
+  setupWheelNav() {
+    let lastWheel = 0;
+    document.addEventListener('wheel', (e) => {
+      const now = Date.now();
+      if (now - lastWheel < 600) return;
+      lastWheel = now;
+      if (Math.abs(e.deltaY) > 30) {
+        e.preventDefault();
+        this.goTo(e.deltaY > 0 ? this.current + 1 : this.current - 1);
+      }
+    }, { passive: false });
+  }
+
+  setupProgressBar() {
+    this.progressBar = document.getElementById('progressBar');
+    this.updateProgressBar();
+  }
+
+  updateProgressBar() {
+    if (!this.progressBar) return;
+    const pct = this.total > 1 ? (this.current / (this.total - 1)) * 100 : 0;
+    this.progressBar.style.width = pct + '%';
+  }
+
+  setupNavDots() {
+    const nav = document.getElementById('navDots');
+    if (!nav) return;
+    this.slides.forEach((_, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'nav-dot' + (i === 0 ? ' active' : '');
+      btn.setAttribute('aria-label', `スライド ${i + 1}`);
+      btn.addEventListener('click', () => this.goTo(i));
+      nav.appendChild(btn);
+    });
+    this.dots = Array.from(nav.querySelectorAll('.nav-dot'));
+  }
+
+  updateNavDots() {
+    this.dots.forEach((d, i) => d.classList.toggle('active', i === this.current));
+  }
+}
+
+/* ===========================================
+   INLINE EDITOR
+   =========================================== */
+class InlineEditor {
+  constructor() {
+    this.isActive = false;
+    this.storageKey = 'thebranch-pitch-2026';
+
+    this.setupToggle();
+    this.loadSaved();
+  }
+
+  getTargets() {
+    return document.querySelectorAll(
+      'h1, h2, h3, .pitch-quote, .pitch-punchline, .concept-text, .overview-tagline, ' +
+      '.agent-col-title, .agent-col-desc, .reason-text, .team-items li, ' +
+      '.card-value, .price-main, .price-desc, .dynamic-label, .dynamic-result, ' +
+      '.git-points li, .fw-text, .sec-title, .sec-desc, .sec-note, ' +
+      '.vs-table td, .diff-item, .rl-content, .gtm-items li, .gtm-phase-title, ' +
+      '.closing-cell-val, .closing-cta, .footer-text'
+    );
+  }
+
+  setupToggle() {
+    const hotzone = document.getElementById('editHotzone');
+    const toggle  = document.getElementById('editToggle');
+    let hideTimeout = null;
+
+    const show = () => { clearTimeout(hideTimeout); toggle.classList.add('show'); };
+    const scheduleHide = () => {
+      hideTimeout = setTimeout(() => {
+        if (!this.isActive) toggle.classList.remove('show');
+      }, 400);
+    };
+
+    hotzone.addEventListener('mouseenter', show);
+    hotzone.addEventListener('mouseleave', scheduleHide);
+    toggle.addEventListener('mouseenter', show);
+    toggle.addEventListener('mouseleave', scheduleHide);
+    hotzone.addEventListener('click', () => this.toggleEditMode());
+    toggle.addEventListener('click',   () => this.toggleEditMode());
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'e' || e.key === 'E') && !e.target.getAttribute('contenteditable')) {
+        this.toggleEditMode();
+      }
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        if (this.isActive) this.saveAll();
+      }
+    });
+  }
+
+  toggleEditMode() {
+    this.isActive = !this.isActive;
+    const toggle = document.getElementById('editToggle');
+    toggle.textContent = this.isActive ? '💾 SAVE (Ctrl+S)' : '✏ EDIT';
+    toggle.classList.toggle('active', this.isActive);
+
+    this.getTargets().forEach((el, i) => {
+      el.setAttribute('contenteditable', this.isActive ? 'true' : 'false');
+      el.dataset.eid = i;
+    });
+
+    if (!this.isActive) this.saveAll();
+  }
+
+  saveAll() {
+    const data = {};
+    this.getTargets().forEach((el, i) => { data[i] = el.innerHTML; });
+    localStorage.setItem(this.storageKey, JSON.stringify(data));
+
+    const toggle = document.getElementById('editToggle');
+    const orig = toggle.textContent;
+    toggle.textContent = '✓ 保存しました';
+    setTimeout(() => { toggle.textContent = orig; }, 1400);
+  }
+
+  loadSaved() {
+    const raw = localStorage.getItem(this.storageKey);
+    if (!raw) return;
+    try {
+      const data = JSON.parse(raw);
+      this.getTargets().forEach((el, i) => {
+        if (data[i] !== undefined) el.innerHTML = data[i];
+      });
+    } catch (e) { /* ignore */ }
+  }
+}
+
+/* ===========================================
+   INIT
+   =========================================== */
+// Inject credit into every slide
+document.querySelectorAll('.slide').forEach(slide => {
+  const credit = document.createElement('div');
+  credit.className = 'slide-credit';
+  credit.textContent = '2026 · CONFIDENTIAL · @adachi_koichi';
+  slide.appendChild(credit);
+});
+
+const presentation = new SlidePresentation();
+const editor = new InlineEditor();
+</script>
+</body>
+</html>

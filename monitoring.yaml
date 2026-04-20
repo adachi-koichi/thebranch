@@ -1,0 +1,60 @@
+# monitoring.yaml — プロジェクトごとのメトリクス・タイムアウト閾値定義
+
+thresholds:
+  cpu_percent: 80
+  memory_percent: 85
+  stuck_task_minutes: 60
+  loop_stale_minutes: 60
+  consecutive_errors: 3
+  session_idle_minutes: 120
+
+projects:
+  breast_cancer_research:
+    dir: /Users/delightone/dev/github.com/adachi-koichi/breast_cancer_research
+    metrics:
+      - name: 分析ログ
+        type: log
+        path: /Users/delightone/dev/github.com/adachi-koichi/breast_cancer_research/logs/analysis.log
+        interval_minutes: 60
+        min_records: 1
+    timeout:
+      process_pattern: "uvicorn|python.*breast"
+      threshold_minutes: 180
+
+  exp-stock:
+    dir: /Users/delightone/dev/github.com/adachi-koichi/exp-stock
+    metrics:
+      - name: 株価データDB
+        type: sqlite
+        path: /Users/delightone/dev/github.com/adachi-koichi/exp-stock/data/stock.db
+        table: price_data
+        interval_minutes: 60
+        min_records: 5
+    timeout:
+      process_pattern: "streamlit.*exp-stock|python.*exp.stock"
+      threshold_minutes: 120
+
+  THEBRANCH:
+    dir: /Users/delightone/dev/github.com/adachi-koichi/ai-orchestrator
+    metrics:
+      - name: タスクDB
+        type: sqlite
+        path: /Users/delightone/.claude/skills/task-manager-sqlite/data/tasks.sqlite
+        table: dev_tasks
+        interval_minutes: 1440
+        min_records: 1
+    timeout:
+      process_pattern: "fastapi|uvicorn.*orchestrator"
+      threshold_minutes: 360
+
+  echo:
+    dir: /Users/delightone/dev/github.com/adachi-koichi/echo
+    metrics:
+      - name: アクセスログ
+        type: log
+        path: /Users/delightone/dev/github.com/adachi-koichi/echo/logs/access.log
+        interval_minutes: 60
+        min_records: 1
+    timeout:
+      process_pattern: "node.*echo|fastify"
+      threshold_minutes: 240

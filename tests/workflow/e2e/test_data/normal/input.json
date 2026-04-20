@@ -1,0 +1,18 @@
+{
+  "workflow_name": "standard_product_launch",
+  "phases": [
+    {
+      "phase_name": "Planning",
+      "task_count": 5
+    },
+    {
+      "phase_name": "Development",
+      "task_count": 5
+    },
+    {
+      "phase_name": "Testing",
+      "task_count": 5
+    }
+  ],
+  "task_priority": "normal"
+}

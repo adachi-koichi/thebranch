@@ -1,0 +1,22 @@
+{
+  "workflow_name": "high_priority_product_launch",
+  "phases": [
+    {
+      "phase_name": "Planning",
+      "task_count": 10
+    },
+    {
+      "phase_name": "Development",
+      "task_count": 10
+    },
+    {
+      "phase_name": "Testing",
+      "task_count": 10
+    },
+    {
+      "phase_name": "Deployment",
+      "task_count": 10
+    }
+  ],
+  "task_priority": "high"
+}

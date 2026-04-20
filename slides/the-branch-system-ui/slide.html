@@ -1,0 +1,2426 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Branch — System &amp; UI Overview</title>
+
+  <!-- Google Fonts: Archivo Black + Space Grotesk + JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+/* ===========================================
+   THEME — Bold Type: White × Yellow
+   =========================================== */
+:root {
+  --yellow:      #FFD600;
+  --yellow-pale: #FFFBDC;
+  --ink:         #0a0a0a;
+  --ink-mid:     #333333;
+  --ink-dim:     #666666;
+  --ink-faint:   #DDDDDD;
+  --white:       #FFFFFF;
+  --dark:        #0d0d0d;
+
+  --font-display: 'Archivo Black', sans-serif;
+  --font-body:    'Space Grotesk', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  --title-size: clamp(2rem, 5.5vw, 4.5rem);
+  --h2-size:    clamp(1.3rem, 3vw,  2.2rem);
+  --h3-size:    clamp(0.9rem, 1.6vw, 1.2rem);
+  --body-size:  clamp(0.72rem, 1.1vw, 0.9rem);
+  --label-size: clamp(0.58rem, 0.85vw, 0.72rem);
+  --mono-size:  clamp(0.6rem, 0.9vw, 0.76rem);
+
+  --slide-padding: clamp(1.4rem, 3.5vw, 3.5rem);
+  --content-gap:   clamp(0.8rem, 1.8vw, 1.8rem);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur: 0.55s;
+}
+
+/* ===========================================
+   VIEWPORT BASE (mandatory)
+   =========================================== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100%; overflow-x: hidden; }
+
+html {
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+.slide {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--white);
+}
+
+/* ===========================================
+   ANIMATIONS
+   =========================================== */
+.reveal, .reveal-left, .reveal-up {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity var(--dur) var(--ease-out-expo),
+              transform var(--dur) var(--ease-out-expo);
+}
+.reveal-left { transform: translateX(-32px); }
+
+.slide.visible .reveal,
+.slide.visible .reveal-left,
+.slide.visible .reveal-up {
+  opacity: 1;
+  transform: translate(0);
+}
+
+/* Stagger */
+.slide.visible .reveal:nth-child(1) { transition-delay: 0.05s; }
+.slide.visible .reveal:nth-child(2) { transition-delay: 0.12s; }
+.slide.visible .reveal:nth-child(3) { transition-delay: 0.19s; }
+.slide.visible .reveal:nth-child(4) { transition-delay: 0.26s; }
+.slide.visible .reveal:nth-child(5) { transition-delay: 0.33s; }
+.slide.visible .reveal:nth-child(6) { transition-delay: 0.40s; }
+
+/* ===========================================
+   SHARED COMPONENTS
+   =========================================== */
+
+/* Slide header */
+.slide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(0.6rem, 1.2vh, 1rem) var(--slide-padding);
+  border-bottom: 2px solid var(--ink);
+  flex-shrink: 0;
+}
+.brand {
+  font-family: var(--font-display);
+  font-size: clamp(0.7rem, 1.1vw, 0.9rem);
+  color: var(--ink);
+  letter-spacing: 0.05em;
+}
+.slide-tag {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: var(--ink-dim);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Dark header variant */
+.slide-header.dark {
+  border-bottom-color: rgba(255,255,255,0.15);
+}
+.slide-header.dark .brand { color: var(--white); }
+.slide-header.dark .slide-tag { color: rgba(255,255,255,0.45); }
+
+/* Slide footer */
+.slide-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(0.5rem, 1vh, 0.8rem) var(--slide-padding);
+  border-top: 2px solid var(--ink);
+  flex-shrink: 0;
+}
+.slide-footer.dark { border-top-color: rgba(255,255,255,0.15); }
+.footer-text {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: var(--ink-dim);
+}
+.footer-text.light { color: rgba(255,255,255,0.4); }
+.footer-sub {
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  color: var(--ink-faint);
+}
+.footer-sub.light { color: rgba(255,255,255,0.3); }
+
+/* Slide number watermark */
+.slide-num {
+  position: absolute;
+  bottom: clamp(2.5rem, 5vh, 4.5rem);
+  right: var(--slide-padding);
+  font-family: var(--font-display);
+  font-size: clamp(5rem, 12vw, 10rem);
+  color: var(--ink);
+  opacity: 0.045;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+.slide-num.light { color: var(--white); opacity: 0.06; }
+
+/* Section heading */
+.section-h {
+  font-family: var(--font-display);
+  font-size: var(--h2-size);
+  color: var(--ink);
+  line-height: 1.1;
+  flex-shrink: 0;
+}
+.hl { color: var(--yellow); }
+.hl-ul {
+  text-decoration: underline;
+  text-decoration-color: var(--yellow);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 4px;
+}
+
+/* Badge */
+.badge {
+  display: inline-block;
+  background: var(--yellow);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--label-size);
+  padding: 4px 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.badge.dark-badge {
+  background: transparent;
+  border: 2px solid var(--yellow);
+  color: var(--yellow);
+}
+
+/* Info card */
+.info-card {
+  border: 2px solid var(--ink-faint);
+  padding: clamp(0.8rem, 1.4vw, 1.4rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.25rem, 0.5vh, 0.5rem);
+}
+.info-card.pale { background: var(--yellow-pale); border-color: var(--yellow); }
+.info-card-label {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: var(--ink-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.info-card-title {
+  font-family: var(--font-display);
+  font-size: var(--h3-size);
+  color: var(--ink);
+}
+.info-card-body {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  line-height: 1.65;
+}
+
+/* Code block */
+.code-block {
+  font-family: var(--font-mono);
+  font-size: var(--mono-size);
+  line-height: 1.7;
+  background: #0d1117;
+  color: #e6edf3;
+  padding: clamp(0.8rem, 1.5vw, 1.4rem);
+  overflow: hidden;
+  flex: 1;
+}
+.code-comment { color: #8b949e; }
+.code-key     { color: #79c0ff; }
+.code-val     { color: #FFD600; }
+.code-dim     { color: #444c56; }
+
+/* Pill (tag) */
+.pill {
+  display: inline-block;
+  border: 1.5px solid var(--ink-faint);
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: var(--ink-mid);
+  padding: 3px 12px;
+  letter-spacing: 0.05em;
+}
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ===========================================
+   SLIDE 01 — TITLE
+   =========================================== */
+.slide-title { background: var(--dark); }
+
+.title-slash {
+  position: absolute;
+  top: 0; right: 0;
+  width: 42%;
+  height: 100%;
+  background: var(--yellow);
+  clip-path: polygon(22% 0, 100% 0, 100% 100%, 0% 100%);
+  z-index: 0;
+}
+
+.title-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--slide-padding);
+  gap: clamp(0.8rem, 1.6vh, 1.6rem);
+  z-index: 1;
+  position: relative;
+  max-width: 62%;
+}
+
+.title-eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: rgba(255,255,255,0.45);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.title-main {
+  font-family: var(--font-display);
+  font-size: var(--title-size);
+  color: var(--white);
+  line-height: 1.0;
+}
+.title-main .hl { color: var(--yellow); }
+
+.title-sub {
+  font-family: var(--font-body);
+  font-size: clamp(0.8rem, 1.4vw, 1.05rem);
+  color: rgba(255,255,255,0.55);
+  line-height: 1.65;
+  max-width: 42ch;
+}
+
+/* Right-side content on dark yellow panel */
+.title-panel-content {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 42%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding: var(--slide-padding) clamp(1.5rem, 3vw, 3rem) var(--slide-padding) clamp(3.5rem, 11vw, 10rem);
+  z-index: 1;
+  gap: clamp(0.6rem, 1.2vh, 1.2rem);
+}
+.tp-label {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: rgba(0,0,0,0.5);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.tp-item {
+  font-family: var(--font-display);
+  font-size: clamp(0.72rem, 1.1vw, 0.9rem);
+  color: var(--ink);
+  padding-left: 14px;
+  position: relative;
+  line-height: 1.3;
+}
+.tp-item::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: 700;
+}
+
+/* ===========================================
+   SLIDE 02 — ARCHITECTURE
+   =========================================== */
+.slide-arch { background: var(--white); }
+.arch-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.8rem, 1.8vh, 1.8rem) var(--slide-padding);
+  gap: clamp(0.8rem, 1.5vh, 1.5rem);
+  overflow: hidden;
+}
+.arch-layers {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.arch-layer {
+  flex: 1;
+  border: 2px solid var(--ink-faint);
+  border-right: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.arch-layer:last-child { border-right: 2px solid var(--ink-faint); }
+.arch-layer-label {
+  font-family: var(--font-display);
+  font-size: clamp(0.6rem, 0.9vw, 0.75rem);
+  color: var(--white);
+  background: var(--ink);
+  padding: 6px 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  text-align: center;
+}
+.arch-layer.center .arch-layer-label { background: var(--yellow); color: var(--ink); }
+.arch-items {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 0.5vh, 0.5rem);
+  padding: clamp(0.6rem, 1.2vw, 1.2rem);
+  flex: 1;
+  overflow: hidden;
+}
+.arch-item {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  padding: 4px 10px;
+  border: 1.5px solid var(--ink-faint);
+  line-height: 1.3;
+}
+.arch-item.core {
+  border-color: var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+}
+.arch-item.yellow {
+  border-color: var(--yellow);
+  background: var(--yellow-pale);
+  color: var(--ink);
+  font-weight: 600;
+}
+.arch-connector {
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  color: var(--ink-dim);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  padding: 0 clamp(0.3rem, 0.6vw, 0.6rem);
+  display: flex;
+  align-items: center;
+  border-top: 2px solid var(--ink-faint);
+  border-bottom: 2px solid var(--ink-faint);
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: #f9f9f9;
+}
+
+/* ===========================================
+   SLIDE 03 — AGENT DEFINITION
+   =========================================== */
+.slide-agent { background: var(--white); }
+.agent-split {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
+}
+.agent-left {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.8rem, 1.8vh, 1.8rem) var(--slide-padding);
+  gap: clamp(0.6rem, 1.2vh, 1.2rem);
+  overflow: hidden;
+  border-right: 2px solid var(--yellow);
+}
+.agent-right {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.8rem, 1.8vh, 1.8rem) var(--slide-padding);
+  gap: clamp(0.6rem, 1vh, 1rem);
+  overflow: hidden;
+}
+
+/* ===========================================
+   SLIDE 04 — CATALOG UI MOCKUP
+   =========================================== */
+.slide-catalog { background: var(--white); }
+.catalog-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.5rem, 1.2vh, 1.2rem) var(--slide-padding);
+  gap: clamp(0.5rem, 1vh, 1rem);
+  overflow: hidden;
+}
+.browser-frame {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--ink);
+  overflow: hidden;
+  min-height: 0;
+}
+.browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f0f0f0;
+  border-bottom: 1.5px solid var(--ink-faint);
+  flex-shrink: 0;
+}
+.browser-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%; flex-shrink: 0;
+}
+.bd-r { background: #ff5f57; }
+.bd-y { background: #febc2e; }
+.bd-g { background: #28c840; }
+.browser-url {
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  color: var(--ink-dim);
+  margin-left: 6px;
+}
+.browser-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.app-sidebar {
+  width: clamp(100px, 14vw, 160px);
+  background: #f8f8f8;
+  border-right: 1.5px solid var(--ink-faint);
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.sidebar-item {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: var(--ink-dim);
+  padding: 7px 14px;
+  cursor: pointer;
+}
+.sidebar-item.active {
+  background: var(--yellow);
+  color: var(--ink);
+  font-weight: 600;
+}
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  gap: 8px;
+  overflow: hidden;
+  min-width: 0;
+}
+.app-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.app-search {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: var(--ink-dim);
+  border: 1.5px solid var(--ink-faint);
+  padding: 5px 10px;
+}
+.app-btn {
+  font-family: var(--font-display);
+  font-size: var(--label-size);
+  background: var(--yellow);
+  color: var(--ink);
+  border: none;
+  padding: 5px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.agent-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(6px, 1vw, 10px);
+  flex: 1;
+  overflow: hidden;
+}
+.agent-card {
+  border: 1.5px solid var(--ink-faint);
+  padding: clamp(6px, 1vw, 10px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow: hidden;
+}
+.agent-card.featured { border-color: var(--yellow); background: var(--yellow-pale); }
+.ac-tag {
+  font-family: var(--font-body);
+  font-size: clamp(0.48rem, 0.65vw, 0.58rem);
+  color: var(--ink-dim);
+  letter-spacing: 0.06em;
+}
+.ac-name {
+  font-family: var(--font-display);
+  font-size: clamp(0.6rem, 0.88vw, 0.74rem);
+  color: var(--ink);
+  line-height: 1.2;
+}
+.ac-meta {
+  font-family: var(--font-mono);
+  font-size: clamp(0.44rem, 0.6vw, 0.54rem);
+  color: var(--ink-dim);
+}
+.ac-price {
+  font-family: var(--font-display);
+  font-size: clamp(0.58rem, 0.8vw, 0.68rem);
+  color: var(--ink);
+  margin-top: auto;
+}
+
+/* ===========================================
+   SLIDE 05 — LAUNCH FLOW
+   =========================================== */
+.slide-flow { background: var(--white); }
+.flow-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.8rem, 1.8vh, 1.8rem) var(--slide-padding);
+  gap: clamp(0.8rem, 1.5vh, 1.5rem);
+  overflow: hidden;
+}
+.flow-steps {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  overflow: hidden;
+}
+.flow-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.8rem, 1.4vw, 1.4rem);
+  border: 2px solid var(--ink-faint);
+  border-right: none;
+  gap: clamp(0.3rem, 0.5vh, 0.5rem);
+  position: relative;
+  min-width: 0;
+}
+.flow-step:last-child { border-right: 2px solid var(--ink-faint); }
+.flow-step.accent {
+  border-color: var(--yellow);
+  background: var(--yellow-pale);
+}
+.flow-step:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translate(50%, -50%);
+  font-size: clamp(0.9rem, 1.8vw, 1.4rem);
+  color: var(--yellow);
+  font-weight: bold;
+  z-index: 2;
+  background: var(--white);
+  line-height: 1;
+  padding: 2px 1px;
+}
+.flow-step.accent:not(:last-child)::after { background: var(--yellow-pale); }
+.step-num {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 2.8vw, 2.4rem);
+  color: var(--yellow);
+  line-height: 1;
+}
+.step-title {
+  font-family: var(--font-display);
+  font-size: var(--h3-size);
+  color: var(--ink);
+}
+.step-body {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  line-height: 1.55;
+}
+.step-badge {
+  display: inline-block;
+  background: var(--yellow);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--label-size);
+  padding: 3px 10px;
+  margin-top: auto;
+  align-self: flex-start;
+}
+
+/* ===========================================
+   SLIDE 06 — CLIENT PANEL
+   =========================================== */
+.slide-client { background: var(--white); }
+.client-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.8rem, 1.8vh, 1.8rem) var(--slide-padding);
+  gap: clamp(0.8rem, 1.4vh, 1.4rem);
+  overflow: hidden;
+}
+.client-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(0.5rem, 1vw, 1rem);
+  flex: 1;
+  overflow: hidden;
+}
+.client-card {
+  border: 2px solid var(--ink-faint);
+  padding: clamp(0.8rem, 1.4vw, 1.3rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 0.5vh, 0.5rem);
+  min-height: 0;
+}
+.client-card.accent { border-color: var(--yellow); background: var(--yellow-pale); }
+.cc-icon { font-size: clamp(1.1rem, 1.8vw, 1.6rem); flex-shrink: 0; }
+.cc-title {
+  font-family: var(--font-display);
+  font-size: var(--h3-size);
+  color: var(--ink);
+}
+.cc-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cc-list li {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  padding-left: 12px;
+  position: relative;
+  line-height: 1.45;
+}
+.cc-list li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--yellow);
+  font-weight: 700;
+}
+
+/* ===========================================
+   SLIDE 07 — VIRTUAL OFFICE
+   =========================================== */
+.slide-voffice { background: var(--white); }
+.voffice-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: clamp(0.8rem, 2.5vw, 3rem);
+  padding: clamp(0.5rem, 1.2vh, 1.2rem) var(--slide-padding);
+  overflow: hidden;
+}
+.voffice-log {
+  flex: 0 0 auto;
+  width: clamp(150px, 20vw, 240px);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.4rem, 0.7vh, 0.7rem);
+  overflow: hidden;
+}
+.voffice-log-title {
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  color: var(--ink-dim);
+  letter-spacing: 0.1em;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--ink-faint);
+  padding-bottom: 5px;
+}
+.log-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+  flex: 1;
+}
+.log-entry {
+  font-family: var(--font-mono);
+  font-size: clamp(0.5rem, 0.7vw, 0.6rem);
+  line-height: 1.45;
+  color: var(--ink-mid);
+}
+.log-agent { color: var(--yellow); font-weight: 600; }
+.log-time   { color: var(--ink-dim); }
+
+.voffice-iso-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-width: 0;
+}
+.iso-world {
+  transform: rotateX(52deg) rotateZ(-42deg) scale(0.86);
+  transform-style: preserve-3d;
+}
+.office-grid {
+  display: grid;
+  grid-template-columns: repeat(5, clamp(36px, 6vw, 58px));
+  grid-template-rows:    repeat(5, clamp(36px, 6vw, 58px));
+  gap: 3px;
+  background: #0a0e1a;
+  padding: 8px;
+  border: 2px solid rgba(255,214,0,0.28);
+  box-shadow: 0 0 36px rgba(255,214,0,0.07);
+}
+.ot {
+  background: #141826;
+  border: 1px solid rgba(255,255,255,0.03);
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.ot.desk     { background: #1a2235; border-color: rgba(255,214,0,0.14); }
+.ot.corridor { background: #0f131f; }
+.ot.plant    { background: #0f2018; }
+.ot.entrance { background: #1a1030; border: 1px solid rgba(147,86,255,0.3); }
+.ot.meeting  { background: #151d2e; border: 1px solid rgba(255,214,0,0.22);
+               font-size: clamp(0.7rem, 1.1vw, 1rem); }
+.av {
+  width: 56%; height: 56%;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(0.42rem, 0.68vw, 0.68rem);
+  flex-shrink: 0;
+  position: relative;
+}
+.av.ai    { background: #2d3748; border: 1.5px solid rgba(255,214,0,0.5); color: rgba(255,214,0,0.9); }
+.av.human { background: #1d4ed8; border: 2px solid #60a5fa; }
+.status-dot {
+  position: absolute;
+  bottom: -1px; right: -1px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  border: 1px solid #0a0e1a;
+}
+@keyframes pulse-g { 0%,100%{opacity:1;transform:scale(1);}  50%{opacity:0.45;transform:scale(1.8);} }
+@keyframes pulse-b { 0%,100%{opacity:1;transform:scale(1);}  50%{opacity:0.45;transform:scale(1.8);} }
+.status-dot.working { background:#22c55e; animation: pulse-g 2s ease-in-out infinite; }
+.status-dot.talking { background:#60a5fa; animation: pulse-b 1.2s ease-in-out infinite; }
+.status-dot.idle    { background:#4b5563; }
+.plant-e { font-size: clamp(0.75rem, 1.2vw, 1.1rem); }
+
+.voffice-caption {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1vh, 1rem);
+  max-width: clamp(130px, 18vw, 210px);
+}
+.vo-legend { display: flex; flex-direction: column; gap: 6px; }
+.vo-legend-item {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: var(--ink-mid);
+}
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-dot.ai-c    { background: rgba(255,214,0,0.85); }
+.legend-dot.human-c { background: #60a5fa; }
+.legend-dot.work-c  { background: #22c55e; }
+
+/* ===========================================
+   SLIDE 08 — INTERACTION FEATURES
+   =========================================== */
+.slide-interact { background: var(--white); }
+.interact-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.8rem, 1.8vh, 1.8rem) var(--slide-padding);
+  gap: clamp(0.8rem, 1.4vh, 1.4rem);
+  overflow: hidden;
+}
+.interact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(0.6rem, 1.2vw, 1.2rem);
+  flex: 1;
+  overflow: hidden;
+}
+.ic {
+  border: 2px solid var(--ink-faint);
+  padding: clamp(0.8rem, 1.4vw, 1.4rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 0.5vh, 0.5rem);
+}
+.ic.accent  { border-color: var(--yellow); background: var(--yellow-pale); }
+.ic.roadmap { border: 2px dashed rgba(255,214,0,0.42); }
+.ic-icon  { font-size: clamp(1.2rem, 2vw, 1.8rem); flex-shrink: 0; }
+.ic-title { font-family: var(--font-display); font-size: var(--h3-size); color: var(--ink); }
+.ic-body  { font-family: var(--font-body); font-size: var(--body-size); color: var(--ink-mid); line-height: 1.6; flex: 1; }
+.ic-badge {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  font-weight: 700;
+  padding: 3px 10px;
+  align-self: flex-start;
+  margin-top: auto;
+}
+.ic-badge.live { background: var(--yellow); color: var(--ink); }
+.ic-badge.road { border: 1.5px solid rgba(255,214,0,0.45); color: var(--ink-dim); font-style: italic; }
+
+/* ===========================================
+   SLIDE 09 — FILTERING / SECURITY
+   =========================================== */
+.slide-filter { background: var(--white); }
+.filter-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.8rem, 1.8vh, 1.8rem) var(--slide-padding);
+  gap: clamp(0.8rem, 1.4vh, 1.4rem);
+  overflow: hidden;
+}
+.filter-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.filter-node {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.6rem, 1.2vw, 1.2rem) clamp(0.4rem, 0.8vw, 0.8rem);
+  text-align: center;
+  gap: clamp(0.3rem, 0.5vh, 0.5rem);
+  border: 2px solid var(--ink-faint);
+  border-right: none;
+  min-width: 0;
+}
+.filter-node:last-child { border-right: 2px solid var(--ink-faint); }
+.filter-node.yn { border-color: var(--yellow); background: var(--yellow-pale); }
+.filter-node.dk { background: var(--ink); border-color: var(--ink); }
+.fn-icon { font-size: clamp(1.1rem, 2vw, 1.8rem); flex-shrink: 0; }
+.fn-title {
+  font-family: var(--font-display);
+  font-size: clamp(0.72rem, 1.1vw, 0.96rem);
+  color: var(--ink);
+  line-height: 1.2;
+}
+.filter-node.dk .fn-title { color: var(--yellow); }
+.fn-body {
+  font-family: var(--font-body);
+  font-size: clamp(0.6rem, 0.9vw, 0.78rem);
+  color: var(--ink-mid);
+  line-height: 1.4;
+}
+.filter-node.dk .fn-body { color: rgba(255,255,255,0.55); }
+.filter-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.9rem, 1.6vw, 1.4rem);
+  color: var(--yellow);
+  font-weight: bold;
+  flex-shrink: 0;
+  padding: 0 clamp(2px, 0.3vw, 4px);
+}
+
+/* ===========================================
+   SLIDE 10 — DATA FLYWHEEL
+   =========================================== */
+.slide-wheel { background: var(--white); }
+.wheel-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: clamp(0.5rem, 1.5vh, 1.5rem) var(--slide-padding);
+  gap: clamp(1.5rem, 4vw, 5rem);
+  overflow: hidden;
+}
+.wheel-left {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.6rem, 1.2vh, 1.2rem);
+  max-width: min(42vw, 360px);
+}
+.wheel-sub {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  line-height: 1.7;
+}
+.wheel-right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+.wheel-container {
+  position: relative;
+  width: min(44vh, 380px);
+  height: min(44vh, 380px);
+  flex-shrink: 0;
+}
+@keyframes spin-slow {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+.wheel-ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 90%; height: 90%;
+  border: 2px dashed rgba(255,214,0,0.35);
+  border-radius: 50%;
+  animation: spin-slow 24s linear infinite;
+}
+.wheel-center {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24%; height: 24%;
+  background: var(--yellow);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: clamp(0.44rem, 0.7vw, 0.62rem);
+  text-align: center;
+  color: var(--ink);
+  line-height: 1.2;
+  z-index: 2;
+}
+.wheel-step {
+  position: absolute;
+  width: 27%;
+  background: var(--yellow-pale);
+  border: 2px solid var(--yellow);
+  padding: clamp(0.25rem, 0.5vw, 0.5rem) clamp(0.2rem, 0.4vw, 0.4rem);
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: clamp(0.44rem, 0.65vw, 0.6rem);
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.wheel-step:nth-child(3) { top:  1%; left: 36.5%; }
+.wheel-step:nth-child(4) { top: 27%; left: 71%;   }
+.wheel-step:nth-child(5) { top: 67%; left: 60%;   }
+.wheel-step:nth-child(6) { top: 67%; left: 13%;   }
+.wheel-step:nth-child(7) { top: 27%; left:  2%;   }
+
+/* ===========================================
+   SLIDE 11 — CHECK AGENT
+   =========================================== */
+.slide-check { background: var(--white); }
+.check-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.8rem, 1.8vh, 1.8rem) var(--slide-padding);
+  gap: clamp(0.8rem, 1.4vh, 1.4rem);
+  overflow: hidden;
+}
+.check-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.6rem, 1.2vw, 1.2rem);
+  flex: 1;
+  overflow: hidden;
+}
+.check-card {
+  border: 2px solid var(--ink-faint);
+  padding: clamp(0.9rem, 1.6vw, 1.6rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 0.7vh, 0.7rem);
+}
+.check-card.accent { border-color: var(--yellow); background: var(--yellow-pale); }
+.cc-num {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 2.8vw, 2.4rem);
+  color: var(--yellow);
+  line-height: 1;
+}
+.cc-h {
+  font-family: var(--font-display);
+  font-size: var(--h3-size);
+  color: var(--ink);
+}
+.cc-body {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  line-height: 1.65;
+}
+
+/* ===========================================
+   SLIDE 12 — INTEGRATIONS
+   =========================================== */
+.slide-int { background: var(--white); }
+.int-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.8rem, 1.8vh, 1.8rem) var(--slide-padding);
+  gap: clamp(0.8rem, 1.4vh, 1.4rem);
+  overflow: hidden;
+}
+.int-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.5rem, 1vw, 1rem);
+  flex: 1;
+  overflow: hidden;
+}
+.int-card {
+  border: 1.5px solid var(--ink-faint);
+  padding: clamp(0.8rem, 1.4vw, 1.4rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 0.5vh, 0.5rem);
+}
+.int-card.live { border-color: var(--ink); }
+.int-name {
+  font-family: var(--font-display);
+  font-size: var(--h3-size);
+  color: var(--ink);
+}
+.int-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  font-weight: 600;
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot-g { background: #22c55e; }
+.dot-y { background: var(--yellow); }
+.dot-x { background: var(--ink-faint); }
+.int-desc {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  line-height: 1.5;
+}
+
+/* ===========================================
+   SLIDE 13 — ROADMAP
+   =========================================== */
+.slide-road { background: var(--white); }
+.road-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.8rem, 1.8vh, 1.8rem) var(--slide-padding);
+  gap: clamp(0.8rem, 1.4vh, 1.4rem);
+  overflow: hidden;
+}
+.road-phases {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.6rem, 1.2vw, 1.2rem);
+  flex: 1;
+  overflow: hidden;
+}
+.phase {
+  border: 2px solid var(--ink-faint);
+  padding: clamp(0.9rem, 1.6vw, 1.6rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 0.6vh, 0.6rem);
+}
+.phase.now { border-color: var(--yellow); background: var(--yellow-pale); }
+.ph-label {
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  color: var(--ink-dim);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.ph-period {
+  font-family: var(--font-display);
+  font-size: var(--h3-size);
+  color: var(--ink);
+}
+.ph-items {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.ph-items li {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: var(--ink-mid);
+  padding-left: 12px;
+  position: relative;
+  line-height: 1.45;
+}
+.ph-items li::before { content: '▸'; position: absolute; left: 0; color: var(--yellow); }
+.ph-badge {
+  background: var(--yellow);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--label-size);
+  padding: 3px 10px;
+  display: inline-block;
+  align-self: flex-start;
+}
+
+/* ===========================================
+   SLIDE 14 — CLOSING
+   =========================================== */
+.slide-close { background: var(--dark); }
+.close-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--slide-padding);
+  gap: clamp(1rem, 2vh, 2rem);
+  position: relative;
+  z-index: 1;
+}
+.close-title {
+  font-family: var(--font-display);
+  font-size: var(--h2-size);
+  color: var(--white);
+  line-height: 1.1;
+  max-width: 22ch;
+}
+.close-title .hl { color: var(--yellow); }
+.close-points {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(0.6rem, 1.2vw, 1.2rem);
+  max-width: min(88vw, 820px);
+}
+.close-pt {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: clamp(0.7rem, 1.2vw, 1.2rem);
+}
+.close-num {
+  font-family: var(--font-display);
+  font-size: clamp(1.2rem, 2.4vw, 2rem);
+  color: var(--yellow);
+  line-height: 1;
+  flex-shrink: 0;
+}
+.close-text {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  color: rgba(255,255,255,0.6);
+  line-height: 1.62;
+}
+.close-text strong {
+  color: var(--white);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* ===========================================
+   PROGRESS BAR
+   =========================================== */
+.progress-bar {
+  position: fixed;
+  top: 0; left: 0;
+  height: 3px;
+  background: var(--yellow);
+  transition: width 0.35s ease;
+  z-index: 1000;
+  width: 0%;
+}
+
+/* ===========================================
+   NAV DOTS
+   =========================================== */
+.nav-dots {
+  position: fixed;
+  right: clamp(0.6rem, 1.5vw, 1.2rem);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  z-index: 100;
+}
+.nav-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  cursor: pointer;
+  transition: background 0.3s, transform 0.3s;
+}
+.nav-dot.active { background: var(--yellow); transform: scale(1.5); }
+
+/* ===========================================
+   INLINE EDITING
+   =========================================== */
+.edit-hotzone {
+  position: fixed;
+  top: 0; left: 0;
+  width: 80px; height: 80px;
+  z-index: 10000;
+  cursor: default;
+}
+.edit-toggle {
+  position: fixed;
+  top: 10px; left: 10px;
+  background: var(--ink);
+  color: var(--white);
+  border: none;
+  padding: 5px 12px;
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 10001;
+  letter-spacing: 0.06em;
+}
+.edit-toggle.show,
+.edit-toggle.active { opacity: 1; pointer-events: auto; }
+.edit-toggle.active { background: var(--yellow); color: var(--ink); }
+
+[contenteditable="true"] {
+  outline: 2px dashed var(--yellow);
+  outline-offset: 2px;
+}
+.save-hint {
+  position: fixed;
+  bottom: 18px; right: 18px;
+  background: var(--ink);
+  color: var(--white);
+  padding: 7px 16px;
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  z-index: 10001;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.save-hint.show { opacity: 1; }
+
+/* ── Slide credit (bottom-right of every slide) ── */
+.slide-credit {
+  position: absolute;
+  bottom: clamp(0.5rem, 1.2vh, 1rem);
+  right: clamp(0.8rem, 2vw, 1.6rem);
+  font-family: var(--font-body);
+  font-size: clamp(0.55rem, 0.85vw, 0.72rem);
+  letter-spacing: 0.05em;
+  color: var(--ink-dim);
+  opacity: 0.55;
+  z-index: 10;
+  pointer-events: none;
+  user-select: none;
+}
+.slide-title .slide-credit,
+.slide-close .slide-credit { color: rgba(255,255,255,0.4); }
+
+/* ===========================================
+   @MEDIA — MUST be at the very end of <style>
+   =========================================== */
+
+/* Short viewports */
+@media (max-height: 700px) {
+  :root {
+    --title-size: clamp(1.4rem, 4.5vw, 3rem);
+    --h2-size:    clamp(1.1rem, 2.6vw, 1.7rem);
+    --slide-padding: clamp(0.8rem, 2.5vw, 2rem);
+    --content-gap:   clamp(0.4rem, 1.2vw, 1rem);
+  }
+}
+@media (max-height: 600px) {
+  :root {
+    --slide-padding: clamp(0.5rem, 2vw, 1.4rem);
+    --content-gap:   clamp(0.3rem, 1vw, 0.7rem);
+    --title-size:    clamp(1.2rem, 4vw, 2.2rem);
+    --body-size:     clamp(0.65rem, 1.1vw, 0.84rem);
+  }
+  .nav-dots { display: none; }
+}
+
+/* Narrow / mobile */
+@media (max-width: 600px) {
+  :root {
+    --title-size:    clamp(1.8rem, 9vw, 3rem);
+    --h2-size:       clamp(1.2rem, 5.5vw, 2rem);
+    --h3-size:       clamp(0.95rem, 4vw, 1.4rem);
+    --body-size:     clamp(0.72rem, 3vw, 0.92rem);
+    --label-size:    clamp(0.55rem, 2.2vw, 0.68rem);
+    --slide-padding: clamp(1rem, 4vw, 1.6rem);
+  }
+
+  /* Title */
+  .title-panel-content { display: none; }
+  .title-slash { display: none; }
+  .title-body { max-width: 100%; }
+
+  /* Arch */
+  .arch-connector { writing-mode: horizontal-tb; transform: none; }
+
+  /* Agent */
+  .agent-split { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .agent-left { border-right: none; border-bottom: 2px solid var(--yellow); max-height: 42vh; }
+
+  /* Catalog */
+  .app-sidebar { display: none; }
+  .agent-cards { grid-template-columns: 1fr 1fr; }
+
+  /* Flow */
+  .flow-steps { flex-direction: column; }
+  .flow-step { border: 2px solid var(--ink-faint) !important; border-bottom: none !important; flex: 0 0 auto; }
+  .flow-step:last-child { border-bottom: 2px solid var(--ink-faint) !important; }
+  .flow-step:not(:last-child)::after { content: '↓'; right: auto; left: 50%; top: auto; bottom: 0; transform: translate(-50%, 55%); background: var(--white); padding: 0 3px; }
+
+  /* Client cards */
+  .client-cards { grid-template-columns: 1fr 1fr; }
+
+  /* Virtual office */
+  .voffice-body { flex-direction: column; align-items: stretch; padding: clamp(0.3rem, 0.7vh, 0.6rem) var(--slide-padding); }
+  .voffice-iso-wrap { order: -1; flex: 0 0 auto; width: 100%; height: clamp(130px, 30vw, 170px); }
+  .iso-world { transform: rotateX(52deg) rotateZ(-42deg) scale(0.54); margin-top: calc(-1 * clamp(25px, 6.5vw, 45px)); margin-bottom: calc(-1 * clamp(25px, 6.5vw, 45px)); }
+  .office-grid { grid-template-columns: repeat(5, clamp(28px, 8.5vw, 40px)); grid-template-rows: repeat(5, clamp(28px, 8.5vw, 40px)); }
+  .voffice-log { order: 0; width: 100%; flex: 0 0 auto; }
+  .log-entries { display: grid; grid-template-columns: 1fr 1fr; max-height: clamp(60px, 14vh, 85px); }
+  .log-entry { font-size: clamp(0.44rem, 1.6vw, 0.54rem); border-left: 2px solid var(--yellow); padding-left: 4px; }
+  .voffice-caption { order: 1; flex-direction: row; flex-wrap: wrap; max-width: 100%; }
+  .voffice-caption .section-h, .voffice-caption > p { display: none; }
+  .vo-legend { flex-direction: row; flex-wrap: wrap; gap: 4px 14px; }
+
+  /* Interact */
+  .interact-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Filter */
+  .filter-flow { flex-direction: column; }
+  .filter-node { border: 2px solid var(--ink-faint) !important; border-bottom: none !important; flex: 0 0 auto; flex-direction: row; align-items: flex-start; text-align: left; }
+  .filter-node:last-child { border-bottom: 2px solid var(--ink-faint) !important; }
+  .filter-arrow { transform: rotate(90deg); }
+
+  /* Wheel */
+  .wheel-wrap { flex-direction: column; }
+  .wheel-left { max-width: 100%; }
+  .wheel-container { width: min(36vw, 160px); height: min(36vw, 160px); }
+  .wheel-step { font-size: clamp(0.35rem, 1.8vw, 0.5rem); }
+
+  /* Check */
+  .check-cards { grid-template-columns: 1fr; }
+
+  /* Int */
+  .int-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Roadmap */
+  .road-phases { grid-template-columns: 1fr; }
+
+  /* Close */
+  .close-points { grid-template-columns: 1fr; }
+}
+
+/* Tablet */
+@media (min-width: 601px) and (max-width: 900px) {
+  .voffice-body { flex-direction: column; align-items: stretch; }
+  .voffice-iso-wrap { order: -1; flex: 0 0 auto; width: 100%; height: clamp(150px, 28vw, 220px); }
+  .iso-world { transform: rotateX(52deg) rotateZ(-42deg) scale(0.65); }
+  .office-grid { grid-template-columns: repeat(5, clamp(34px, 6.5vw, 52px)); grid-template-rows: repeat(5, clamp(34px, 6.5vw, 52px)); }
+  .voffice-log { order: 0; width: 100%; flex: 0 0 auto; }
+  .log-entries { display: grid; grid-template-columns: repeat(3, 1fr); max-height: clamp(80px, 18vh, 110px); }
+  .voffice-caption { order: 1; flex-direction: row; align-items: center; max-width: 100%; }
+  .voffice-caption .section-h, .voffice-caption > p { display: none; }
+  .vo-legend { flex-direction: row; gap: 6px 20px; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.2s !important;
+  }
+  html { scroll-behavior: auto; }
+}
+  </style>
+</head>
+<body>
+
+<!-- Fixed UI -->
+<div class="progress-bar" id="progressBar"></div>
+<nav class="nav-dots" id="navDots"></nav>
+<div class="edit-hotzone" id="editHotzone"></div>
+<button class="edit-toggle" id="editToggle">✏️ 編集</button>
+<div class="save-hint" id="saveHint">⌘S / Ctrl+S で保存</div>
+
+<!-- ============================================================
+     SLIDE 01 — TITLE
+     ============================================================ -->
+<section class="slide slide-title" data-index="0">
+  <div class="slide-num light">01</div>
+  <div class="title-slash"></div>
+
+  <header class="slide-header dark">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">System &amp; UI Overview</span>
+  </header>
+
+  <div class="title-body">
+    <p class="title-eyebrow reveal">Technical Deep Dive — 2026</p>
+    <h1 class="title-main reveal">システムの<br><span class="hl">全体設計</span></h1>
+    <p class="title-sub reveal">
+      AIエージェントを育て・借りる・収益化する<br>
+      プラットフォームの技術的全体像
+    </p>
+    <div class="pill-row reveal">
+      <span class="pill" style="border-color:rgba(255,255,255,0.25);color:rgba(255,255,255,0.55);">アーキテクチャ</span>
+      <span class="pill" style="border-color:rgba(255,255,255,0.25);color:rgba(255,255,255,0.55);">セキュリティ</span>
+      <span class="pill" style="border-color:rgba(255,255,255,0.25);color:rgba(255,255,255,0.55);">API連携</span>
+      <span class="pill" style="border-color:rgba(255,255,255,0.25);color:rgba(255,255,255,0.55);">UI設計</span>
+    </div>
+  </div>
+
+  <!-- Right panel (yellow area content) -->
+  <div class="title-panel-content reveal">
+    <div class="tp-label">このデッキの内容</div>
+    <div class="tp-item">3層アーキテクチャ</div>
+    <div class="tp-item">エージェント = Git リポジトリ</div>
+    <div class="tp-item">カタログ UI デモ</div>
+    <div class="tp-item">バーチャルオフィス</div>
+    <div class="tp-item">3段階セキュリティ</div>
+    <div class="tp-item">データフライホイール</div>
+    <div class="tp-item">統合ロードマップ</div>
+  </div>
+
+  <footer class="slide-footer dark">
+    <span class="footer-text light">The Branch — System &amp; UI Overview 2026</span>
+    <span class="footer-sub light">Confidential</span>
+  </footer>
+</section>
+
+<!-- ============================================================
+     SLIDE 02 — ARCHITECTURE
+     ============================================================ -->
+<section class="slide slide-arch" data-index="1">
+  <div class="slide-num">02</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Architecture</span>
+  </header>
+
+  <div class="arch-wrap">
+    <h2 class="section-h reveal">3層で設計された<span class="hl">プラットフォーム</span></h2>
+
+    <div class="arch-layers reveal">
+      <!-- Layer 1: Client -->
+      <div class="arch-layer">
+        <span class="arch-layer-label">Client Layer</span>
+        <div class="arch-items">
+          <span class="arch-item core">ブラウザ UI</span>
+          <span class="arch-item core">Slack 連携</span>
+          <span class="arch-item">REST API</span>
+          <span class="arch-item">Webhook</span>
+        </div>
+      </div>
+
+      <div class="arch-connector">↑↓ HTTP / WebSocket</div>
+
+      <!-- Layer 2: Platform -->
+      <div class="arch-layer center">
+        <span class="arch-layer-label">Platform Layer</span>
+        <div class="arch-items">
+          <span class="arch-item yellow">Agent Catalog</span>
+          <span class="arch-item yellow">Task Manager</span>
+          <span class="arch-item core">課金エンジン</span>
+          <span class="arch-item core">機密フィルター</span>
+          <span class="arch-item core">ロイヤリティ計算</span>
+          <span class="arch-item">認証・認可</span>
+        </div>
+      </div>
+
+      <div class="arch-connector">↑↓ Agent SDK / Git API</div>
+
+      <!-- Layer 3: Agent -->
+      <div class="arch-layer">
+        <span class="arch-layer-label">Agent Layer</span>
+        <div class="arch-items">
+          <span class="arch-item core">Git リポジトリ群</span>
+          <span class="arch-item core">LLM ランタイム</span>
+          <span class="arch-item">Check Agent</span>
+          <span class="arch-item">スキル DB</span>
+          <span class="arch-item">ツール実行環境</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 03 — AGENT DEFINITION
+     ============================================================ -->
+<section class="slide slide-agent" data-index="2">
+  <div class="slide-num">03</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Agent Definition</span>
+  </header>
+
+  <div class="agent-split">
+    <!-- Left: code -->
+    <div class="agent-left">
+      <h2 class="section-h reveal">エージェント = <span class="hl">Git リポジトリ</span></h2>
+      <div class="code-block reveal"><span class="code-comment"># エージェント定義例: sakamoto-v2</span>
+<span class="code-comment"># repo: the-branch/agents/sakamoto-v2</span>
+<span class="code-dim">────────────────────────────────────</span>
+<span class="code-key">CLAUDE.md</span>           <span class="code-comment"># 基本ルール・ペルソナ定義</span>
+<span class="code-key">skills/</span>
+  <span class="code-key">├─ meta-ads.md</span>    <span class="code-comment"># Meta広告運用スキル</span>
+  <span class="code-key">├─ copy-write.md</span>  <span class="code-comment"># コピーライティング</span>
+  <span class="code-key">└─ reporting.md</span>   <span class="code-comment"># レポーティング</span>
+<span class="code-key">tools/</span>
+  <span class="code-key">├─ meta-api.py</span>    <span class="code-comment"># Meta API ツール</span>
+  <span class="code-key">└─ slack-bot.py</span>   <span class="code-comment"># Slack 通知</span>
+<span class="code-key">CHANGELOG.md</span>        <span class="code-comment"># 成長記録（コミットログ）</span>
+<span class="code-dim">────────────────────────────────────</span>
+<span class="code-comment"># バージョンアップ = スキル追加・改善</span>
+<span class="code-val">$ git tag v2.0.0 -m "ROAS改善スキル追加"</span>
+<span class="code-val">$ git clone . ../sakamoto-v2-b-corp/</span>
+<span class="code-comment">  # → 機密除去 → B社向けにインスタンス化完了</span></div>
+    </div>
+
+    <!-- Right: cards -->
+    <div class="agent-right">
+      <div class="info-card reveal" style="flex:1;">
+        <div class="info-card-label">スキル定義</div>
+        <div class="info-card-title">全て .md ファイルで記述</div>
+        <div class="info-card-body">ルール・制約・得意業務を Markdown で定義。LLM が読み込み、即座に行動規範に反映。エンジニア不要で業務チームが編集できる。</div>
+      </div>
+      <div class="info-card reveal" style="flex:1;">
+        <div class="info-card-label">バージョン管理</div>
+        <div class="info-card-title">Git コミット = 成長記録</div>
+        <div class="info-card-body">コミットログが学習履歴。タグでバージョン管理。差分で「何が改善されたか」を可視化。育成の ROI を数値で証明できる。</div>
+      </div>
+      <div class="info-card pale reveal" style="flex:1;">
+        <div class="info-card-label">インスタンス化</div>
+        <div class="info-card-title">git clone でコピー展開</div>
+        <div class="info-card-body">機密除去 → リネーム → 即起動。同一エージェントを複数社に同時展開。これがコスト構造を根本から変える。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 04 — CATALOG UI MOCKUP
+     ============================================================ -->
+<section class="slide slide-catalog" data-index="3">
+  <div class="slide-num">04</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Catalog UI</span>
+  </header>
+
+  <div class="catalog-wrap">
+    <h2 class="section-h reveal">カタログ — <span class="hl">選ぶ・借りる・チームを組む</span></h2>
+
+    <div class="browser-frame reveal">
+      <div class="browser-bar">
+        <span class="browser-dot bd-r"></span>
+        <span class="browser-dot bd-y"></span>
+        <span class="browser-dot bd-g"></span>
+        <span class="browser-url">https://app.the-branch.ai / catalog</span>
+      </div>
+
+      <div class="browser-body">
+        <nav class="app-sidebar">
+          <div class="sidebar-item active">📦 カタログ</div>
+          <div class="sidebar-item">👥 マイチーム</div>
+          <div class="sidebar-item">✅ タスク</div>
+          <div class="sidebar-item">📊 分析</div>
+          <div class="sidebar-item">⚙️ 設定</div>
+        </nav>
+
+        <div class="app-main">
+          <div class="app-toolbar">
+            <div class="app-search">🔍　エージェントを検索（スキル・業務・評価スコアで絞り込み）</div>
+            <button class="app-btn">+ チームに追加</button>
+          </div>
+
+          <div class="agent-cards">
+            <div class="agent-card featured">
+              <div class="ac-tag">⭐ 人気 · Self-hosted</div>
+              <div class="ac-name">Meta 広告運用チーム / 坂本 v2</div>
+              <div class="ac-meta">5名構成 · v2.0.0 · スコア 94</div>
+              <div class="ac-price">¥110 / call　A社優遇価格</div>
+            </div>
+            <div class="agent-card">
+              <div class="ac-tag">法務 · Self-hosted</div>
+              <div class="ac-name">法務チェック / 坂本 v2</div>
+              <div class="ac-meta">1名 · v2.0.0 · スコア 88</div>
+              <div class="ac-price">¥100 / call</div>
+            </div>
+            <div class="agent-card">
+              <div class="ac-tag">🌱 育成中 · 優遇価格</div>
+              <div class="ac-name">コピーライター / 田中 v1</div>
+              <div class="ac-meta">1名 · v1.0.0 · スコア 71</div>
+              <div class="ac-price">¥80 / call</div>
+            </div>
+            <div class="agent-card">
+              <div class="ac-tag">外部 · 審査済</div>
+              <div class="ac-name">Google 広告最適化 AI</div>
+              <div class="ac-meta">外部登録 · v1.2.0 · スコア 91</div>
+              <div class="ac-price">¥120 / call</div>
+            </div>
+            <div class="agent-card">
+              <div class="ac-tag">外部 · 審査済</div>
+              <div class="ac-name">財務分析エージェント</div>
+              <div class="ac-meta">外部登録 · v3.0.0 · スコア 96</div>
+              <div class="ac-price">¥150 / call</div>
+            </div>
+            <div class="agent-card" style="border-style:dashed;align-items:center;justify-content:center;color:var(--ink-faint);font-family:var(--font-body);font-size:var(--label-size);text-align:center;">
+              + 外部エージェント<br>登録受付中
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 05 — LAUNCH FLOW
+     ============================================================ -->
+<section class="slide slide-flow" data-index="4">
+  <div class="slide-num">05</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Launch Flow</span>
+  </header>
+
+  <div class="flow-wrap">
+    <h2 class="section-h reveal">アサインから稼働まで、<span class="hl">最短3ステップ</span></h2>
+
+    <div class="flow-steps reveal">
+      <div class="flow-step">
+        <div class="step-num">01</div>
+        <div class="step-title">カタログ選択</div>
+        <div class="step-body">業務に合うエージェントをカタログで選ぶ。スキル・バージョン・価格・評価スコアを確認してチームに追加。</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">02</div>
+        <div class="step-title">チーム編成</div>
+        <div class="step-body">複数エージェントをチームとしてグループ化。部署・案件ごとに異なるチームを並行して組める。</div>
+      </div>
+      <div class="flow-step accent">
+        <div class="step-num">03</div>
+        <div class="step-title">ルール設定</div>
+        <div class="step-body">優先ルール・制約・エージェント名をカスタマイズ。機密保護スコープを定義する。ここが差別化ポイント。</div>
+        <div class="step-badge">ここが差別化</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">04</div>
+        <div class="step-title">即日稼働</div>
+        <div class="step-body">Slack / ブラウザ UI から指示するだけ。マネージャーエージェントが整合性を担保して並行稼働する。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 06 — CLIENT PANEL
+     ============================================================ -->
+<section class="slide slide-client" data-index="5">
+  <div class="slide-num">06</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Client Operations</span>
+  </header>
+
+  <div class="client-wrap">
+    <h2 class="section-h reveal">クライアントが<span class="hl">操作できること</span></h2>
+
+    <div class="client-cards">
+      <div class="client-card reveal">
+        <div class="cc-icon">📋</div>
+        <div class="cc-title">指示・優先ルール</div>
+        <ul class="cc-list">
+          <li>業務ルールを Markdown で追記</li>
+          <li>指示の優先順位を設定</li>
+          <li>禁止アクションを定義</li>
+          <li>レポート形式を指定</li>
+        </ul>
+      </div>
+      <div class="client-card accent reveal">
+        <div class="cc-icon">🎭</div>
+        <div class="cc-title">名前・アバター変更</div>
+        <ul class="cc-list">
+          <li>エージェントに任意の名前</li>
+          <li>アバター画像を設定</li>
+          <li>ペルソナを追加定義</li>
+          <li>社内への見え方をカスタマイズ</li>
+        </ul>
+      </div>
+      <div class="client-card reveal">
+        <div class="cc-icon">🔒</div>
+        <div class="cc-title">制約・機密設定</div>
+        <ul class="cc-list">
+          <li>機密ワードリストを登録</li>
+          <li>アクセス権限スコープを設定</li>
+          <li>外部送信の許可・禁止</li>
+          <li>ログ保持期間を指定</li>
+        </ul>
+      </div>
+      <div class="client-card reveal">
+        <div class="cc-icon">✅</div>
+        <div class="cc-title">承認フロー</div>
+        <ul class="cc-list">
+          <li>高リスクアクションを承認制に</li>
+          <li>Slack で承認・却下</li>
+          <li>承認履歴をログ保存</li>
+          <li>タイムアウト設定</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 07 — VIRTUAL OFFICE
+     ============================================================ -->
+<section class="slide slide-voffice" data-index="6">
+  <div class="slide-num">07</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Virtual Office</span>
+  </header>
+
+  <div class="voffice-body">
+    <!-- Left: Live activity log -->
+    <div class="voffice-log reveal-left">
+      <div class="voffice-log-title">// live activity</div>
+      <div class="log-entries">
+        <div class="log-entry">
+          <span class="log-time">09:42</span>
+          <span class="log-agent"> 坂本 (広告AI)</span><br>
+          Meta Ads — ROAS +14% 最適化完了
+        </div>
+        <div class="log-entry">
+          <span class="log-time">09:43</span>
+          <span class="log-agent"> 田中 (分析AI)</span><br>
+          週次レポート生成中...
+        </div>
+        <div class="log-entry">
+          <span class="log-time">09:44</span>
+          <span class="log-agent"> 法務 (審査AI)</span><br>
+          契約書チェック — 待機中
+        </div>
+        <div class="log-entry">
+          <span class="log-time">09:45</span>
+          <span class="log-agent"> 田中様 (顧客)</span><br>
+          「先月の広告費を教えて」
+        </div>
+        <div class="log-entry">
+          <span class="log-time">09:45</span>
+          <span class="log-agent"> 坂本 (広告AI)</span><br>
+          「¥1,280,000 です。詳細は—」
+        </div>
+        <div class="log-entry">
+          <span class="log-time">09:46</span>
+          <span class="log-agent"> 制作 (CopyAI)</span><br>
+          バナー原稿 3本 生成中
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: Isometric office -->
+    <div class="voffice-iso-wrap">
+      <div class="iso-world reveal">
+        <div class="office-grid">
+          <div class="ot plant"><span class="plant-e">🌿</span></div>
+          <div class="ot desk"><div class="av ai">坂<div class="status-dot working"></div></div></div>
+          <div class="ot corridor"></div>
+          <div class="ot desk"><div class="av ai">田<div class="status-dot working"></div></div></div>
+          <div class="ot plant"><span class="plant-e">🌿</span></div>
+          <div class="ot corridor"></div>
+          <div class="ot corridor"></div>
+          <div class="ot corridor"></div>
+          <div class="ot corridor"></div>
+          <div class="ot corridor"></div>
+          <div class="ot desk"><div class="av ai">法<div class="status-dot idle"></div></div></div>
+          <div class="ot corridor"></div>
+          <div class="ot meeting">📋</div>
+          <div class="ot corridor"></div>
+          <div class="ot desk"><div class="av ai">制<div class="status-dot working"></div></div></div>
+          <div class="ot corridor"></div>
+          <div class="ot corridor"></div>
+          <div class="ot corridor"><div class="av human">👤<div class="status-dot talking"></div></div></div>
+          <div class="ot corridor"></div>
+          <div class="ot corridor"></div>
+          <div class="ot entrance">🚪</div>
+          <div class="ot corridor"></div>
+          <div class="ot corridor"></div>
+          <div class="ot corridor"></div>
+          <div class="ot entrance">🚪</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: caption + legend -->
+    <div class="voffice-caption reveal">
+      <h2 class="section-h" style="font-size:var(--h3-size);line-height:1.15;">
+        <span class="hl">バーチャル<br>オフィス</span>
+      </h2>
+      <p style="font-family:var(--font-body);font-size:var(--body-size);color:var(--ink-mid);line-height:1.65;">
+        AIエージェントが常駐する仮想空間。稼働状況をGather / Claw Empireのように斜め上から俯瞰できる。
+      </p>
+      <div class="vo-legend">
+        <div class="vo-legend-item"><div class="legend-dot ai-c"></div>AIエージェント</div>
+        <div class="vo-legend-item"><div class="legend-dot human-c"></div>顧客アバター</div>
+        <div class="vo-legend-item"><div class="legend-dot work-c"></div>稼働中（緑点滅）</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 08 — INTERACTION FEATURES
+     ============================================================ -->
+<section class="slide slide-interact" data-index="7">
+  <div class="slide-num">08</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Office Interactions</span>
+  </header>
+
+  <div class="interact-wrap">
+    <h2 class="section-h reveal">オフィスで<span class="hl">できること</span></h2>
+
+    <div class="interact-grid">
+      <div class="ic accent reveal">
+        <div class="ic-icon">👥</div>
+        <div class="ic-title">アバター入室</div>
+        <div class="ic-body">顧客の人間アバターがバーチャルオフィスに入室。稼働中のAIエージェントの様子をリアルタイムで確認し、好きなエージェントに声をかけられる。</div>
+        <span class="ic-badge live">利用可能</span>
+      </div>
+      <div class="ic reveal">
+        <div class="ic-icon">💬</div>
+        <div class="ic-title">テキスト&amp;チャット</div>
+        <div class="ic-body">オフィス内のAIエージェントに直接テキストで質問・指示できる。会話ログは全件記録され、監査・振り返りも万全。</div>
+        <span class="ic-badge live">利用可能</span>
+      </div>
+      <div class="ic reveal">
+        <div class="ic-icon">🎤</div>
+        <div class="ic-title">音声コマンド</div>
+        <div class="ic-body">「先月の広告費は？」「バナーを3本作って」——音声でAIに指示できる。タイピング不要で業務スピードが劇的に向上する。</div>
+        <span class="ic-badge live">利用可能</span>
+      </div>
+      <div class="ic roadmap reveal">
+        <div class="ic-icon">📹</div>
+        <div class="ic-title">ビデオチャット</div>
+        <div class="ic-body">AIエージェントのアバターとビデオ通話。表情・動作を持つAIと対話し、まるで同僚と話しているような体験を実現する。</div>
+        <span class="ic-badge road">ロードマップ</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 09 — FILTERING / SECURITY
+     ============================================================ -->
+<section class="slide slide-filter" data-index="8">
+  <div class="slide-num">09</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Security Core</span>
+  </header>
+
+  <div class="filter-wrap">
+    <h2 class="section-h reveal">セキュリティのコア — <span class="hl">3段階フィルタリング</span></h2>
+
+    <div class="filter-flow reveal">
+      <div class="filter-node">
+        <div class="fn-icon">📂</div>
+        <div class="fn-title">クライアント業務データ</div>
+        <div class="fn-body">Slack ログ・広告レポート・顧客情報</div>
+      </div>
+      <div class="filter-arrow">→</div>
+      <div class="filter-node yn">
+        <div class="fn-icon">🔍</div>
+        <div class="fn-title">① 自動スキャン</div>
+        <div class="fn-body">Check Agent が全出力を常時監視。機密ワード・個人情報を自動検出。</div>
+      </div>
+      <div class="filter-arrow">→</div>
+      <div class="filter-node dk">
+        <div class="fn-icon">🛡️</div>
+        <div class="fn-title">② 機密マスク</div>
+        <div class="fn-body">固有名詞・金額・顧客 ID を自動マスク。ルールはクライアントが定義。</div>
+      </div>
+      <div class="filter-arrow">→</div>
+      <div class="filter-node yn">
+        <div class="fn-icon">✅</div>
+        <div class="fn-title">③ マージ承認</div>
+        <div class="fn-body">フィルタ後データのみ Git にマージ。The Branch の学習資産として蓄積。</div>
+      </div>
+      <div class="filter-arrow">→</div>
+      <div class="filter-node">
+        <div class="fn-icon">📦</div>
+        <div class="fn-title">Git リポジトリへ</div>
+        <div class="fn-body">機密ゼロの状態で成長記録として永続化。解約後も The Branch の資産。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 10 — DATA FLYWHEEL
+     ============================================================ -->
+<section class="slide slide-wheel" data-index="9">
+  <div class="slide-num">10</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Data Flywheel</span>
+  </header>
+
+  <div class="wheel-wrap">
+    <div class="wheel-left">
+      <h2 class="section-h reveal">使うほど賢くなる<br><span class="hl">データフライホイール</span></h2>
+      <p class="wheel-sub reveal">解約後もThe Branchの資産として蓄積。使い続けるほど競合が追いつけない差が生まれる。</p>
+      <div class="info-card pale reveal">
+        <div class="info-card-label">競合への堀</div>
+        <div class="info-card-body">早く使い始めた企業ほどエージェントが賢くなり、解約コストも上がる。ネットワーク効果が評価スコアを加速させ、後発者では埋められない差が生まれる。</div>
+      </div>
+    </div>
+
+    <div class="wheel-right">
+      <div class="wheel-container reveal">
+        <div class="wheel-ring"></div>
+        <div class="wheel-center">The<br>Branch</div>
+        <div class="wheel-step">クライアントが<br>使う</div>
+        <div class="wheel-step">機密フィルタ<br>自動除去</div>
+        <div class="wheel-step">Git に<br>マージ</div>
+        <div class="wheel-step">評価スコア<br>UP→単価UP</div>
+        <div class="wheel-step">採用企業<br>が増える</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 11 — CHECK AGENT
+     ============================================================ -->
+<section class="slide slide-check" data-index="10">
+  <div class="slide-num">11</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Check Agent</span>
+  </header>
+
+  <div class="check-wrap">
+    <h2 class="section-h reveal">24/7稼働する<span class="hl">セキュリティエージェント</span></h2>
+
+    <div class="check-cards">
+      <div class="check-card reveal">
+        <div class="cc-num">01</div>
+        <div class="cc-h">常時監視</div>
+        <div class="cc-body">全エージェントの出力をリアルタイムスキャン。機密ワード・不審な外部通信・異常な API コール量を自動検出し、即座にログに記録する。</div>
+      </div>
+      <div class="check-card accent reveal">
+        <div class="cc-num">02</div>
+        <div class="cc-h">自動アラート</div>
+        <div class="cc-body">異常検知時は Slack・メールに即通知。重大度レベル別にエスカレーションルートを設定。エージェントを一時停止する権限も持つ。</div>
+      </div>
+      <div class="check-card reveal">
+        <div class="cc-num">03</div>
+        <div class="cc-h">人間は最終判断のみ</div>
+        <div class="cc-body">日常監視は Check Agent が全自動。人間は「承認 / 却下 / エスカレーション」のみ担う。運用コストを最小化しながら最高水準のガバナンスを維持。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 12 — INTEGRATIONS
+     ============================================================ -->
+<section class="slide slide-int" data-index="11">
+  <div class="slide-num">12</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Integrations</span>
+  </header>
+
+  <div class="int-wrap">
+    <h2 class="section-h reveal">主要 API と<span class="hl">接続済み</span></h2>
+
+    <div class="int-grid">
+      <div class="int-card live reveal">
+        <div class="int-name">Meta Ads API</div>
+        <div class="int-status"><span class="dot dot-g"></span>稼働中</div>
+        <div class="int-desc">広告配信・予算最適化・ROAS 計測。広告代理店フェーズの中心スキル。ビーチヘッド市場で即日活用できる。</div>
+      </div>
+      <div class="int-card live reveal">
+        <div class="int-name">Google Ads API</div>
+        <div class="int-status"><span class="dot dot-g"></span>稼働中</div>
+        <div class="int-desc">キーワード入札・品質スコア改善・レポート自動生成。Meta と組み合わせて横断運用が可能。</div>
+      </div>
+      <div class="int-card live reveal">
+        <div class="int-name">Slack</div>
+        <div class="int-status"><span class="dot dot-g"></span>稼働中</div>
+        <div class="int-desc">指示・承認フロー・アラートを Slack で完結。非エンジニアも操作できるため導入ハードルが低い。</div>
+      </div>
+      <div class="int-card live reveal">
+        <div class="int-name">GitHub / Git</div>
+        <div class="int-status"><span class="dot dot-g"></span>稼働中</div>
+        <div class="int-desc">エージェントリポジトリ管理・バージョン管理・差分追跡の基盤。全エージェント定義を Git で管理。</div>
+      </div>
+      <div class="int-card reveal">
+        <div class="int-name">Claude API</div>
+        <div class="int-status"><span class="dot dot-y"></span>実装中</div>
+        <div class="int-desc">Anthropic Claude を LLM ランタイムとして使用。長いコンテキスト・拡張思考機能を最大活用する。</div>
+      </div>
+      <div class="int-card reveal">
+        <div class="int-name">Custom Webhook</div>
+        <div class="int-status"><span class="dot dot-x"></span>計画中</div>
+        <div class="int-desc">任意の外部サービスと接続するカスタム Webhook エンドポイント。クライアント固有の要件に対応。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 13 — ROADMAP
+     ============================================================ -->
+<section class="slide slide-road" data-index="12">
+  <div class="slide-num">13</div>
+  <header class="slide-header">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Roadmap</span>
+  </header>
+
+  <div class="road-wrap">
+    <h2 class="section-h reveal">フェーズ別<span class="hl">開発ロードマップ</span></h2>
+
+    <div class="road-phases">
+      <div class="phase now reveal">
+        <div class="ph-label">Phase 1 — 現在</div>
+        <div class="ph-period">2026 Q1〜Q2</div>
+        <ul class="ph-items">
+          <li>自社 EC「へそのや」で実証</li>
+          <li>Meta / Google 広告エージェント</li>
+          <li>Check Agent MVP</li>
+          <li>カタログ・Slack 連携</li>
+          <li>機密フィルタリング基盤</li>
+        </ul>
+        <span class="ph-badge">稼働中</span>
+      </div>
+      <div class="phase reveal">
+        <div class="ph-label">Phase 2</div>
+        <div class="ph-period">2026 Q3〜Q4</div>
+        <ul class="ph-items">
+          <li>外部エージェント登録開始</li>
+          <li>ロイヤリティ自動計算</li>
+          <li>広告代理店 β クライアント獲得</li>
+          <li>多段承認フロー</li>
+          <li>ダッシュボード v1 リリース</li>
+        </ul>
+      </div>
+      <div class="phase reveal">
+        <div class="ph-label">Phase 3</div>
+        <div class="ph-period">2027〜</div>
+        <ul class="ph-items">
+          <li>エンタープライズプラン</li>
+          <li>多言語エージェント対応</li>
+          <li>API マーケットプレイス</li>
+          <li>エージェント評価スコア公開</li>
+          <li>オンプレ・プライベートクラウド</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SLIDE 14 — CLOSING
+     ============================================================ -->
+<section class="slide slide-close" data-index="13">
+  <div class="slide-num light">14</div>
+  <header class="slide-header dark">
+    <span class="brand">The Branch</span>
+    <span class="slide-tag">Summary</span>
+  </header>
+
+  <div class="close-body">
+    <div class="badge dark-badge reveal">System Summary</div>
+    <h2 class="close-title reveal">システムの<br><span class="hl">本質的な強み</span></h2>
+
+    <div class="close-points reveal">
+      <div class="close-pt">
+        <div class="close-num">01</div>
+        <div class="close-text">
+          <strong>コピー可能な設計</strong>
+          Git リポジトリ = エージェント。clone するだけで複数社への同時展開が完了する。採用ゼロ・即日稼働。
+        </div>
+      </div>
+      <div class="close-pt">
+        <div class="close-num">02</div>
+        <div class="close-text">
+          <strong>データが永続する</strong>
+          解約後も The Branch の資産として蓄積。使い続けるほど競合優位が拡大するデータフライホイール。
+        </div>
+      </div>
+      <div class="close-pt">
+        <div class="close-num">03</div>
+        <div class="close-text">
+          <strong>3段階セキュリティ</strong>
+          Check Agent が常時監視。機密フィルタリング → Git マージで情報漏洩をゼロに。人間は最終判断のみ。
+        </div>
+      </div>
+      <div class="close-pt">
+        <div class="close-num">04</div>
+        <div class="close-text">
+          <strong>即時スケール</strong>
+          需要増にエージェントで対応。Slack から指示するだけ。マネージャーエージェントが整合性を担保。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="slide-footer dark">
+    <span class="footer-text light">The Branch — System &amp; UI Overview 2026</span>
+    <span class="footer-sub light">the-branch.ai</span>
+  </footer>
+</section>
+
+<!-- ===========================================
+     JAVASCRIPT
+     =========================================== -->
+<script>
+/* === SLIDE PRESENTATION CONTROLLER === */
+class SlidePresentation {
+  constructor() {
+    this.slides = document.querySelectorAll('.slide');
+    this.currentSlide = 0;
+    this.setupIntersectionObserver();
+    this.setupKeyboardNav();
+    this.setupTouchNav();
+    this.setupProgressBar();
+    this.setupNavDots();
+  }
+
+  setupIntersectionObserver() {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            const idx = Array.from(this.slides).indexOf(entry.target);
+            this.currentSlide = idx;
+            this.updateNavDots();
+            this.updateProgressBar();
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+    this.slides.forEach(slide => observer.observe(slide));
+  }
+
+  setupKeyboardNav() {
+    document.addEventListener('keydown', (e) => {
+      if (editor && editor.isActive) return;
+      switch (e.key) {
+        case 'ArrowDown': case 'ArrowRight': case ' ':
+          e.preventDefault();
+          this.goTo(Math.min(this.currentSlide + 1, this.slides.length - 1));
+          break;
+        case 'ArrowUp': case 'ArrowLeft':
+          e.preventDefault();
+          this.goTo(Math.max(this.currentSlide - 1, 0));
+          break;
+        case 'Home': e.preventDefault(); this.goTo(0); break;
+        case 'End':  e.preventDefault(); this.goTo(this.slides.length - 1); break;
+      }
+    });
+  }
+
+  setupTouchNav() {
+    let startY = 0, startX = 0;
+    document.addEventListener('touchstart', e => {
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+    }, { passive: true });
+    document.addEventListener('touchend', e => {
+      const dy = startY - e.changedTouches[0].clientY;
+      const dx = startX - e.changedTouches[0].clientX;
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 50) {
+        if (dy > 0) this.goTo(Math.min(this.currentSlide + 1, this.slides.length - 1));
+        else        this.goTo(Math.max(this.currentSlide - 1, 0));
+      }
+    }, { passive: true });
+  }
+
+  setupProgressBar()  { this.progressBar = document.getElementById('progressBar'); }
+  updateProgressBar() {
+    if (!this.progressBar) return;
+    const pct = (this.currentSlide / (this.slides.length - 1)) * 100;
+    this.progressBar.style.width = pct + '%';
+  }
+
+  setupNavDots() {
+    const nav = document.getElementById('navDots');
+    if (!nav) return;
+    this.slides.forEach((_, i) => {
+      const dot = document.createElement('div');
+      dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+      dot.addEventListener('click', () => this.goTo(i));
+      nav.appendChild(dot);
+    });
+  }
+
+  updateNavDots() {
+    document.querySelectorAll('.nav-dot').forEach((dot, i) => {
+      dot.classList.toggle('active', i === this.currentSlide);
+    });
+  }
+
+  goTo(index) {
+    this.slides[index].scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+/* === INLINE EDITOR === */
+class InlineEditor {
+  constructor() { this.isActive = false; }
+
+  toggleEditMode() {
+    this.isActive = !this.isActive;
+    const toggle = document.getElementById('editToggle');
+    const hint   = document.getElementById('saveHint');
+
+    if (this.isActive) {
+      document.querySelectorAll(
+        'h1, h2, h3, p, li, .badge, .info-card-title, .info-card-body, ' +
+        '.section-h, .title-main, .title-sub, .footer-text, .step-title, ' +
+        '.step-body, .cc-h, .cc-body, .int-desc, .int-name, .ph-period, ' +
+        '.fn-title, .fn-body, .close-title, .close-text, .wheel-sub, ' +
+        '.ac-name, .ph-items li, .cc-list li, .wheel-step, .tp-item'
+      ).forEach(el => {
+        if (!el.closest('.browser-frame')) {
+          el.setAttribute('contenteditable', 'true');
+        }
+      });
+      toggle.textContent = '✓ 完了';
+      toggle.classList.add('active');
+      hint.classList.add('show');
+    } else {
+      document.querySelectorAll('[contenteditable]').forEach(el => {
+        el.removeAttribute('contenteditable');
+      });
+      toggle.textContent = '✏️ 編集';
+      toggle.classList.remove('active');
+      hint.classList.remove('show');
+      this.saveFile();
+    }
+  }
+
+  saveFile() {
+    const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'the-branch-system-ui.html';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+}
+
+/* Initialize */
+// Inject credit into every slide
+document.querySelectorAll('.slide').forEach(slide => {
+  const credit = document.createElement('div');
+  credit.className = 'slide-credit';
+  credit.textContent = '2026 · CONFIDENTIAL · @adachi_koichi';
+  slide.appendChild(credit);
+});
+
+const presentation = new SlidePresentation();
+const editor       = new InlineEditor();
+
+/* Hotzone: JS-based hover with 400ms grace period */
+const hotzone    = document.getElementById('editHotzone');
+const editToggle = document.getElementById('editToggle');
+let hideTimeout  = null;
+
+hotzone.addEventListener('mouseenter', () => {
+  clearTimeout(hideTimeout);
+  editToggle.classList.add('show');
+});
+hotzone.addEventListener('mouseleave', () => {
+  hideTimeout = setTimeout(() => {
+    if (!editor.isActive) editToggle.classList.remove('show');
+  }, 400);
+});
+editToggle.addEventListener('mouseenter', () => { clearTimeout(hideTimeout); });
+editToggle.addEventListener('mouseleave', () => {
+  hideTimeout = setTimeout(() => {
+    if (!editor.isActive) editToggle.classList.remove('show');
+  }, 400);
+});
+hotzone.addEventListener('click',    () => editor.toggleEditMode());
+editToggle.addEventListener('click', () => editor.toggleEditMode());
+
+/* Keyboard shortcuts */
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'e' || e.key === 'E') && !e.target.getAttribute('contenteditable')) {
+    editor.toggleEditMode();
+  }
+  if ((e.key === 's' || e.key === 'S') && (e.metaKey || e.ctrlKey) && editor.isActive) {
+    e.preventDefault();
+    editor.toggleEditMode();
+  }
+});
+</script>
+</body>
+</html>
