@@ -58,21 +58,75 @@ class AgentConfig(BaseModel):
 
 class DepartmentCreate(BaseModel):
     name: str
-    type: str
-    description: Optional[str] = ""
-    agent: AgentConfig
-    kpi_target: Optional[str] = ""
+    slug: str
+    description: Optional[str] = None
+    parent_id: Optional[int] = None
+    budget: Optional[float] = None
+
+
+class DepartmentUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    budget: Optional[float] = None
+    status: Optional[str] = None
 
 
 class DepartmentResponse(BaseModel):
-    id: str
+    id: int
     name: str
-    type: str
+    slug: str
     description: Optional[str]
-    agent: dict
-    kpi_target: Optional[str]
-    created_at: datetime
-    updated_at: datetime
+    parent_id: Optional[int]
+    budget: Optional[float]
+    status: str
+    agent_count: int = 0
+    team_count: int = 0
+    created_at: str
+    updated_at: str
 
-    class Config:
-        from_attributes = True
+
+class DepartmentDetailResponse(DepartmentResponse):
+    parent: Optional[dict] = None
+
+
+class DepartmentAgentCreate(BaseModel):
+    agent_id: int
+    role: str
+
+
+class DepartmentAgentResponse(BaseModel):
+    department_id: int
+    agent_id: int
+    agent: dict
+    role: str
+    joined_at: str
+
+
+class TeamCreate(BaseModel):
+    name: str
+    slug: str
+    description: Optional[str] = None
+    status: str = "active"
+
+
+class TeamUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+
+
+class TeamResponse(BaseModel):
+    id: int
+    department_id: int
+    name: str
+    slug: str
+    description: Optional[str]
+    status: str
+    created_at: str
+    updated_at: str
+
+
+class RelationCreate(BaseModel):
+    dept_b_id: int
+    relation_type: str
+    description: Optional[str] = None

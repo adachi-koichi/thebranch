@@ -3372,23 +3372,419 @@ async def add_role(role_req: models.UserRoleCreate, authorization: Optional[str]
 # Departments (#2362)
 # ──────────────────────────────────────────────
 
-@app.post("/api/departments", response_model=dict)
+THEBRANCH_DB = DASHBOARD_DIR / "data" / "thebranch.sqlite"
+
+async def ensure_db_initialized():
+    """Initialize database if not exists."""
+    if not THEBRANCH_DB.parent.exists():
+        THEBRANCH_DB.parent.mkdir(parents=True, exist_ok=True)
+
+    if not THEBRANCH_DB.exists():
+        conn = sqlite3.connect(str(THEBRANCH_DB))
+        try:
+            migrations_dir = DASHBOARD_DIR / "migrations"
+            for mig_file in sorted(migrations_dir.glob("*.sql")):
+                with open(mig_file) as f:
+                    conn.executescript(f.read())
+            conn.commit()
+        finally:
+            conn.close()
+
+@app.on_event("startup")
+async def startup_event():
+    await ensure_db_initialized()
+
+@app.post("/api/departments", status_code=201)
 async def create_department(dept_req: models.DepartmentCreate):
-    import uuid
-    dept_id = str(uuid.uuid4())
-    created_at = datetime.now().isoformat()
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """INSERT INTO departments (name, slug, description, parent_id, budget, status, created_by)
+                   VALUES (?, ?, ?, ?, ?, 'active', 'system')""",
+                (dept_req.name, dept_req.slug, dept_req.description, dept_req.parent_id, dept_req.budget),
+            )
+            dept_id = cursor.lastrowid
+            await db.commit()
+
+            cursor = await db.execute(
+                """SELECT id, name, slug, description, parent_id, budget, status,
+                          (SELECT COUNT(*) FROM department_agents WHERE department_id = ?) as agent_count,
+                          (SELECT COUNT(*) FROM teams WHERE department_id = ?) as team_count,
+                          created_at, updated_at FROM departments WHERE id = ?""",
+                (dept_id, dept_id, dept_id),
+            )
+            row = await cursor.fetchone()
+
+        return dict(row) if row else {"error": "Failed to create"}
+    except sqlite3.IntegrityError as e:
+        if "UNIQUE constraint failed" in str(e):
+            if "name" in str(e):
+                raise HTTPException(status_code=400, detail={"error": "DEPT_NAME_DUPLICATE", "message": "部署名が既に存在します"})
+            elif "slug" in str(e):
+                raise HTTPException(status_code=400, detail={"error": "DEPT_SLUG_DUPLICATE", "message": "スラッグが既に存在します"})
+        raise HTTPException(status_code=400, detail="データ完全性エラー")
+
+@app.get("/api/departments")
+async def list_departments(status: str = "", parent_id: int = None, page: int = 1, limit: int = 20):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        query = "SELECT id, name, slug, description, parent_id, budget, status, " \
+                "(SELECT COUNT(*) FROM department_agents WHERE department_id = departments.id) as agent_count, " \
+                "(SELECT COUNT(*) FROM teams WHERE department_id = departments.id) as team_count, " \
+                "created_at FROM departments WHERE 1=1"
+        params = []
+
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        if parent_id:
+            query += " AND parent_id = ?"
+            params.append(parent_id)
+
+        query += " ORDER BY id DESC LIMIT ? OFFSET ?"
+        offset = (page - 1) * limit
+        params.extend([limit, offset])
+
+        cursor = await db.execute(query, params)
+        rows = await cursor.fetchall()
+
+        cursor = await db.execute("SELECT COUNT(*) FROM departments WHERE 1=1" +
+                                  (" AND status = ?" if status else "") +
+                                  (" AND parent_id = ?" if parent_id else ""),
+                                  params[:-2] if params else [])
+        total = (await cursor.fetchone())[0]
 
     return {
-        "id": dept_id,
-        "name": dept_req.name,
-        "type": dept_req.type,
-        "description": dept_req.description,
-        "agent": dept_req.agent.dict(),
-        "kpi_target": dept_req.kpi_target,
-        "created_at": created_at,
-        "updated_at": created_at,
-        "status": "created"
+        "data": [dict(r) for r in rows],
+        "pagination": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit}
     }
+
+@app.get("/api/departments/{dept_id}")
+async def get_department(dept_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT id, name, slug, description, parent_id, budget, status,
+                      (SELECT COUNT(*) FROM department_agents WHERE department_id = ?) as agent_count,
+                      (SELECT COUNT(*) FROM teams WHERE department_id = ?) as team_count,
+                      created_at, updated_at FROM departments WHERE id = ?""",
+            (dept_id, dept_id, dept_id),
+        )
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="部署が見つかりません")
+
+        dept = dict(row)
+        if dept["parent_id"]:
+            cursor = await db.execute(
+                "SELECT id, name, slug FROM departments WHERE id = ?",
+                (dept["parent_id"],),
+            )
+            parent = await cursor.fetchone()
+            dept["parent"] = dict(parent) if parent else None
+
+    return dept
+
+@app.put("/api/departments/{dept_id}")
+async def update_department(dept_id: int, update_req: models.DepartmentUpdate):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        updates = []
+        params = []
+
+        if update_req.name:
+            updates.append("name = ?")
+            params.append(update_req.name)
+        if update_req.description is not None:
+            updates.append("description = ?")
+            params.append(update_req.description)
+        if update_req.budget is not None:
+            updates.append("budget = ?")
+            params.append(update_req.budget)
+        if update_req.status:
+            updates.append("status = ?")
+            params.append(update_req.status)
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="更新フィールドがありません")
+
+        updates.append("updated_at = datetime('now','localtime')")
+        params.append(dept_id)
+
+        await db.execute(f"UPDATE departments SET {', '.join(updates)} WHERE id = ?", params)
+        await db.commit()
+
+        cursor = await db.execute(
+            "SELECT id, name, slug, description, parent_id, budget, status, created_at, updated_at FROM departments WHERE id = ?",
+            (dept_id,),
+        )
+        row = await cursor.fetchone()
+
+    return dict(row) if row else {"error": "更新失敗"}
+
+@app.delete("/api/departments/{dept_id}", status_code=204)
+async def delete_department(dept_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cursor = await db.execute("SELECT COUNT(*) FROM departments WHERE parent_id = ?", (dept_id,))
+        child_count = (await cursor.fetchone())[0]
+
+        if child_count > 0:
+            cursor = await db.execute(
+                "SELECT id, name, slug FROM departments WHERE parent_id = ?",
+                (dept_id,),
+            )
+            children = await cursor.fetchall()
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "DEPT_HAS_CHILDREN", "message": "子部署が存在するため削除できません",
+                        "child_departments": [{"id": c[0], "name": c[1], "slug": c[2]} for c in children]}
+            )
+
+        await db.execute("DELETE FROM departments WHERE id = ?", (dept_id,))
+        await db.commit()
+
+@app.post("/api/departments/{dept_id}/agents", status_code=201)
+async def add_agent_to_department(dept_id: int, agent_req: models.DepartmentAgentCreate):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (dept_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="部署が見つかりません")
+
+        await db.execute(
+            "INSERT INTO department_agents (department_id, agent_id, role) VALUES (?, ?, ?)",
+            (dept_id, agent_req.agent_id, agent_req.role),
+        )
+        await db.commit()
+
+        cursor = await db.execute(
+            """SELECT da.department_id, da.agent_id, da.role, da.joined_at,
+                      a.id, a.slug, a.name, a.role_type, a.specialty
+               FROM department_agents da
+               JOIN agents a ON da.agent_id = a.id
+               WHERE da.department_id = ? AND da.agent_id = ?""",
+            (dept_id, agent_req.agent_id),
+        )
+        row = await cursor.fetchone()
+
+    if row:
+        return {
+            "department_id": row[0],
+            "agent_id": row[1],
+            "role": row[2],
+            "joined_at": row[3],
+            "agent": {"id": row[4], "slug": row[5], "name": row[6], "role_type": row[7], "specialty": row[8]}
+        }
+    raise HTTPException(status_code=500, detail="エージェント追加に失敗しました")
+
+@app.get("/api/departments/{dept_id}/agents")
+async def list_department_agents(dept_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT da.agent_id, da.role, da.joined_at,
+                      a.id, a.slug, a.name, a.role_type, a.specialty
+               FROM department_agents da
+               JOIN agents a ON da.agent_id = a.id
+               WHERE da.department_id = ?
+               ORDER BY da.joined_at""",
+            (dept_id,),
+        )
+        rows = await cursor.fetchall()
+
+    agents = []
+    for r in rows:
+        agents.append({
+            "agent_id": r[0],
+            "role": r[1],
+            "joined_at": r[2],
+            "agent": {"id": r[3], "slug": r[4], "name": r[5], "role_type": r[6], "specialty": r[7]}
+        })
+    return {"data": agents, "total": len(agents)}
+
+@app.delete("/api/departments/{dept_id}/agents/{agent_id}", status_code=204)
+async def remove_agent_from_department(dept_id: int, agent_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await db.execute(
+            "DELETE FROM department_agents WHERE department_id = ? AND agent_id = ?",
+            (dept_id, agent_id),
+        )
+        await db.commit()
+
+@app.post("/api/departments/{dept_id}/teams", status_code=201)
+async def create_team(dept_id: int, team_req: models.TeamCreate):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (dept_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="部署が見つかりません")
+
+        cursor = await db.execute(
+            """INSERT INTO teams (department_id, name, slug, description, status, created_by)
+               VALUES (?, ?, ?, ?, ?, 'system')""",
+            (dept_id, team_req.name, team_req.slug, team_req.description, team_req.status),
+        )
+        team_id = cursor.lastrowid
+        await db.commit()
+
+        cursor = await db.execute(
+            "SELECT id, department_id, name, slug, description, status, created_at, updated_at FROM teams WHERE id = ?",
+            (team_id,),
+        )
+        row = await cursor.fetchone()
+
+    return dict(row) if row else {"error": "チーム作成失敗"}
+
+@app.get("/api/departments/{dept_id}/teams")
+async def list_teams(dept_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id, department_id, name, slug, description, status, created_at, updated_at FROM teams WHERE department_id = ? ORDER BY id",
+            (dept_id,),
+        )
+        rows = await cursor.fetchall()
+
+    return {"data": [dict(r) for r in rows], "total": len(rows)}
+
+@app.get("/api/departments/{dept_id}/teams/{team_id}")
+async def get_team(dept_id: int, team_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id, department_id, name, slug, description, status, created_at, updated_at FROM teams WHERE id = ? AND department_id = ?",
+            (team_id, dept_id),
+        )
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="チームが見つかりません")
+
+    return dict(row)
+
+@app.put("/api/departments/{dept_id}/teams/{team_id}")
+async def update_team(dept_id: int, team_id: int, update_req: models.TeamUpdate):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        updates = []
+        params = []
+
+        if update_req.name:
+            updates.append("name = ?")
+            params.append(update_req.name)
+        if update_req.description is not None:
+            updates.append("description = ?")
+            params.append(update_req.description)
+        if update_req.status:
+            updates.append("status = ?")
+            params.append(update_req.status)
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="更新フィールドがありません")
+
+        updates.append("updated_at = datetime('now','localtime')")
+        params.extend([team_id, dept_id])
+
+        await db.execute(
+            f"UPDATE teams SET {', '.join(updates)} WHERE id = ? AND department_id = ?",
+            params
+        )
+        await db.commit()
+
+        cursor = await db.execute(
+            "SELECT id, department_id, name, slug, description, status, created_at, updated_at FROM teams WHERE id = ?",
+            (team_id,),
+        )
+        row = await cursor.fetchone()
+
+    return dict(row) if row else {"error": "チーム更新失敗"}
+
+@app.delete("/api/departments/{dept_id}/teams/{team_id}", status_code=204)
+async def delete_team(dept_id: int, team_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await db.execute(
+            "DELETE FROM teams WHERE id = ? AND department_id = ?",
+            (team_id, dept_id),
+        )
+        await db.commit()
+
+
+# Department Relations
+
+@app.post("/api/departments/{dept_id}/relations", status_code=201)
+async def create_relation(dept_id: int, rel_req: models.RelationCreate):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (dept_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="部署が見つかりません")
+
+        cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (rel_req.dept_b_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="関連部署が見つかりません")
+
+        cursor = await db.execute(
+            """INSERT INTO department_relations (dept_a_id, dept_b_id, relation_type, description)
+               VALUES (?, ?, ?, ?)""",
+            (dept_id, rel_req.dept_b_id, rel_req.relation_type, rel_req.description),
+        )
+        await db.commit()
+
+        rel_id = cursor.lastrowid
+        cursor = await db.execute(
+            """SELECT id, dept_a_id, dept_b_id, relation_type, description, created_at
+               FROM department_relations WHERE id = ?""",
+            (rel_id,),
+        )
+        row = await cursor.fetchone()
+
+    return dict(row) if row else {"error": "関係作成失敗"}
+
+
+@app.get("/api/departments/{dept_id}/relations")
+async def list_relations(dept_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (dept_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="部署が見つかりません")
+
+        cursor = await db.execute(
+            """SELECT id, dept_a_id, dept_b_id, relation_type, description, created_at
+               FROM department_relations WHERE dept_a_id = ? ORDER BY id""",
+            (dept_id,),
+        )
+        rows = await cursor.fetchall()
+
+    return {
+        "data": [dict(r) for r in rows],
+        "total": len(rows)
+    }
+
+
+@app.delete("/api/departments/{dept_id}/relations/{related_dept_id}", status_code=204)
+async def delete_relation(dept_id: int, related_dept_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await db.execute(
+            "DELETE FROM department_relations WHERE dept_a_id = ? AND dept_b_id = ?",
+            (dept_id, related_dept_id),
+        )
+        await db.commit()
 
 
 # ──────────────────────────────────────────────
