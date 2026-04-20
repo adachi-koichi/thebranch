@@ -31,6 +31,7 @@ TMUX_BIN = shutil.which("tmux") or "/opt/homebrew/bin/tmux"
 app = FastAPI()
 
 DASHBOARD_DIR = Path(__file__).parent
+THEBRANCH_DB = DASHBOARD_DIR / "data" / "thebranch.sqlite"
 
 
 # ──────────────────────────────────────────────
@@ -448,6 +449,24 @@ async def patch_task(task_id: int, req: PatchTaskRequest):
         raise HTTPException(status_code=404, detail=f"タスク #{task_id} が見つかりません")
 
     return dict(row)
+
+
+# ──────────────────────────────────────────────
+# Department Templates
+# ──────────────────────────────────────────────
+
+@app.get("/api/department-templates")
+async def get_department_templates():
+    if not THEBRANCH_DB.exists():
+        return []
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id, name, description, category, status, total_roles, total_processes, total_tasks "
+            "FROM departments_templates WHERE status='active' ORDER BY id ASC"
+        )
+        rows = await cursor.fetchall()
+    return [dict(row) for row in rows]
 
 
 # ──────────────────────────────────────────────

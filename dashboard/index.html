@@ -128,6 +128,23 @@
     border-bottom: 1px solid var(--border);
     background: var(--card);
     padding: 0 24px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scroll-behavior: smooth;
+  }
+  .tabs::-webkit-scrollbar {
+    height: 4px;
+  }
+  .tabs::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .tabs::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 2px;
+  }
+  .tabs::-webkit-scrollbar-thumb:hover {
+    background: var(--gray);
   }
 
   .tab-btn {
@@ -1127,7 +1144,7 @@
 </div>
 
 <!-- Tabs -->
-<div class="tabs">
+<div class="tabs" id="tabsContainer">
   <button class="tab-btn active" data-tab="tasks">Tasks</button>
   <button class="tab-btn" data-tab="agents">Agents</button>
   <button class="tab-btn" data-tab="projects">Applications</button>
@@ -1176,6 +1193,19 @@
       <div class="kpi-label">稼働ペイン数</div>
       <div class="kpi-value" id="kpiActivePanes">—</div>
       <div class="kpi-sub">tmux アクティブペイン</div>
+    </div>
+  </div>
+
+  <!-- Quick Access Section -->
+  <div style="margin-top:24px;margin-bottom:24px;">
+    <h3 style="font-size:14px;color:var(--text-muted);font-weight:600;margin-bottom:12px;text-transform:uppercase;">
+      ⚡ クイックアクセス
+      <button onclick="openTabSearchModal()" style="float:right;background:rgba(88,166,255,0.15);border:1px solid rgba(88,166,255,0.3);color:var(--accent);border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer;transition:all 0.2s;">
+        🔍 すべて見る (Ctrl+K)
+      </button>
+    </h3>
+    <div id="quickAccessGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:8px;">
+      <!-- Populated by JS -->
     </div>
   </div>
 
@@ -1861,6 +1891,14 @@
         </div>
 
         <div class="form-group">
+          <label for="departmentTemplate">部署テンプレート</label>
+          <select id="departmentTemplate" name="template_id">
+            <option value="">テンプレートを選択（オプション）</option>
+          </select>
+          <small style="color: var(--text-muted); margin-top: 4px; display: block;">テンプレートを選択すると、ロール・プロセス・タスク定義が自動で適用されます</small>
+        </div>
+
+        <div class="form-group">
           <label for="departmentDescription">説明</label>
           <textarea id="departmentDescription" name="description" placeholder="部署の役割や目的を入力..."></textarea>
         </div>
@@ -2002,6 +2040,20 @@
 <!-- Toast -->
 <div id="toast"></div>
 
+<!-- Tab Search Modal -->
+<div id="tabSearchModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;width:90%;max-width:600px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;">
+    <div style="padding:16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;font-size:16px;">タブを検索</h3>
+      <button onclick="closeTabSearchModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;">&times;</button>
+    </div>
+    <input type="text" id="tabSearchInput" placeholder="タブ名で検索..." style="padding:12px 16px;border-bottom:1px solid var(--border);background:transparent;color:var(--text);border:none;font-size:14px;outline:none;">
+    <div id="tabSearchResults" style="overflow-y:auto;flex:1;padding:8px;">
+      <div style="padding:16px;color:var(--text-muted);text-align:center;">入力してください</div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════
 // Utilities
@@ -2054,8 +2106,96 @@ function formatDate(d) {
 }
 
 // ══════════════════════════════════════════════
-// Tabs
+// Tabs & Navigation
 // ══════════════════════════════════════════════
+
+const TAB_GROUPS = {
+  '🔧 管理': ['tasks', 'agents', 'projects', 'daemons', 'panes'],
+  '🔄 ワークフロー': ['wf-instances', 'wf-templates', 'dept-templates'],
+  '📊 分析': ['costs', 'metrics', 'alerts', 'gantt', 'dag', 'stats', 'charts'],
+  '📈 その他': ['trend', 'project-summary', 'session-tasks', 'heatmap', 'logs', 'health-hist', 'bubble', 'activity', 'rankings']
+};
+
+function openTabSearchModal() {
+  document.getElementById('tabSearchModal').style.display = 'flex';
+  document.getElementById('tabSearchInput').focus();
+}
+
+function closeTabSearchModal() {
+  document.getElementById('tabSearchModal').style.display = 'none';
+  document.getElementById('tabSearchInput').value = '';
+}
+
+function searchTabs(query) {
+  const results = document.getElementById('tabSearchResults');
+  if (!query.trim()) {
+    results.innerHTML = '<div style="padding:16px;color:var(--text-muted);text-align:center;">入力してください</div>';
+    return;
+  }
+
+  const q = query.toLowerCase();
+  const filtered = [];
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    const label = btn.textContent.toLowerCase();
+    if (label.includes(q)) {
+      filtered.push({ btn, label: btn.textContent, tab: btn.dataset.tab });
+    }
+  });
+
+  if (filtered.length === 0) {
+    results.innerHTML = '<div style="padding:16px;color:var(--text-muted);text-align:center;">マッチするタブなし</div>';
+    return;
+  }
+
+  results.innerHTML = filtered.map(f => `
+    <div onclick="switchTab('${f.tab}');closeTabSearchModal();" style="padding:10px 12px;cursor:pointer;border-radius:6px;margin:4px 0;background:rgba(88,166,255,0.1);border-left:3px solid var(--accent);transition:all 0.2s;font-size:14px;">
+      <strong style="color:var(--accent)">${escHtml(f.label)}</strong>
+    </div>
+  `).join('');
+}
+
+function switchTab(tabName) {
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  if (btn) btn.click();
+}
+
+// イベントリスナー
+document.getElementById('tabSearchInput').addEventListener('input', (e) => {
+  searchTabs(e.target.value);
+});
+
+document.getElementById('tabSearchInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeTabSearchModal();
+});
+
+document.getElementById('tabSearchModal').addEventListener('click', (e) => {
+  if (e.target.id === 'tabSearchModal') closeTabSearchModal();
+});
+
+// キーボードショートカット
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    openTabSearchModal();
+  }
+});
+
+function initQuickAccess() {
+  const grid = document.getElementById('quickAccessGrid');
+  if (!grid) return;
+
+  const pinned = JSON.parse(localStorage.getItem('pinnedTabs') || '["tasks","agents","projects","metrics"]');
+  const allTabs = [...document.querySelectorAll('.tab-btn')];
+  const pinnedBtns = allTabs.filter(btn => pinned.includes(btn.dataset.tab));
+
+  grid.innerHTML = pinnedBtns.map(btn => `
+    <button onclick="switchTab('${btn.dataset.tab}')" style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;color:var(--text);transition:all 0.2s;text-align:center;">
+      ${escHtml(btn.textContent)}
+    </button>
+  `).join('');
+}
+
+document.addEventListener('DOMContentLoaded', initQuickAccess);
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -5583,9 +5723,29 @@ async function fetchRankings() {
 // Department Creation Form (#2362)
 // ══════════════════════════════════════════════
 
+async function loadDepartmentTemplates() {
+  const select = document.getElementById('departmentTemplate');
+  try {
+    const res = await fetch('/api/department-templates');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const templates = await res.json();
+    select.innerHTML = '<option value="">テンプレートを選択（オプション）</option>';
+    templates.forEach(tmpl => {
+      const opt = document.createElement('option');
+      opt.value = tmpl.id;
+      opt.textContent = `${tmpl.name} - ${tmpl.description || '説明なし'}`;
+      select.appendChild(opt);
+    });
+  } catch(e) {
+    console.error('テンプレート読み込みエラー:', e);
+    select.innerHTML = '<option value="">読み込みエラー</option>';
+  }
+}
+
 function openDepartmentModal() {
   const modal = document.getElementById('departmentModal');
   if (modal) modal.classList.add('open');
+  loadDepartmentTemplates();
 }
 
 function closeDepartmentModal() {
