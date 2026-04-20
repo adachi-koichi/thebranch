@@ -3549,6 +3549,27 @@ async def delete_department(dept_id: int):
         await db.execute("DELETE FROM departments WHERE id = ?", (dept_id,))
         await db.commit()
 
+@app.get("/api/departments/templates")
+async def list_department_templates(category: str = "", status: str = "active"):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        query = "SELECT id, name, description, category, status, total_roles, total_processes, total_tasks FROM departments_templates WHERE 1=1"
+        params = []
+
+        if category:
+            query += " AND category = ?"
+            params.append(category)
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+
+        query += " ORDER BY name"
+        cursor = await db.execute(query, params)
+        rows = await cursor.fetchall()
+
+    return [dict(r) for r in rows]
+
 @app.post("/api/departments/{dept_id}/agents", status_code=201)
 async def add_agent_to_department(dept_id: int, agent_req: models.DepartmentAgentCreate):
     await ensure_db_initialized()
