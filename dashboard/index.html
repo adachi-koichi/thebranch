@@ -1109,6 +1109,32 @@
     opacity: 0.06;
     pointer-events: none;
   }
+
+  /* ── Mission Styles ── */
+  .agent-mission {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .agent-mission-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .mission-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .agent-mission-content {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.4;
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -1964,6 +1990,51 @@
     </div>
   </div>
 
+  <!-- Mission Modal (Task #2395) -->
+  <div class="modal-overlay" id="missionModal">
+    <div class="modal" style="max-width: 700px;">
+      <h2>ミッション設定</h2>
+      <form id="missionForm">
+        <div class="form-group">
+          <label>ワークフロー <span style="color: var(--red);">*</span></label>
+          <select id="missionWorkflow" name="workflow_id" required>
+            <option value="">-- ワークフロー選択 --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>割り当てるタスク <span style="color: var(--red);">*</span></label>
+          <div id="tasksList" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 8px;">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>カスタムプロンプト</label>
+          <textarea id="missionPrompt" name="custom_prompt" placeholder="エージェント用の追加指示（オプション）" rows="4"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>完了予定日</label>
+          <input type="date" id="missionTarget" name="target_completion">
+        </div>
+
+        <div class="form-group">
+          <label>優先度</label>
+          <select id="missionPriority" name="priority">
+            <option value="1">高</option>
+            <option value="2">中</option>
+            <option value="3" selected>低</option>
+          </select>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeMissionModal()">キャンセル</button>
+          <button type="submit" class="btn">ミッション設定</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 </main>
 
 <!-- Keyboard Shortcuts Panel (#1633) -->
@@ -2256,6 +2327,14 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     } else {
       if (_projectSummaryTimer) { clearInterval(_projectSummaryTimer); _projectSummaryTimer = null; }
     }
+    if (btn.dataset.tab === 'activity') {
+      startActivityFeed();
+      if (window.currentDeptId) startAgentActivityFeed(window.currentDeptId);
+    } else {
+      stopActivityFeed();
+      stopAgentActivityFeed();
+    }
+    if (btn.dataset.tab === 'rankings') { fetchRankings(); }
   });
 });
 
@@ -5666,6 +5745,71 @@ function stopActivityFeed() {
   if (_activityWs) { _activityWs.close(); _activityWs = null; }
 }
 
+let _agentActivitySource = null;
+const _agentActivityLogs = [];
+
+function startAgentActivityFeed(deptId) {
+  if (!deptId) return;
+  if (_agentActivitySource) _agentActivitySource.close();
+
+  _agentActivitySource = new EventSource(`/api/departments/${deptId}/activity-feed`);
+
+  _agentActivitySource.addEventListener('message', (e) => {
+    try {
+      const logs = JSON.parse(e.data);
+      _agentActivityLogs.length = 0;
+      _agentActivityLogs.push(...logs);
+      _renderAgentActivityLogs();
+    } catch (_) {}
+  });
+
+  _agentActivitySource.onerror = () => {
+    setTimeout(() => startAgentActivityFeed(deptId), 5000);
+  };
+}
+
+function stopAgentActivityFeed() {
+  if (_agentActivitySource) {
+    _agentActivitySource.close();
+    _agentActivitySource = null;
+  }
+}
+
+function _renderAgentActivityLogs() {
+  const container = document.getElementById('activityFeed');
+  if (!container) return;
+
+  if (_agentActivityLogs.length === 0) {
+    container.innerHTML = '<div class="empty-state">アクティビティなし</div>';
+    return;
+  }
+
+  container.innerHTML = _agentActivityLogs.map(log => {
+    const date = new Date(log.created_at).toLocaleTimeString('ja-JP');
+    const actionLabel = {
+      'started': '▶ 開始',
+      'stopped': '⏹ 停止',
+      'failed': '⚠ エラー',
+      'message': 'ℹ メッセージ'
+    }[log.action] || log.action;
+
+    const actionColor = {
+      'started': 'var(--green)',
+      'stopped': 'var(--text-muted)',
+      'failed': 'var(--red)',
+      'message': 'var(--blue)'
+    }[log.action] || 'var(--text-secondary)';
+
+    return `<div style="padding:8px;border-bottom:1px solid var(--border);font-size:13px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span style="color:${actionColor};font-weight:500;">${actionLabel}</span>
+        <span style="color:var(--text-muted);font-size:11px;">${date}</span>
+      </div>
+      <div style="color:var(--text-secondary);">${log.detail || '-'}</div>
+    </div>`;
+  }).join('');
+}
+
 // ══════════════════════════════════════════════
 // Agent Rankings
 // ══════════════════════════════════════════════
@@ -5900,6 +6044,18 @@ function renderDepartmentDashboard(dept, agents) {
           </div>
         </div>
         <div style="font-size:12px;color:var(--text-muted);">起動: ${started}</div>
+        <hr class="agent-divider">
+        <div class="agent-mission">
+          <div class="agent-mission-header">
+            <span class="mission-label">🎯 ミッション</span>
+            <button class="btn btn-sm" style="background:var(--accent);color:#0d1117;padding:2px 8px;font-size:12px;cursor:pointer;border:none;border-radius:4px;" onclick="openMissionModal(${a.id}, ${window.currentDeptId})">
+              設定
+            </button>
+          </div>
+          <div class="agent-mission-content" id="mission-${a.id}">
+            <small class="text-muted">未設定</small>
+          </div>
+        </div>
       </div>
     `;
   }).join('');
@@ -5941,6 +6097,129 @@ async function stopAgent(agentId, deptId) {
 
 function showAddAgentForm() {
   alert('エージェント追加フォーム（次のリリースで実装予定）');
+}
+
+/* ── Mission Modal Handlers ── */
+let currentMissionAgentId = null;
+let currentMissionDeptId = null;
+
+async function openMissionModal(agentId, deptId) {
+  currentMissionAgentId = agentId;
+  currentMissionDeptId = deptId;
+
+  const modal = document.getElementById('missionModal');
+  modal.classList.add('open');
+
+  // ワークフロー一覧取得
+  try {
+    const res = await fetch(`/api/departments/${deptId}/workflows`);
+    if (res.ok) {
+      const workflows = await res.json();
+      const select = document.getElementById('missionWorkflow');
+      select.innerHTML = '<option value="">-- ワークフロー選択 --</option>' +
+        workflows.map(w => `<option value="${w.id}">${escHtml(w.name)}</option>`).join('');
+    }
+  } catch (e) {
+    showToast('ワークフロー取得エラー: ' + e.message, 'error');
+  }
+}
+
+function closeMissionModal() {
+  document.getElementById('missionModal').classList.remove('open');
+  document.getElementById('missionForm').reset();
+}
+
+document.getElementById('missionWorkflow').addEventListener('change', async (e) => {
+  const workflowId = e.target.value;
+  if (!workflowId) return;
+
+  // タスク一覧を動的に取得・表示
+  try {
+    const res = await fetch(`/api/workflows/${workflowId}/tasks`);
+    if (res.ok) {
+      const tasks = await res.json();
+      const tasksList = document.getElementById('tasksList');
+      tasksList.innerHTML = tasks.map(t => `
+        <label style="display: block; margin-bottom: 6px; cursor: pointer;">
+          <input type="checkbox" name="task_ids" value="${t.id}">
+          <span style="margin-left: 4px; font-size: 13px;">${escHtml(t.title)}</span>
+        </label>
+      `).join('');
+    }
+  } catch (e) {
+    showToast('タスク取得エラー: ' + e.message, 'error');
+  }
+});
+
+document.getElementById('missionForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const formData = new FormData(e.target);
+  const workflowId = formData.get('workflow_id');
+  const taskIds = Array.from(document.querySelectorAll('input[name="task_ids"]:checked'))
+    .map(el => parseInt(el.value));
+
+  if (!workflowId) {
+    showToast('ワークフローを選択してください', 'error');
+    return;
+  }
+
+  if (taskIds.length === 0) {
+    showToast('タスクを1つ以上選択してください', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `/api/departments/${currentMissionDeptId}/agents/${currentMissionAgentId}/mission`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workflow_id: parseInt(workflowId),
+          task_ids: taskIds,
+          custom_prompt: formData.get('custom_prompt') || null,
+          target_completion: formData.get('target_completion') || null,
+          priority: parseInt(formData.get('priority'))
+        })
+      }
+    );
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    showToast('ミッション設定完了');
+    closeMissionModal();
+
+    // エージェント詳細を再読み込み
+    await loadAgentMission(currentMissionAgentId, currentMissionDeptId);
+  } catch (e) {
+    showToast('ミッション設定エラー: ' + e.message, 'error');
+  }
+});
+
+async function loadAgentMission(agentId, deptId) {
+  try {
+    const res = await fetch(`/api/departments/${deptId}/agents/${agentId}/mission`);
+    if (res.ok) {
+      const { data } = await res.json();
+      const container = document.getElementById(`mission-${agentId}`);
+
+      if (!data) {
+        container.innerHTML = '<small class="text-muted">未設定</small>';
+        return;
+      }
+
+      container.innerHTML = `
+        <small>
+          📋 <strong>${escHtml(data.name)}</strong><br>
+          状態: <span class="badge badge-${data.status}">${data.status}</span><br>
+          タスク: ${data.tasks.length}件
+        </small>
+      `;
+    }
+  } catch (e) {
+    console.error('Mission load error:', e);
+  }
 }
 
 </script>

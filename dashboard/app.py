@@ -3451,6 +3451,22 @@ async def stop_tmux_session(session_name: str) -> bool:
     except Exception:
         return False
 
+async def log_agent_activity(
+    agent_id: int,
+    action: str,
+    detail: Optional[str] = None
+) -> None:
+    """Record agent activity to agent_logs table."""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            await db.execute(
+                "INSERT INTO agent_logs (agent_id, action, detail) VALUES (?, ?, ?)",
+                (agent_id, action, detail)
+            )
+            await db.commit()
+    except Exception as e:
+        pass
+
 async def ensure_db_initialized():
     """Initialize database if not exists."""
     if not THEBRANCH_DB.parent.exists():
@@ -3672,6 +3688,7 @@ async def add_agent_to_department(dept_id: int, agent_req: models.DepartmentAgen
         row = await cursor.fetchone()
 
     if row:
+        await log_agent_activity(agent_req.agent_id, "started", f"部署にエージェント追加: {agent_req.role}")
         return {
             "department_id": row[0],
             "agent_id": row[1],
@@ -3822,7 +3839,129 @@ async def stop_agent(agent_id: int):
         )
         row = await cursor.fetchone()
 
+    if row:
+        await log_agent_activity(agent_id, "stopped", "エージェント停止")
     return dict(row) if row else {"error": "Failed to stop"}
+
+
+async def activity_event_generator(dept_id: int) -> AsyncGenerator[str, None]:
+    """Stream agent activity logs for a department."""
+    while True:
+        try:
+            async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
+                    """SELECT al.id, al.agent_id, al.action, al.detail, al.created_at,
+                             a.role
+                       FROM agent_logs al
+                       JOIN agents a ON al.agent_id = a.id
+                       WHERE a.department_id = ?
+                       ORDER BY al.created_at DESC
+                       LIMIT 20""",
+                    (dept_id,)
+                )
+                rows = await cursor.fetchall()
+
+            logs = [dict(row) for row in rows]
+            yield f"data: {json.dumps(logs, ensure_ascii=False)}\n\n"
+        except Exception:
+            yield f"data: []\n\n"
+        await asyncio.sleep(5)
+
+@app.get("/api/departments/{dept_id}/activity-feed")
+async def stream_activity_feed(dept_id: int):
+    """SSE endpoint for agent activity logs."""
+    await ensure_db_initialized()
+    return StreamingResponse(
+        activity_event_generator(dept_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/departments/{dept_id}/agents/{agent_id}/mission", status_code=201)
+async def create_agent_mission(
+    dept_id: int,
+    agent_id: int,
+    mission_req: models.MissionCreate
+):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id FROM agents WHERE id = ? AND department_id = ?",
+            (agent_id, dept_id)
+        )
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Agent not found in department")
+
+        cursor = await db.execute(
+            "SELECT id FROM department_instance_workflows WHERE id = ?",
+            (mission_req.workflow_id,)
+        )
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Workflow not found")
+
+        cursor = await db.execute(
+            """INSERT INTO missions (agent_id, department_id, workflow_id, name, status, custom_prompt, target_completion, priority)
+               VALUES (?, ?, ?, ?, 'planning', ?, ?, ?)""",
+            (agent_id, dept_id, mission_req.workflow_id,
+             f"Mission for agent {agent_id}",
+             mission_req.custom_prompt,
+             mission_req.target_completion,
+             mission_req.priority)
+        )
+        mission_id = cursor.lastrowid
+
+        for task_id in mission_req.task_ids:
+            await db.execute(
+                """INSERT INTO mission_tasks (mission_id, task_key, task_title, status)
+                   VALUES (?, ?, ?, 'pending')""",
+                (mission_id, f"task_{task_id}", f"Task {task_id}")
+            )
+
+        await db.commit()
+
+        cursor = await db.execute(
+            """SELECT id, agent_id, workflow_id, name, status, priority, custom_prompt, target_completion, created_at, updated_at
+               FROM missions WHERE id = ?""",
+            (mission_id,)
+        )
+        row = await cursor.fetchone()
+
+    return dict(row) if row else {"error": "Failed to create mission"}
+
+
+@app.get("/api/departments/{dept_id}/agents/{agent_id}/mission")
+async def get_agent_mission(dept_id: int, agent_id: int):
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        cursor = await db.execute(
+            """SELECT id, agent_id, workflow_id, name, status, priority, custom_prompt, target_completion, created_at, updated_at
+               FROM missions WHERE agent_id = ? AND department_id = ?""",
+            (agent_id, dept_id)
+        )
+        mission = await cursor.fetchone()
+
+        if not mission:
+            return {"data": None}
+
+        cursor = await db.execute(
+            """SELECT id, task_key, task_title, status, priority FROM mission_tasks
+               WHERE mission_id = ?""",
+            (mission['id'],)
+        )
+        tasks = await cursor.fetchall()
+
+        return {
+            "data": {
+                **dict(mission),
+                "tasks": [dict(t) for t in tasks]
+            }
+        }
+
 
 @app.post("/api/departments/{dept_id}/teams", status_code=201)
 async def create_team(dept_id: int, team_req: models.TeamCreate):

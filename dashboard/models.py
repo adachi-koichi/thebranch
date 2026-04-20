@@ -120,6 +120,20 @@ class AgentResponse(BaseModel):
     updated_at: str
 
 
+class AgentLogCreate(BaseModel):
+    action: str
+    detail: Optional[str] = None
+
+
+class AgentLogResponse(BaseModel):
+    id: int
+    agent_id: int
+    action: str
+    detail: Optional[str] = None
+    created_at: str
+    role: Optional[str] = None
+
+
 class TeamCreate(BaseModel):
     name: str
     slug: str
@@ -148,3 +162,31 @@ class RelationCreate(BaseModel):
     dept_b_id: int
     relation_type: str
     description: Optional[str] = None
+
+
+class MissionCreate(BaseModel):
+    workflow_id: int
+    task_ids: List[int]
+    custom_prompt: Optional[str] = None
+    target_completion: Optional[str] = None
+    priority: int = 3
+
+
+class MissionResponse(BaseModel):
+    id: int
+    agent_id: int
+    workflow_id: int
+    name: str
+    status: str
+    priority: int
+    custom_prompt: Optional[str]
+    target_completion: Optional[str]
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class MissionDetailResponse(MissionResponse):
+    tasks: List[dict] = []
