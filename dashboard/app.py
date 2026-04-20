@@ -19,6 +19,9 @@ from pydantic import BaseModel
 
 from . import auth
 from . import models
+from workflow.repositories.template import TemplateRepository
+from workflow.services.template import TemplateService
+from workflow.validation.template import TemplateValidator
 
 TASKS_DB = Path.home() / ".claude" / "skills" / "task-manager-sqlite" / "data" / "tasks.sqlite"
 SESSIONS_DIR = Path.home() / ".claude" / "sessions"
@@ -32,6 +35,29 @@ app = FastAPI()
 
 DASHBOARD_DIR = Path(__file__).parent
 THEBRANCH_DB = DASHBOARD_DIR / "data" / "thebranch.sqlite"
+
+# ──────────────────────────────────────────────
+# Workflow Services
+# ──────────────────────────────────────────────
+
+template_repo = None
+template_service = None
+
+def init_workflow_services():
+    global template_repo, template_service
+    if template_repo is None:
+        template_repo = TemplateRepository(str(THEBRANCH_DB))
+        template_service = TemplateService(template_repo, TemplateValidator(template_repo))
+
+def get_template_service():
+    if template_service is None:
+        init_workflow_services()
+    return template_service
+
+def get_template_repo():
+    if template_repo is None:
+        init_workflow_services()
+    return template_repo
 
 
 # ──────────────────────────────────────────────
@@ -3964,6 +3990,183 @@ async def delete_relation(dept_id: int, related_dept_id: int):
             (dept_id, related_dept_id),
         )
         await db.commit()
+
+
+# ──────────────────────────────────────────────
+# Workflow Templates
+# ──────────────────────────────────────────────
+
+class CreateTemplateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    created_by: Optional[str] = None
+
+class CreatePhaseRequest(BaseModel):
+    phase_key: str
+    phase_label: str
+    specialist_type: str
+    phase_order: int
+    is_parallel: bool = False
+
+class CreateTaskRequest(BaseModel):
+    task_key: str
+    task_title: str
+    task_description: Optional[str] = None
+    depends_on_key: Optional[str] = None
+    priority: int = 1
+    estimated_hours: Optional[float] = None
+    task_order: int = 0
+
+@app.post("/api/templates")
+async def create_template(req: CreateTemplateRequest):
+    try:
+        service = get_template_service()
+        template = service.create_template(
+            name=req.name,
+            description=req.description,
+            created_by=req.created_by or "dashboard",
+        )
+        return {
+            "id": template.id,
+            "name": template.name,
+            "description": template.description,
+            "status": template.status,
+            "created_by": template.created_by,
+            "created_at": template.created_at.isoformat() if template.created_at else None,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/templates")
+async def list_templates(status: Optional[str] = None, limit: int = 50, offset: int = 0):
+    try:
+        service = get_template_service()
+        templates = service.list_templates(status=status, limit=limit, offset=offset)
+        return [
+            {
+                "id": t.id,
+                "name": t.name,
+                "description": t.description,
+                "status": t.status,
+                "phase_count": t.phase_count,
+                "task_count": t.task_count,
+                "created_by": t.created_by,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
+            for t in templates
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/templates/{template_id}")
+async def get_template(template_id: int):
+    try:
+        service = get_template_service()
+        template = service.get_template(template_id)
+
+        def phase_to_dict(phase):
+            tasks = [
+                {
+                    "id": t.id,
+                    "task_key": t.task_key,
+                    "task_title": t.task_title,
+                    "task_description": t.task_description,
+                    "priority": t.priority,
+                    "estimated_hours": t.estimated_hours,
+                    "task_order": t.task_order,
+                    "depends_on_key": t.depends_on_key,
+                }
+                for t in (phase.tasks or [])
+            ]
+            return {
+                "id": phase.id,
+                "phase_key": phase.phase_key,
+                "phase_label": phase.phase_label,
+                "specialist_type": phase.specialist_type,
+                "phase_order": phase.phase_order,
+                "is_parallel": phase.is_parallel,
+                "tasks": tasks,
+            }
+
+        phases = [phase_to_dict(p) for p in (template.phases or [])]
+
+        return {
+            "id": template.id,
+            "name": template.name,
+            "description": template.description,
+            "status": template.status,
+            "phase_count": template.phase_count,
+            "task_count": template.task_count,
+            "created_by": template.created_by,
+            "created_at": template.created_at.isoformat() if template.created_at else None,
+            "phases": phases,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.post("/api/templates/{template_id}/phases")
+async def create_phase(template_id: int, req: CreatePhaseRequest):
+    try:
+        service = get_template_service()
+        phase = service.add_phase(
+            template_id=template_id,
+            phase_key=req.phase_key,
+            phase_label=req.phase_label,
+            specialist_type=req.specialist_type,
+            phase_order=req.phase_order,
+            is_parallel=req.is_parallel,
+        )
+        return {
+            "id": phase.id,
+            "phase_key": phase.phase_key,
+            "phase_label": phase.phase_label,
+            "specialist_type": phase.specialist_type,
+            "phase_order": phase.phase_order,
+            "is_parallel": phase.is_parallel,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/templates/{template_id}/phases/{phase_id}/tasks")
+async def create_task_def(template_id: int, phase_id: int, req: CreateTaskRequest):
+    try:
+        service = get_template_service()
+        task = service.add_task_to_phase(
+            phase_id=phase_id,
+            task_key=req.task_key,
+            task_title=req.task_title,
+            task_description=req.task_description,
+            depends_on_key=req.depends_on_key,
+            priority=req.priority,
+            estimated_hours=req.estimated_hours,
+            task_order=req.task_order,
+        )
+        return {
+            "id": task.id,
+            "task_key": task.task_key,
+            "task_title": task.task_title,
+            "task_description": task.task_description,
+            "priority": task.priority,
+            "estimated_hours": task.estimated_hours,
+            "task_order": task.task_order,
+            "depends_on_key": task.depends_on_key,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/templates/{template_id}/publish")
+async def publish_template(template_id: int):
+    try:
+        service = get_template_service()
+        template = service.publish_template(template_id)
+        return {
+            "id": template.id,
+            "name": template.name,
+            "status": template.status,
+            "updated_at": template.updated_at.isoformat() if template.updated_at else None,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ──────────────────────────────────────────────

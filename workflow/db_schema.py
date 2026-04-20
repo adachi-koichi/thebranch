@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS workflow_templates (
     category        TEXT,
     version         INTEGER DEFAULT 1,
     status          TEXT DEFAULT 'draft'
-                    CHECK(status IN ('draft', 'active', 'deprecated')),
+                    CHECK(status IN ('draft', 'published', 'active', 'deprecated')),
     owner_id        INTEGER,
     organization_id INTEGER,
     phase_count     INTEGER DEFAULT 0,
@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS wf_template_tasks (
     estimated_hours      INTEGER,
     depends_on_key       TEXT,
     acceptance_criteria  TEXT,
+    task_order           INTEGER DEFAULT 0,
     tags                 TEXT,
     config               TEXT,
     created_at           TEXT NOT NULL DEFAULT (datetime('now','localtime')),
