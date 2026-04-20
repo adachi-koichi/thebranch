@@ -3369,6 +3369,29 @@ async def add_role(role_req: models.UserRoleCreate, authorization: Optional[str]
 
 
 # ──────────────────────────────────────────────
+# Departments (#2362)
+# ──────────────────────────────────────────────
+
+@app.post("/api/departments", response_model=dict)
+async def create_department(dept_req: models.DepartmentCreate):
+    import uuid
+    dept_id = str(uuid.uuid4())
+    created_at = datetime.now().isoformat()
+
+    return {
+        "id": dept_id,
+        "name": dept_req.name,
+        "type": dept_req.type,
+        "description": dept_req.description,
+        "agent": dept_req.agent.dict(),
+        "kpi_target": dept_req.kpi_target,
+        "created_at": created_at,
+        "updated_at": created_at,
+        "status": "created"
+    }
+
+
+# ──────────────────────────────────────────────
 # Entry point
 # ──────────────────────────────────────────────
 

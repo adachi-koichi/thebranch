@@ -48,3 +48,31 @@ class UserRoleResponse(BaseModel):
 
 class UserDetailResponse(UserResponse):
     roles: List[UserRoleResponse] = []
+
+
+class AgentConfig(BaseModel):
+    role: str
+    tasks: str
+    model: str = "claude-sonnet-4-6"
+
+
+class DepartmentCreate(BaseModel):
+    name: str
+    type: str
+    description: Optional[str] = ""
+    agent: AgentConfig
+    kpi_target: Optional[str] = ""
+
+
+class DepartmentResponse(BaseModel):
+    id: str
+    name: str
+    type: str
+    description: Optional[str]
+    agent: dict
+    kpi_target: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -1107,6 +1107,7 @@
   <span id="activePaneCounter" title="アクティブペイン数" style="font-size:12px;font-weight:600;color:var(--text-muted);border:1px solid var(--border);border-radius:20px;padding:3px 10px;margin-right:8px;display:none;">
     <span style="color:var(--green)">&#9679;</span> <span id="activePaneCount">0</span> panes
   </span>
+  <button onclick="openDepartmentModal()" style="background:var(--accent);border:none;border-radius:8px;color:#0d1117;cursor:pointer;font-size:13px;font-weight:600;padding:4px 12px;margin-right:8px;transition:opacity 0.2s;" title="部署を作成">➕ 部署を作成</button>
   <button id="kbd-shortcut-btn" title="キーボードショートカット (? キー)" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text-muted);cursor:pointer;font-size:14px;padding:4px 10px;margin-right:8px;transition:all 0.2s;">?</button>
   <button id="theme-toggle" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text-muted);cursor:pointer;font-size:16px;padding:4px 10px;margin-right:8px;transition:all 0.2s;" title="テーマ切り替え">🌙</button>
   <span id="wsBadge" title="WebSocket接続状態" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;border:1px solid var(--border);color:var(--text-muted);margin-right:6px;">
@@ -1822,6 +1823,73 @@
     </div>
   </div>
 
+  <!-- Department Creation Modal (#2362) -->
+  <div class="modal-overlay" id="departmentModal">
+    <div class="modal" style="max-width: 600px;">
+      <h2>AIエージェント部署を作成</h2>
+      <form id="departmentForm">
+        <div class="form-group">
+          <label for="departmentName">部署名 <span style="color: var(--red);">*</span></label>
+          <input type="text" id="departmentName" name="name" placeholder="例: 営業部、CS部、企画部" required>
+        </div>
+
+        <div class="form-group">
+          <label for="departmentType">部署タイプ <span style="color: var(--red);">*</span></label>
+          <select id="departmentType" name="type" required>
+            <option value="">選択してください</option>
+            <option value="engineering">開発</option>
+            <option value="accounting">経理</option>
+            <option value="legal">法務</option>
+            <option value="hr">人事</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="departmentDescription">説明</label>
+          <textarea id="departmentDescription" name="description" placeholder="部署の役割や目的を入力..."></textarea>
+        </div>
+
+        <fieldset style="border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 14px;">
+          <legend style="padding: 0 6px; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">エージェント設定</legend>
+
+          <div class="form-group">
+            <label for="agentRole">エージェント役割 <span style="color: var(--red);">*</span></label>
+            <select id="agentRole" name="agent_role" required>
+              <option value="">選択してください</option>
+              <option value="lead">Tech Lead</option>
+              <option value="engineer">Engineer</option>
+              <option value="qa">QA Engineer</option>
+              <option value="manager">Manager</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="agentTasks">担当タスク <span style="color: var(--red);">*</span></label>
+            <textarea id="agentTasks" name="agent_tasks" placeholder="このエージェントが担当するタスクを入力&#10;例: リード抽出、スコアリング、メール送信" required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="agentModel">使用AI モデル</label>
+            <select id="agentModel" name="agent_model">
+              <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+              <option value="claude-opus-4-7">Claude Opus 4.7</option>
+              <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+            </select>
+          </div>
+        </fieldset>
+
+        <div class="form-group">
+          <label for="kpiTarget">KPI 目標</label>
+          <input type="text" id="kpiTarget" name="kpi_target" placeholder="例: 成約率 80%, リード抽出 100件/日">
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeDepartmentModal()">キャンセル</button>
+          <button type="submit" class="btn">部署を作成</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
 </main>
 
@@ -5425,6 +5493,81 @@ async function fetchRankings() {
   document.getElementById('rankingsRefreshBtn').onclick = fetchRankings;
 }
 
+// ══════════════════════════════════════════════
+// Department Creation Form (#2362)
+// ══════════════════════════════════════════════
+
+function openDepartmentModal() {
+  const modal = document.getElementById('departmentModal');
+  if (modal) modal.classList.add('open');
+}
+
+function closeDepartmentModal() {
+  const modal = document.getElementById('departmentModal');
+  if (modal) {
+    modal.classList.remove('open');
+    document.getElementById('departmentForm').reset();
+  }
+}
+
+// Close modal when clicking outside
+document.getElementById('departmentModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'departmentModal') {
+    closeDepartmentModal();
+  }
+});
+
+// Handle form submission
+document.getElementById('departmentForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const formData = new FormData(e.target);
+  const data = {
+    name: formData.get('name'),
+    type: formData.get('type'),
+    description: formData.get('description'),
+    agent: {
+      role: formData.get('agent_role'),
+      tasks: formData.get('agent_tasks'),
+      model: formData.get('agent_model')
+    },
+    kpi_target: formData.get('kpi_target')
+  };
+
+  try {
+    const res = await fetch('/api/departments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+
+    if (!res.ok) {
+      throw new Error(`エラー: ${res.status} ${res.statusText}`);
+    }
+
+    const result = await res.json();
+
+    // Show success toast
+    const toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = `✓ 部署 "${data.name}" を作成しました`;
+      toast.className = 'show success';
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    closeDepartmentModal();
+
+    // Optionally refresh data
+    location.reload();
+  } catch (e) {
+    const toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = `✗ エラー: ${e.message}`;
+      toast.className = 'show error';
+      setTimeout(() => toast.classList.remove('show'), 5000);
+    }
+  }
+});
 
 </script>
 </body>

@@ -318,6 +318,200 @@ CREATE INDEX IF NOT EXISTS idx_task_dependencies_successor_id
     ON task_dependencies(successor_id);
 """
 
+# ===== DEPARTMENT TEMPLATE LAYER =====
+
+CREATE_DEPARTMENTS_TEMPLATES = """
+CREATE TABLE IF NOT EXISTS departments_templates (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL UNIQUE,
+    description     TEXT,
+    category        TEXT NOT NULL,
+    version         INTEGER DEFAULT 1,
+    status          TEXT DEFAULT 'draft',
+    total_roles     INTEGER DEFAULT 0,
+    total_processes INTEGER DEFAULT 0,
+    total_tasks     INTEGER DEFAULT 0,
+    config          TEXT,
+    created_by      TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    CHECK(status IN ('draft', 'active', 'deprecated')),
+    CHECK(category IN ('back-office', 'tech', 'ops', 'support'))
+);
+"""
+
+CREATE_IDX_DEPARTMENTS_TEMPLATES_STATUS = """
+CREATE INDEX IF NOT EXISTS idx_departments_templates_status
+    ON departments_templates(status);
+"""
+
+CREATE_IDX_DEPARTMENTS_TEMPLATES_CATEGORY = """
+CREATE INDEX IF NOT EXISTS idx_departments_templates_category
+    ON departments_templates(category);
+"""
+
+CREATE_DEPARTMENT_TEMPLATE_ROLES = """
+CREATE TABLE IF NOT EXISTS department_template_roles (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_id      INTEGER NOT NULL REFERENCES departments_templates(id) ON DELETE CASCADE,
+    role_key         TEXT NOT NULL,
+    role_label       TEXT NOT NULL,
+    role_order       INTEGER NOT NULL,
+    responsibility   TEXT,
+    required_skills  TEXT,
+    min_members      INTEGER DEFAULT 1,
+    max_members      INTEGER,
+    supervisor_role_key TEXT,
+    config           TEXT,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE(template_id, role_key),
+    UNIQUE(template_id, role_order),
+    CHECK(min_members >= 1),
+    CHECK(max_members IS NULL OR max_members >= min_members)
+);
+"""
+
+CREATE_IDX_DEPARTMENT_TEMPLATE_ROLES_TEMPLATE_ID = """
+CREATE INDEX IF NOT EXISTS idx_department_template_roles_template_id
+    ON department_template_roles(template_id);
+"""
+
+CREATE_DEPARTMENT_TEMPLATE_PROCESSES = """
+CREATE TABLE IF NOT EXISTS department_template_processes (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_id      INTEGER NOT NULL REFERENCES departments_templates(id) ON DELETE CASCADE,
+    process_key      TEXT NOT NULL,
+    process_label    TEXT NOT NULL,
+    process_order    INTEGER NOT NULL,
+    description      TEXT,
+    responsible_role_key TEXT NOT NULL,
+    estimated_hours  INTEGER,
+    frequency        TEXT,
+    doc_requirements TEXT,
+    config           TEXT,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE(template_id, process_key),
+    UNIQUE(template_id, process_order),
+    CHECK(frequency IN ('daily', 'weekly', 'monthly', 'quarterly', 'annual', 'ad-hoc'))
+);
+"""
+
+CREATE_IDX_DEPARTMENT_TEMPLATE_PROCESSES_TEMPLATE_ID = """
+CREATE INDEX IF NOT EXISTS idx_department_template_processes_template_id
+    ON department_template_processes(template_id);
+"""
+
+CREATE_DEPARTMENT_TEMPLATE_TASKS = """
+CREATE TABLE IF NOT EXISTS department_template_tasks (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    process_id        INTEGER NOT NULL REFERENCES department_template_processes(id) ON DELETE CASCADE,
+    template_id       INTEGER NOT NULL REFERENCES departments_templates(id) ON DELETE CASCADE,
+    task_key          TEXT NOT NULL,
+    task_title        TEXT NOT NULL,
+    task_description  TEXT,
+    assigned_role_key TEXT NOT NULL,
+    category          TEXT,
+    estimated_hours   REAL,
+    depends_on_key    TEXT,
+    priority          INTEGER DEFAULT 3,
+    success_criteria  TEXT,
+    config            TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE(process_id, task_key),
+    CHECK(priority IN (1, 2, 3)),
+    CHECK(estimated_hours > 0)
+);
+"""
+
+CREATE_IDX_DEPARTMENT_TEMPLATE_TASKS_PROCESS_ID = """
+CREATE INDEX IF NOT EXISTS idx_department_template_tasks_process_id
+    ON department_template_tasks(process_id);
+"""
+
+CREATE_DEPARTMENT_INSTANCES = """
+CREATE TABLE IF NOT EXISTS department_instances (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_id     INTEGER NOT NULL REFERENCES departments_templates(id),
+    name            TEXT NOT NULL,
+    status          TEXT DEFAULT 'active',
+    organization_id TEXT,
+    location        TEXT,
+    manager_agent_id INTEGER REFERENCES agents(id),
+    context         TEXT,
+    member_count    INTEGER DEFAULT 0,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    started_at      TEXT,
+    closed_at       TEXT,
+    CHECK(status IN ('planning', 'active', 'suspended', 'closed'))
+);
+"""
+
+CREATE_IDX_DEPARTMENT_INSTANCES_TEMPLATE_ID = """
+CREATE INDEX IF NOT EXISTS idx_department_instances_template_id
+    ON department_instances(template_id);
+"""
+
+CREATE_IDX_DEPARTMENT_INSTANCES_STATUS = """
+CREATE INDEX IF NOT EXISTS idx_department_instances_status
+    ON department_instances(status);
+"""
+
+CREATE_DEPARTMENT_INSTANCE_MEMBERS = """
+CREATE TABLE IF NOT EXISTS department_instance_members (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    instance_id      INTEGER NOT NULL REFERENCES department_instances(id) ON DELETE CASCADE,
+    agent_id         INTEGER NOT NULL REFERENCES agents(id),
+    role_key         TEXT NOT NULL,
+    status           TEXT DEFAULT 'active',
+    start_date       TEXT NOT NULL DEFAULT (date('now')),
+    end_date         TEXT,
+    assigned_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE(instance_id, agent_id),
+    CHECK(status IN ('active', 'inactive', 'on-leave'))
+);
+"""
+
+CREATE_IDX_DEPARTMENT_INSTANCE_MEMBERS_INSTANCE_ID = """
+CREATE INDEX IF NOT EXISTS idx_department_instance_members_instance_id
+    ON department_instance_members(instance_id);
+"""
+
+CREATE_IDX_DEPARTMENT_INSTANCE_MEMBERS_AGENT_ID = """
+CREATE INDEX IF NOT EXISTS idx_department_instance_members_agent_id
+    ON department_instance_members(agent_id);
+"""
+
+CREATE_DEPARTMENT_INSTANCE_WORKFLOWS = """
+CREATE TABLE IF NOT EXISTS department_instance_workflows (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    instance_id           INTEGER NOT NULL REFERENCES department_instances(id) ON DELETE CASCADE,
+    process_id            INTEGER NOT NULL REFERENCES department_template_processes(id),
+    workflow_instance_id  INTEGER REFERENCES workflow_instances(id),
+    execution_count       INTEGER DEFAULT 1,
+    status                TEXT DEFAULT 'pending',
+    scheduled_date        TEXT,
+    started_at            TEXT,
+    completed_at          TEXT,
+    result_notes          TEXT,
+    created_at            TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at            TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE(instance_id, process_id, execution_count),
+    CHECK(status IN ('pending', 'running', 'completed', 'failed', 'paused'))
+);
+"""
+
+CREATE_IDX_DEPARTMENT_INSTANCE_WORKFLOWS_INSTANCE_ID = """
+CREATE INDEX IF NOT EXISTS idx_department_instance_workflows_instance_id
+    ON department_instance_workflows(instance_id);
+"""
+
+CREATE_IDX_DEPARTMENT_INSTANCE_WORKFLOWS_STATUS = """
+CREATE INDEX IF NOT EXISTS idx_department_instance_workflows_status
+    ON department_instance_workflows(status);
+"""
+
 # ===== SCHEMA INITIALIZATION =====
 
 ALL_CREATE_STATEMENTS = [
@@ -364,6 +558,26 @@ ALL_CREATE_STATEMENTS = [
     CREATE_TASK_DEPENDENCIES,
     CREATE_IDX_TASK_DEPENDENCIES_PREDECESSOR_ID,
     CREATE_IDX_TASK_DEPENDENCIES_SUCCESSOR_ID,
+
+    # Department template layer
+    CREATE_DEPARTMENTS_TEMPLATES,
+    CREATE_IDX_DEPARTMENTS_TEMPLATES_STATUS,
+    CREATE_IDX_DEPARTMENTS_TEMPLATES_CATEGORY,
+    CREATE_DEPARTMENT_TEMPLATE_ROLES,
+    CREATE_IDX_DEPARTMENT_TEMPLATE_ROLES_TEMPLATE_ID,
+    CREATE_DEPARTMENT_TEMPLATE_PROCESSES,
+    CREATE_IDX_DEPARTMENT_TEMPLATE_PROCESSES_TEMPLATE_ID,
+    CREATE_DEPARTMENT_TEMPLATE_TASKS,
+    CREATE_IDX_DEPARTMENT_TEMPLATE_TASKS_PROCESS_ID,
+    CREATE_DEPARTMENT_INSTANCES,
+    CREATE_IDX_DEPARTMENT_INSTANCES_TEMPLATE_ID,
+    CREATE_IDX_DEPARTMENT_INSTANCES_STATUS,
+    CREATE_DEPARTMENT_INSTANCE_MEMBERS,
+    CREATE_IDX_DEPARTMENT_INSTANCE_MEMBERS_INSTANCE_ID,
+    CREATE_IDX_DEPARTMENT_INSTANCE_MEMBERS_AGENT_ID,
+    CREATE_DEPARTMENT_INSTANCE_WORKFLOWS,
+    CREATE_IDX_DEPARTMENT_INSTANCE_WORKFLOWS_INSTANCE_ID,
+    CREATE_IDX_DEPARTMENT_INSTANCE_WORKFLOWS_STATUS,
 ]
 
 
