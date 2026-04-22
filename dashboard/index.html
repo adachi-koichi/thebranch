@@ -7505,6 +7505,214 @@ document.getElementById('onboardingModal')?.addEventListener('click', (e) => {
 // Initialize onboarding on page load
 document.addEventListener('DOMContentLoaded', initializeOnboarding);
 
+// Phase 2-3 API handlers for new onboarding flow
+async function submitVisionAndGetSuggestions() {
+  const visionInput = document.getElementById('onboarding-vision')?.value.trim();
+  if (!visionInput || visionInput.length < 10 || visionInput.length > 500) {
+    showToast('ビジョンは10文字以上500文字以内で入力してください', 'error');
+    return;
+  }
+
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'AI分析中...';
+
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch('/api/onboarding/initialize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ vision_input: visionInput })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      showToast('エラー: ' + (err.detail || 'AI分析に失敗しました'), 'error');
+      btn.disabled = false;
+      btn.textContent = 'AI分析を開始';
+      return;
+    }
+
+    const data = await res.json();
+    localStorage.setItem('onboarding_id', data.onboarding_id);
+
+    // Display suggestions
+    const suggestionsContainer = document.getElementById('templateSuggestions');
+    if (suggestionsContainer) {
+      suggestionsContainer.innerHTML = data.suggestions.map(s => `
+        <div class="template-card" onclick="selectTemplate(${s.template_id}, '${s.name.replace(/'/g, "\\'")}', '${s.category.replace(/'/g, "\\'")}')">
+          <h3>${s.name}</h3>
+          <p class="category">${s.category}</p>
+          <p class="details">役割: ${s.total_roles}個 / プロセス: ${s.total_processes}個</p>
+          <p class="reason">${s.reason}</p>
+          <span class="rank">推奨度 #${s.rank}</span>
+        </div>
+      `).join('');
+    }
+
+    showOnboardingStep(1);
+    showToast('テンプレート提案を取得しました', 'success');
+  } catch (e) {
+    console.error('Vision analysis error:', e);
+    showToast('エラーが発生しました: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'AI分析を開始';
+  }
+}
+
+function selectTemplate(templateId, name, category) {
+  document.getElementById('onboarding-template-id').value = templateId;
+  document.getElementById('onboarding-dept-type').value = category;
+  document.getElementById('onboarding-dept-name').value = name;
+
+  // Highlight selected
+  document.querySelectorAll('.template-card').forEach(card => {
+    card.classList.remove('selected');
+  });
+  event.currentTarget.classList.add('selected');
+
+  showOnboardingStep(2);
+  showToast('テンプレートを選択しました', 'success');
+}
+
+async function submitDetailedSetup() {
+  const deptName = document.getElementById('onboarding-dept-name')?.value.trim();
+  const managerName = document.getElementById('onboarding-manager-name')?.value.trim();
+  const membersCount = parseInt(document.getElementById('onboarding-members-count')?.value || 0);
+  const budget = parseFloat(document.getElementById('onboarding-budget')?.value || 0);
+  const kpi = document.getElementById('onboarding-kpi')?.value.trim();
+  const templateId = parseInt(document.getElementById('onboarding-template-id')?.value || 0);
+
+  if (!deptName || !managerName || membersCount < 1 || budget < 0 || !kpi || !templateId) {
+    showToast('すべての項目を入力してください', 'error');
+    return;
+  }
+
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '検証中...';
+
+  try {
+    const token = localStorage.getItem('token');
+    const onboardingId = localStorage.getItem('onboarding_id');
+    const res = await fetch('/api/onboarding/setup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        onboarding_id: onboardingId,
+        template_id: templateId,
+        dept_name: deptName,
+        manager_name: managerName,
+        members_count: membersCount,
+        budget: budget,
+        kpi: kpi,
+        integrations: {}
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      showToast('エラー: ' + (err.detail || '設定に失敗しました'), 'error');
+      btn.disabled = false;
+      btn.textContent = '次へ';
+      return;
+    }
+
+    const data = await res.json();
+    localStorage.setItem('dept_id', data.dept_id);
+
+    // Display budget validation
+    const budgetMsg = document.getElementById('budgetValidationMsg');
+    if (budgetMsg) {
+      budgetMsg.innerHTML = `
+        <div class="validation-${data.budget_validation.status}">
+          <strong>${data.budget_validation.message}</strong>
+          <p>人当たり月額: $${data.budget_validation.monthly_per_person.toFixed(2)}</p>
+          <p>市場相場: $${data.budget_validation.market_benchmark}</p>
+        </div>
+      `;
+    }
+
+    showOnboardingStep(3);
+    showToast('設定を保存しました', 'success');
+  } catch (e) {
+    console.error('Setup error:', e);
+    showToast('エラーが発生しました: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '次へ';
+  }
+}
+
+async function executeOnboarding() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '実行中...';
+
+  try {
+    const token = localStorage.getItem('token');
+    const onboardingId = localStorage.getItem('onboarding_id');
+    const deptId = localStorage.getItem('dept_id');
+
+    const res = await fetch('/api/onboarding/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        onboarding_id: onboardingId,
+        dept_id: parseInt(deptId)
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      showToast('エラー: ' + (err.detail || '実行に失敗しました'), 'error');
+      btn.disabled = false;
+      btn.textContent = '実行';
+      return;
+    }
+
+    const data = await res.json();
+
+    // Display tasks
+    const tasksContainer = document.getElementById('initialTasksList');
+    if (tasksContainer) {
+      tasksContainer.innerHTML = data.tasks_created.map(t => `
+        <div class="task-item">
+          <h4>${t.title}</h4>
+          <p>${t.description}</p>
+          <p class="task-meta">予算: $${t.budget} | 担当: ${t.assigned_to} | 期限: ${t.deadline}</p>
+        </div>
+      `).join('');
+    }
+
+    // Update completion info
+    document.getElementById('completionDeptName').textContent = document.getElementById('onboarding-dept-name')?.value || '';
+    document.getElementById('completionDeptType').textContent = document.getElementById('onboarding-dept-type')?.value || '';
+    document.getElementById('completionAgentRole').textContent = data.agent_status || 'activating';
+
+    showOnboardingStep(4);
+    showToast('オンボーディング完了！ダッシュボードに遷移します', 'success');
+
+    // Redirect to dashboard
+    setTimeout(() => {
+      window.location.href = data.dashboard_url || '/dashboard';
+    }, 2000);
+  } catch (e) {
+    console.error('Execute error:', e);
+    showToast('エラーが発生しました: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '実行';
+  }
+}
+
 let _deptTreeDragSrc = null;
 
 async function loadDeptTree() {

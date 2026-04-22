@@ -380,7 +380,6 @@ class DepartmentCreateResponse(BaseModel):
 
 
 class VisionInputRequest(BaseModel):
-    onboarding_id: str
     vision_input: str
 
 

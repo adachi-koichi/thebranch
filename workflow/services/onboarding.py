@@ -35,7 +35,7 @@ class OnboardingService:
         Returns:
             TemplateSuggestion 형태의 제안 목록 (최소 2개)
         """
-        prompt = f"""당신은 조직 구조 설계 전문가입니다. 사용자의 비전을 분석하여 가장 적합한 부서 템플릿을 제안해주세요.
+        prompt = """당신은 조직 구조 설계 전문가입니다. 사용자의 비전을 분석하여 가장 적합한 부서 템플릿을 제안해주세요.
 
 사용자 비전:
 "{vision_input}"
@@ -63,17 +63,17 @@ class OnboardingService:
 
 JSON 형식으로 응답하세요:
 [
-  {
-    "template_id": <int>,
-    "name": "<string>",
-    "category": "<string>",
-    "total_roles": <int>,
-    "total_processes": <int>,
-    "reason": "<string>",
-    "rank": <int>
-  }
+  {{
+    "template_id": 1,
+    "name": "부서명",
+    "category": "카테고리",
+    "total_roles": 4,
+    "total_processes": 6,
+    "reason": "선택 이유",
+    "rank": 1
+  }}
 ]
-"""
+""".format(vision_input=vision_input)
 
         try:
             message = self.client.messages.create(
@@ -128,7 +128,7 @@ JSON 형식으로 응답하세요:
         Returns:
             InitialTask 형태의 작업 목록 (3-5개)
         """
-        prompt = f"""당신은 부서 목표 달성을 위한 작업 계획 전문가입니다. 주어진 정보를 기반으로 초기 작업을 생성해주세요.
+        prompt = """당신은 부서 목표 달성을 위한 작업 계획 전문가입니다. 주어진 정보를 기반으로 초기 작업을 생성해주세요.
 
 부서 정보:
 - 부서명: {dept_name}
@@ -147,15 +147,15 @@ JSON 형식으로 응답하세요:
 JSON 형식으로 응답하세요:
 [
   {{
-    "task_id": "<string>",
-    "title": "<string>",
-    "description": "<string>",
-    "budget": <float>,
-    "deadline": "<YYYY-MM-DD>",
-    "assigned_to": "<string>"
+    "task_id": "task_001",
+    "title": "작업 제목",
+    "description": "작업 설명",
+    "budget": 1000.0,
+    "deadline": "2026-05-15",
+    "assigned_to": "Manager"
   }}
 ]
-"""
+""".format(dept_name=dept_name, kpi=kpi, budget=budget, members_count=members_count)
 
         try:
             message = self.client.messages.create(
