@@ -2403,12 +2403,147 @@
 // Utilities
 // ══════════════════════════════════════════════
 
+// Toast notification class
+class Toast {
+  static ICONS = {
+    success: '✓',
+    error: '✕',
+    warning: '⚠',
+    info: 'ℹ'
+  };
+
+  static create(msg, type = 'success', duration = 3000) {
+    const container = document.getElementById('toast-container') || (() => {
+      const div = document.createElement('div');
+      div.id = 'toast-container';
+      div.style.position = 'fixed';
+      div.style.bottom = '24px';
+      div.style.right = '24px';
+      div.style.display = 'flex';
+      div.style.flexDirection = 'column';
+      div.style.gap = '12px';
+      div.style.zIndex = '999';
+      document.body.appendChild(div);
+      return div;
+    })();
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.style.background = 'var(--card)';
+    toast.style.border = '1px solid var(--border)';
+    toast.style.borderLeftWidth = '4px';
+    toast.style.borderLeftColor = this._colorForType(type);
+    toast.style.borderRadius = '8px';
+    toast.style.padding = '12px 16px';
+    toast.style.fontSize = '13px';
+    toast.style.display = 'flex';
+    toast.style.alignItems = 'center';
+    toast.style.gap = '8px';
+    toast.style.animation = 'toastSlideIn 0.3s ease forwards';
+    toast.style.transition = 'opacity 0.25s, transform 0.25s';
+    toast.style.color = this._colorForType(type);
+
+    const iconSpan = document.createElement('span');
+    iconSpan.style.flexShrink = '0';
+    iconSpan.style.fontWeight = '600';
+    iconSpan.style.fontSize = '14px';
+    iconSpan.textContent = this.ICONS[type];
+
+    const msgSpan = document.createElement('span');
+    msgSpan.style.flex = '1';
+    msgSpan.style.color = 'var(--text)';
+    msgSpan.textContent = msg;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '×';
+    closeBtn.style.flexShrink = '0';
+    closeBtn.style.background = 'none';
+    closeBtn.style.border = 'none';
+    closeBtn.style.color = 'var(--text-muted)';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.style.fontSize = '16px';
+    closeBtn.style.transition = 'color 0.2s';
+    closeBtn.onmouseover = () => closeBtn.style.color = 'var(--text)';
+    closeBtn.onmouseout = () => closeBtn.style.color = 'var(--text-muted)';
+    closeBtn.onclick = () => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(400px)';
+      setTimeout(() => toast.remove(), 250);
+    };
+
+    toast.appendChild(iconSpan);
+    toast.appendChild(msgSpan);
+    toast.appendChild(closeBtn);
+    container.appendChild(toast);
+
+    if (duration) {
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(400px)';
+        setTimeout(() => toast.remove(), 250);
+      }, duration);
+    }
+
+    return toast;
+  }
+
+  static _colorForType(type) {
+    const colors = {
+      success: 'var(--green)',
+      error: 'var(--red)',
+      warning: 'var(--orange)',
+      info: 'var(--blue)'
+    };
+    return colors[type] || 'var(--text-muted)';
+  }
+}
+
+// Backward compatibility
 function showToast(msg, type = 'success') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = `show ${type}`;
-  clearTimeout(el._timer);
-  el._timer = setTimeout(() => { el.className = ''; }, 2800);
+  Toast.create(msg, type, 2800);
+}
+
+// Notification WebSocket
+let _notificationsWs = null;
+let _notificationsWsReconnectTimer = null;
+
+function connectNotificationsWebSocket() {
+  if (_notificationsWs && _notificationsWs.readyState <= 1) return;
+
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  _notificationsWs = new WebSocket(`${proto}://${location.host}/ws/notifications`);
+
+  _notificationsWs.onopen = () => {
+    console.log('Notifications WebSocket connected');
+  };
+
+  _notificationsWs.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'notification') {
+        const toastType = msg.severity === 'error' ? 'error' :
+                         msg.severity === 'warning' ? 'warning' :
+                         msg.severity === 'critical' ? 'error' : 'info';
+        Toast.create(`${msg.title}: ${msg.message}`, toastType, 4000);
+        console.log('Notification received:', msg);
+      }
+    } catch (e) {
+      console.error('Failed to parse notification:', e);
+    }
+  };
+
+  _notificationsWs.onerror = (event) => {
+    console.error('Notifications WebSocket error:', event);
+    Toast.create('通知システムエラー', 'error', 3000);
+  };
+
+  _notificationsWs.onclose = () => {
+    console.log('Notifications WebSocket disconnected');
+    clearTimeout(_notificationsWsReconnectTimer);
+    _notificationsWsReconnectTimer = setTimeout(() => {
+      connectNotificationsWebSocket();
+    }, 5000);
+  };
 }
 
 function statusBadge(status) {
@@ -4262,6 +4397,7 @@ function applyClientPriorityFilter() {
 fetchTasks();
 connectAgentsWebSocket();
 connectTasksWS();
+connectNotificationsWebSocket();
 
 // ══════════════════════════════════════════════
 // Metrics (パフォーマンス)

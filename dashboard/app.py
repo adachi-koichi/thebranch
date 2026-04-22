@@ -1,11 +1,13 @@
 import asyncio
 import json
+import logging
 import os
 import re
 import shutil
 import sqlite3
 import subprocess
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from datetime import datetime
@@ -38,6 +40,8 @@ MONITORING_YAML = Path(__file__).parent.parent / "monitoring.yaml"
 TMUX_BIN = shutil.which("tmux") or "/opt/homebrew/bin/tmux"
 
 app = FastAPI()
+
+logger = logging.getLogger(__name__)
 
 DASHBOARD_DIR = Path(__file__).parent
 THEBRANCH_DB = DASHBOARD_DIR / "data" / "thebranch.sqlite"
@@ -3550,6 +3554,209 @@ async def websocket_activity(websocket: WebSocket):
 
 
 # ──────────────────────────────────────────────
+# Notifications: WebSocket + REST API
+# ──────────────────────────────────────────────
+
+_notification_manager = None
+
+class NotificationRequest(BaseModel):
+    notification_type: str
+    title: str
+    message: str
+    severity: str = "info"
+    recipient_id: Optional[str] = None
+    recipient_type: Optional[str] = None
+    source_table: Optional[str] = None
+    source_id: Optional[int] = None
+    action_url: Optional[str] = None
+
+class NotificationManager:
+    def __init__(self):
+        self.active: list[WebSocket] = []
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.active.append(ws)
+
+    def disconnect(self, ws: WebSocket):
+        self.active = [c for c in self.active if c is not ws]
+
+    async def broadcast(self, message: str):
+        dead = []
+        for ws in self.active:
+            try:
+                await ws.send_text(message)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+def get_notification_manager():
+    global _notification_manager
+    if _notification_manager is None:
+        _notification_manager = NotificationManager()
+    return _notification_manager
+
+async def create_notification_log(
+    notification_type: str,
+    title: str,
+    message: str,
+    severity: str = "info",
+    recipient_id: str = None,
+    recipient_type: str = None,
+    source_table: str = None,
+    source_id: int = None,
+    metadata: dict = None,
+    action_url: str = None
+):
+    """通知ログを DB に記録して WebSocket でブロードキャストする"""
+    try:
+        notification_key = f"notif-{uuid.uuid4()}"
+        now = datetime.now().isoformat()
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            await db.execute("""
+                INSERT INTO notification_logs (
+                    notification_key, notification_type, title, message, severity,
+                    recipient_id, recipient_type, source_table, source_id,
+                    metadata, action_url, status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                notification_key, notification_type, title, message, severity,
+                recipient_id, recipient_type, source_table, source_id,
+                json.dumps(metadata) if metadata else None, action_url,
+                "unread", now, now
+            ))
+            await db.commit()
+
+        # WebSocket でブロードキャスト
+        notif_msg = {
+            "type": "notification",
+            "id": notification_key,
+            "notification_type": notification_type,
+            "title": title,
+            "message": message,
+            "severity": severity,
+            "recipient_id": recipient_id,
+            "source_table": source_table,
+            "source_id": source_id,
+            "action_url": action_url,
+            "created_at": now
+        }
+        await get_notification_manager().broadcast(json.dumps(notif_msg))
+        return notification_key
+    except Exception as e:
+        logging.error(f"Failed to create notification: {e}")
+        return None
+
+@app.websocket("/ws/notifications")
+async def websocket_notifications(websocket: WebSocket):
+    """通知をリアルタイム配信する WebSocket エンドポイント"""
+    manager = get_notification_manager()
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+@app.get("/api/notifications")
+async def get_notifications(
+    limit: int = 50,
+    status: Optional[str] = None,
+    notification_type: Optional[str] = None,
+    severity: Optional[str] = None
+):
+    """通知一覧を取得（フィルタ対応）"""
+    if not THEBRANCH_DB.exists():
+        return {"notifications": [], "total": 0}
+
+    query = "SELECT * FROM notification_logs WHERE 1=1"
+    params = []
+
+    if status:
+        query += " AND status = ?"
+        params.append(status)
+    if notification_type:
+        query += " AND notification_type = ?"
+        params.append(notification_type)
+    if severity:
+        query += " AND severity = ?"
+        params.append(severity)
+
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+
+            # 合計数を取得
+            count_query = "SELECT COUNT(*) FROM notification_logs WHERE 1=1"
+            count_params = []
+            if status:
+                count_query += " AND status = ?"
+                count_params.append(status)
+            if notification_type:
+                count_query += " AND notification_type = ?"
+                count_params.append(notification_type)
+            if severity:
+                count_query += " AND severity = ?"
+                count_params.append(severity)
+
+            cursor = await db.execute(count_query, count_params)
+            total = (await cursor.fetchone())[0]
+
+        notifications = [dict(row) for row in rows]
+        return {"notifications": notifications, "total": total}
+    except Exception as e:
+        logging.error(f"Failed to get notifications: {e}")
+        return {"notifications": [], "total": 0, "error": str(e)}
+
+@app.post("/api/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: int):
+    """通知を既読化する"""
+    if not THEBRANCH_DB.exists():
+        raise HTTPException(status_code=404, detail="Database not found")
+
+    try:
+        now = datetime.now().isoformat()
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            await db.execute("""
+                UPDATE notification_logs
+                SET status = 'read', read_at = ?, updated_at = ?
+                WHERE id = ?
+            """, (now, now, notification_id))
+            await db.commit()
+        return {"status": "marked_as_read"}
+    except Exception as e:
+        logging.error(f"Failed to mark notification as read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/notifications/create")
+async def create_notification_endpoint(req: NotificationRequest):
+    """通知を手動作成（テスト・内部用）"""
+    try:
+        notification_key = await create_notification_log(
+            notification_type=req.notification_type,
+            title=req.title,
+            message=req.message,
+            severity=req.severity,
+            recipient_id=req.recipient_id,
+            recipient_type=req.recipient_type,
+            source_table=req.source_table,
+            source_id=req.source_id,
+            action_url=req.action_url
+        )
+        return {"notification_key": notification_key, "status": "created"}
+    except Exception as e:
+        logging.error(f"Failed to create notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
 # Agent Rankings
 # ──────────────────────────────────────────────
 
@@ -5071,6 +5278,252 @@ async def post_onboarding_suggest(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"部署提案取得エラー: {str(e)}")
+
+
+@app.post("/api/onboarding/initialize", status_code=201, response_model=models.SuggestResponse)
+async def initialize_onboarding(
+    req: models.VisionInputRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """ビジョン入力 → AI分析 → テンプレート提案を返す"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    user_id = await auth.verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if not req.vision_input or len(req.vision_input) < 10 or len(req.vision_input) > 500:
+        raise HTTPException(status_code=400, detail="Vision input must be 10-500 characters")
+
+    await ensure_db_initialized()
+
+    try:
+        import uuid
+        from workflow.services.onboarding import get_onboarding_service
+
+        # Generate onboarding_id
+        onboarding_id = str(uuid.uuid4())
+
+        # Save vision input
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            await db.execute(
+                """
+                INSERT INTO user_onboarding_progress
+                (onboarding_id, user_id, vision_input, current_step, created_at, updated_at)
+                VALUES (?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
+                """,
+                (onboarding_id, user_id, req.vision_input, 0)
+            )
+            await db.commit()
+
+        # Analyze vision and get suggestions
+        onboarding_service = get_onboarding_service()
+        suggestions = onboarding_service.analyze_vision_for_templates(req.vision_input)
+
+        return {
+            "onboarding_id": onboarding_id,
+            "suggestions": suggestions
+        }
+    except Exception as e:
+        logger.error(f"Vision analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Vision analysis error: {str(e)}")
+
+
+@app.post("/api/onboarding/setup", response_model=models.SetupResponse)
+async def setup_onboarding(
+    req: models.DetailedSetupRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """詳細設定を保存 → 予算検証を実行"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    user_id = await auth.verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    await ensure_db_initialized()
+
+    try:
+        from workflow.services.onboarding import get_onboarding_service
+
+        # Validate budget
+        onboarding_service = get_onboarding_service()
+        budget_validation = onboarding_service.validate_budget(
+            members_count=req.members_count,
+            budget=float(req.budget),
+            dept_type="marketing"  # デフォルト値（実際はテンプレートタイプから決定）
+        )
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            # Update onboarding_progress with setup details
+            await db.execute(
+                """
+                UPDATE user_onboarding_progress
+                SET current_step = 1, updated_at = datetime('now','localtime')
+                WHERE onboarding_id = ? AND user_id = ?
+                """,
+                (req.onboarding_id, user_id)
+            )
+
+            # Create department_instances record (status='planning')
+            slug = req.dept_name.lower().replace(" ", "-")
+            cursor = await db.execute(
+                """
+                INSERT INTO departments
+                (name, slug, description, status, created_by, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
+                """,
+                (req.dept_name, slug, f"Template {req.template_id}", "planning", user_id)
+            )
+            await db.commit()
+            dept_id = cursor.lastrowid
+
+            # Update onboarding_progress with dept_id
+            await db.execute(
+                """
+                UPDATE user_onboarding_progress
+                SET dept_id = ? WHERE onboarding_id = ?
+                """,
+                (dept_id, req.onboarding_id)
+            )
+            await db.commit()
+
+        return {
+            "dept_id": dept_id,
+            "config_validated": budget_validation["status"] != "error",
+            "budget_validation": budget_validation
+        }
+    except Exception as e:
+        logger.error(f"Setup error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Setup error: {str(e)}")
+
+
+@app.post("/api/onboarding/execute", response_model=models.ExecuteResponse)
+async def execute_onboarding(
+    req: models.ExecuteRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """初期タスク生成 → エージェント起動"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    user_id = await auth.verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    await ensure_db_initialized()
+
+    try:
+        from workflow.services.onboarding import get_onboarding_service
+        from datetime import datetime
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            # Get onboarding details
+            cursor = await db.execute(
+                """
+                SELECT dept_id FROM user_onboarding_progress
+                WHERE onboarding_id = ? AND user_id = ?
+                """,
+                (req.onboarding_id, user_id)
+            )
+            row = await cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Onboarding not found")
+
+            dept_id = row[0]
+
+            # Get department details
+            cursor = await db.execute(
+                "SELECT name FROM departments WHERE id = ?",
+                (dept_id,)
+            )
+            dept_row = await cursor.fetchone()
+            if not dept_row:
+                raise HTTPException(status_code=404, detail="Department not found")
+
+            dept_name = dept_row[0]
+
+            # Generate initial tasks
+            onboarding_service = get_onboarding_service()
+            tasks = onboarding_service.generate_initial_tasks(
+                dept_name=dept_name,
+                kpi="初期KPI設定",
+                budget=10000.0,  # デフォルト予算
+                members_count=3
+            )
+
+            # Create tasks in database
+            tasks_created = []
+            for i, task in enumerate(tasks):
+                cursor = await db.execute(
+                    """
+                    INSERT INTO tasks
+                    (title, description, status, department_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
+                    """,
+                    (task.get("title"), task.get("description"), "pending", dept_id)
+                )
+                await db.commit()
+                task_id = cursor.lastrowid
+
+                tasks_created.append({
+                    "task_id": str(task_id),
+                    "title": task.get("title"),
+                    "description": task.get("description"),
+                    "budget": task.get("budget", 0),
+                    "deadline": task.get("deadline"),
+                    "assigned_to": task.get("assigned_to")
+                })
+
+            # Create agent
+            session_id = f"thebranch_onboarding_{user_id}_{dept_id}"
+            cursor = await db.execute(
+                """
+                INSERT INTO agents
+                (department_id, session_id, role, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
+                """,
+                (dept_id, session_id, "coordinator", "activating")
+            )
+            await db.commit()
+            agent_id = cursor.lastrowid
+
+            # Update onboarding_progress
+            now = datetime.now().isoformat()
+            await db.execute(
+                """
+                UPDATE user_onboarding_progress
+                SET current_step = 3, completed_at = datetime('now','localtime'),
+                    updated_at = datetime('now','localtime')
+                WHERE onboarding_id = ?
+                """,
+                (req.onboarding_id,)
+            )
+
+            # Update user
+            await db.execute(
+                "UPDATE users SET onboarding_completed = 1 WHERE id = ?",
+                (user_id,)
+            )
+            await db.commit()
+
+        return {
+            "dept_id": dept_id,
+            "tasks_created": tasks_created,
+            "agent_status": "activating",
+            "dashboard_url": f"/dashboard?dept_id={dept_id}",
+            "completed_at": now
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Execute error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Execute error: {str(e)}")
 
 
 @app.post("/api/onboarding/complete", status_code=201, response_model=models.OnboardingCompleteResponse)
