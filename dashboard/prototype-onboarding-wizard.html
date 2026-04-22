@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>部署セットアップウィザード - THEBRANCH</title>
+  <style>
+    :root {
+      --color-primary: #3B82F6;
+      --color-primary-dark: #1E40AF;
+      --color-success: #22C55E;
+      --color-warning: #FBBF24;
+      --color-error: #EF4444;
+      --color-text-primary: #1F2937;
+      --color-text-secondary: #6B7280;
+      --color-bg-primary: #FFFFFF;
+      --color-bg-secondary: #F9FAFB;
+      --color-border: #E5E7EB;
+      --color-shadow: rgba(0, 0, 0, 0.1);
+
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --spacing-xl: 32px;
+      --spacing-2xl: 48px;
+
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+
+      --transition: 200ms ease-out;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-text-primary: #F3F4F6;
+        --color-text-secondary: #D1D5DB;
+        --color-bg-primary: #111827;
+        --color-bg-secondary: #1F2937;
+        --color-border: #374151;
+        --color-shadow: rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+      color: var(--color-text-primary);
+      background-color: var(--color-bg-primary);
+      line-height: 1.6;
+      padding: var(--spacing-lg);
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .wizard-header {
+      text-align: center;
+      margin-bottom: var(--spacing-2xl);
+    }
+
+    .logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--color-primary);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .wizard-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: var(--spacing-md);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .wizard-subtitle {
+      font-size: 16px;
+      color: var(--color-text-secondary);
+    }
+
+    /* Progress Bar */
+    .progress-container {
+      margin-bottom: var(--spacing-2xl);
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background-color: var(--color-border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--color-primary), var(--color-primary-dark));
+      transition: width var(--transition);
+    }
+
+    .progress-label {
+      margin-top: var(--spacing-sm);
+      text-align: center;
+      font-size: 14px;
+      color: var(--color-text-secondary);
+      font-weight: 500;
+    }
+
+    /* Step Labels */
+    .step-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: var(--spacing-2xl);
+      gap: var(--spacing-md);
+    }
+
+    .step-label {
+      flex: 1;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 500;
+      padding: var(--spacing-md);
+      border-radius: var(--radius-md);
+      background-color: var(--color-bg-secondary);
+      color: var(--color-text-secondary);
+      transition: all var(--transition);
+    }
+
+    .step-label.active {
+      background-color: var(--color-primary);
+      color: white;
+    }
+
+    .step-label.completed {
+      background-color: var(--color-success);
+      color: white;
+    }
+
+    /* Main Content */
+    .wizard-content {
+      background-color: var(--color-bg-primary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-xl);
+      box-shadow: 0 4px 6px var(--color-shadow);
+      min-height: 400px;
+      animation: fadeIn 300ms ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .step {
+      display: none;
+    }
+
+    .step.active {
+      display: block;
+      animation: slideIn 300ms ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    /* Step 1: Template Selection */
+    .step-1-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: var(--spacing-lg);
+      color: var(--color-text-primary);
+    }
+
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--spacing-lg);
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .template-card {
+      padding: var(--spacing-lg);
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      transition: all var(--transition);
+      background-color: var(--color-bg-primary);
+    }
+
+    .template-card:hover {
+      border-color: var(--color-primary);
+      box-shadow: 0 4px 12px var(--color-shadow);
+      transform: translateY(-2px);
+    }
+
+    .template-card.selected {
+      border-color: var(--color-primary);
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.05));
+      border-width: 3px;
+    }
+
+    .template-icon {
+      font-size: 32px;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .template-name {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: var(--spacing-sm);
+      color: var(--color-text-primary);
+    }
+
+    .template-desc {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      line-height: 1.5;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .template-info {
+      background-color: var(--color-bg-secondary);
+      padding: var(--spacing-sm);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: var(--color-text-secondary);
+    }
+
+    .info-item {
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .info-label {
+      font-weight: 600;
+    }
+
+    /* Step 2: Basic Information */
+    .step-2-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: var(--spacing-lg);
+      color: var(--color-text-primary);
+    }
+
+    .form-group {
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: var(--spacing-sm);
+      color: var(--color-text-primary);
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: var(--spacing-md);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      background-color: var(--color-bg-primary);
+      color: var(--color-text-primary);
+      transition: border-color var(--transition);
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .form-group input::placeholder {
+      color: var(--color-text-secondary);
+    }
+
+    .validation-message {
+      font-size: 12px;
+      margin-top: var(--spacing-xs);
+      display: none;
+    }
+
+    .validation-message.error {
+      color: var(--color-error);
+      display: block;
+    }
+
+    .validation-message.success {
+      color: var(--color-success);
+      display: block;
+    }
+
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      margin-top: var(--spacing-sm);
+    }
+
+    .form-group input[type="range"] {
+      flex: 1;
+      padding: 0;
+      height: 6px;
+      cursor: pointer;
+    }
+
+    .slider-value {
+      min-width: 50px;
+      text-align: center;
+      font-weight: 600;
+      color: var(--color-primary);
+    }
+
+    /* Step 3: Confirmation */
+    .step-3-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: var(--spacing-lg);
+      color: var(--color-text-primary);
+    }
+
+    .confirmation-section {
+      background-color: var(--color-bg-secondary);
+      border-left: 4px solid var(--color-primary);
+      padding: var(--spacing-lg);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .confirmation-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: var(--spacing-md);
+      color: var(--color-text-primary);
+    }
+
+    .confirmation-item {
+      font-size: 14px;
+      margin-bottom: var(--spacing-sm);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .confirmation-label {
+      color: var(--color-text-secondary);
+      font-weight: 500;
+    }
+
+    .confirmation-value {
+      color: var(--color-text-primary);
+      font-weight: 600;
+    }
+
+    .ai-proposal {
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.05), rgba(59, 130, 246, 0.05));
+      border: 1px solid var(--color-success);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-lg);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .ai-proposal-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--color-success);
+      margin-bottom: var(--spacing-md);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+    }
+
+    .ai-proposal-content {
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--color-text-primary);
+    }
+
+    .proposal-item {
+      margin-bottom: var(--spacing-md);
+      padding-bottom: var(--spacing-md);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .proposal-item:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .proposal-label {
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+
+    .proposal-desc {
+      color: var(--color-text-secondary);
+      font-size: 13px;
+      margin-top: var(--spacing-xs);
+    }
+
+    /* Buttons */
+    .button-group {
+      display: flex;
+      gap: var(--spacing-md);
+      justify-content: flex-end;
+      margin-top: var(--spacing-2xl);
+    }
+
+    button {
+      padding: var(--spacing-md) var(--spacing-lg);
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .btn-secondary {
+      background-color: transparent;
+      color: var(--color-primary);
+      border: 2px solid var(--color-primary);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--color-primary);
+      color: white;
+    }
+
+    .btn-primary {
+      background-color: var(--color-primary);
+      color: white;
+      box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-primary:hover {
+      background-color: var(--color-primary-dark);
+      box-shadow: 0 8px 12px rgba(59, 130, 246, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary:disabled {
+      background-color: var(--color-text-secondary);
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .container {
+        max-width: 100%;
+      }
+
+      .wizard-content {
+        padding: var(--spacing-lg);
+      }
+
+      .step-labels {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+      }
+
+      .template-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .button-group {
+        flex-direction: column-reverse;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="wizard-header">
+      <div class="logo">🌿 THEBRANCH</div>
+      <h1 class="wizard-title">部署セットアップウィザード</h1>
+      <p class="wizard-subtitle">翌朝から組織を動かすための3ステップ</p>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-container">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-label">
+        <span id="progressLabel">Step 1 of 3</span>
+      </div>
+    </div>
+
+    <!-- Step Labels -->
+    <div class="step-labels">
+      <div class="step-label active" id="stepLabel1">1. テンプレート選択</div>
+      <div class="step-label" id="stepLabel2">2. 基本情報入力</div>
+      <div class="step-label" id="stepLabel3">3. 確認・完了</div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="wizard-content">
+      <!-- Step 1: Template Selection -->
+      <div class="step active" id="step1">
+        <h2 class="step-1-title">部署テンプレートを選択</h2>
+
+        <div class="template-grid" id="templateGrid">
+          <div class="template-card" data-template="sales">
+            <div class="template-icon">📞</div>
+            <div class="template-name">営業・マーケティング</div>
+            <div class="template-desc">営業チームの立ち上げに最適。SFA連携対応。</div>
+            <div class="template-info">
+              <div class="info-item"><span class="info-label">メンバー:</span> 営業3名 + マネジャー1名</div>
+              <div class="info-item"><span class="info-label">給与目安:</span> 月180-240万円</div>
+              <div class="info-item"><span class="info-label">SFA:</span> Salesforce / Google Sheets</div>
+            </div>
+          </div>
+
+          <div class="template-card" data-template="cs">
+            <div class="template-icon">💬</div>
+            <div class="template-name">CS・カスタマーサクセス</div>
+            <div class="template-desc">カスタマーサポート・チャーン防止を自動化。</div>
+            <div class="template-info">
+              <div class="info-item"><span class="info-label">メンバー:</span> CSM 2名 + サポート1名</div>
+              <div class="info-item"><span class="info-label">給与目安:</span> 月140-180万円</div>
+              <div class="info-item"><span class="info-label">連携:</span> Zendesk / Intercom</div>
+            </div>
+          </div>
+
+          <div class="template-card" data-template="operation">
+            <div class="template-icon">⚙️</div>
+            <div class="template-name">企画・運営</div>
+            <div class="template-desc">プロジェクト管理・事業企画を効率化。</div>
+            <div class="template-info">
+              <div class="info-item"><span class="info-label">メンバー:</span> PM 2名 + AnalyticsEng 1名</div>
+              <div class="info-item"><span class="info-label">給与目安:</span> 月160-220万円</div>
+              <div class="info-item"><span class="info-label">連携:</span> Asana / Monday.com</div>
+            </div>
+          </div>
+
+          <div class="template-card" data-template="custom">
+            <div class="template-icon">🎨</div>
+            <div class="template-name">カスタムテンプレート</div>
+            <div class="template-desc">あなたの組織に合わせて0から設計。</div>
+            <div class="template-info">
+              <div class="info-item"><span class="info-label">構成:</span> 自由に設定</div>
+              <div class="info-item"><span class="info-label">給与:</span> あなたの予算に合わせる</div>
+              <div class="info-item"><span class="info-label">連携:</span> あとで設定</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Basic Information -->
+      <div class="step" id="step2">
+        <h2 class="step-2-title">基本情報を入力</h2>
+
+        <div class="form-group">
+          <label for="deptName">部署名 *</label>
+          <input type="text" id="deptName" placeholder="例) 営業推進部" required>
+          <div class="validation-message"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="managerName">責任者名 *</label>
+          <input type="text" id="managerName" placeholder="例) 田中太郎" required>
+          <div class="validation-message"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="budget">予算上限（月額）*</label>
+          <input type="number" id="budget" placeholder="例) 3000000" min="0" step="100000" required>
+          <div class="validation-message"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="members">メンバー数目安 *</label>
+          <div class="slider-container">
+            <input type="range" id="members" min="1" max="10" value="3">
+            <span class="slider-value"><span id="membersValue">3</span>人</span>
+          </div>
+          <div class="validation-message"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="kpi">目標売上・KPI *</label>
+          <input type="text" id="kpi" placeholder="例) 月商1000万円、成約率35%">
+          <div class="validation-message"></div>
+        </div>
+      </div>
+
+      <!-- Step 3: Confirmation -->
+      <div class="step" id="step3">
+        <h2 class="step-3-title">設定を確認</h2>
+
+        <div class="confirmation-section">
+          <div class="confirmation-title">📋 部署構成</div>
+          <div class="confirmation-item">
+            <span class="confirmation-label">部署名:</span>
+            <span class="confirmation-value" id="confirmDeptName">-</span>
+          </div>
+          <div class="confirmation-item">
+            <span class="confirmation-label">責任者:</span>
+            <span class="confirmation-value" id="confirmManagerName">-</span>
+          </div>
+          <div class="confirmation-item">
+            <span class="confirmation-label">メンバー数:</span>
+            <span class="confirmation-value" id="confirmMembers">-</span>
+          </div>
+          <div class="confirmation-item">
+            <span class="confirmation-label">予算:</span>
+            <span class="confirmation-value" id="confirmBudget">-</span>
+          </div>
+        </div>
+
+        <div class="confirmation-section">
+          <div class="confirmation-title">🎯 目標設定</div>
+          <div class="confirmation-item">
+            <span class="confirmation-label">KPI:</span>
+            <span class="confirmation-value" id="confirmKpi">-</span>
+          </div>
+        </div>
+
+        <div class="ai-proposal">
+          <div class="ai-proposal-title">✨ AI による設定提案</div>
+          <div class="ai-proposal-content">
+            <div class="proposal-item">
+              <div class="proposal-label">💰 給与体系提案</div>
+              <div class="proposal-desc" id="proposalSalary">
+                市場相場に基づいて、最適な給与体系を提案します。
+              </div>
+            </div>
+            <div class="proposal-item">
+              <div class="proposal-label">🔗 SFA設定提案</div>
+              <div class="proposal-desc" id="proposalSfa">
+                Salesforce または Google Sheets の自動連携を設定します。
+              </div>
+            </div>
+            <div class="proposal-item">
+              <div class="proposal-label">📊 営業プロセス設計</div>
+              <div class="proposal-desc" id="proposalProcess">
+                リード発掘 → 初期接触 → 提案 → クロージングのプロセスを自動構築します。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: var(--spacing-lg); padding: var(--spacing-lg); background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(239, 68, 68, 0.1)); border-radius: var(--radius-md); border-left: 4px solid var(--color-warning);">
+          <div style="font-size: 14px; color: var(--color-text-primary); margin-bottom: var(--spacing-sm);">
+            <strong>⚠️ 予算検証</strong>
+          </div>
+          <div style="font-size: 13px; color: var(--color-text-secondary); line-height: 1.6;">
+            <div id="budgetValidation">予算額と メンバー数の組み合わせは実行可能です。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Buttons -->
+    <div class="button-group">
+      <button class="btn-secondary" id="prevBtn" onclick="changeStep(-1)">戻る</button>
+      <button class="btn-primary" id="nextBtn" onclick="changeStep(1)">次へ</button>
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 1;
+    const totalSteps = 3;
+    let selectedTemplate = null;
+
+    // Template selection
+    document.querySelectorAll('.template-card').forEach(card => {
+      card.addEventListener('click', function() {
+        document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+        this.classList.add('selected');
+        selectedTemplate = this.dataset.template;
+      });
+    });
+
+    // Slider
+    document.getElementById('members').addEventListener('input', function() {
+      document.getElementById('membersValue').textContent = this.value;
+    });
+
+    // Form validation
+    function validateStep(step) {
+      if (step === 1) {
+        if (!selectedTemplate) {
+          alert('テンプレートを選択してください');
+          return false;
+        }
+      } else if (step === 2) {
+        const deptName = document.getElementById('deptName').value.trim();
+        const managerName = document.getElementById('managerName').value.trim();
+        const budget = document.getElementById('budget').value;
+        const kpi = document.getElementById('kpi').value.trim();
+
+        if (!deptName || !managerName || !budget || !kpi) {
+          alert('すべての項目を入力してください');
+          return false;
+        }
+
+        if (budget < 500000) {
+          alert('予算は50万円以上に設定してください');
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function updateConfirmation() {
+      const budget = parseInt(document.getElementById('budget').value) || 0;
+      const members = parseInt(document.getElementById('members').value) || 0;
+
+      document.getElementById('confirmDeptName').textContent = document.getElementById('deptName').value || '-';
+      document.getElementById('confirmManagerName').textContent = document.getElementById('managerName').value || '-';
+      document.getElementById('confirmMembers').textContent = members + '人';
+      document.getElementById('confirmBudget').textContent = '¥' + (budget / 10000).toFixed(0) + '万/月';
+      document.getElementById('confirmKpi').textContent = document.getElementById('kpi').value || '-';
+
+      // AI proposal
+      const monthlySalary = budget / members;
+      document.getElementById('proposalSalary').innerHTML =
+        `<strong>¥${(monthlySalary / 10000).toFixed(0)}万/人</strong> を推奨します。市場相場より ${Math.random() > 0.5 ? '5' : '10'}% 高く、優秀層を採用しやすい水準です。`;
+
+      // Budget validation
+      if (budget < members * 800000) {
+        document.getElementById('budgetValidation').innerHTML =
+          `<span style="color: var(--color-warning);">⚠️ 注意: ${members}人体制での平均給与が市場相場より低い可能性があります。採用難易度が上がる場合があります。</span>`;
+      } else {
+        document.getElementById('budgetValidation').innerHTML =
+          `✅ ${members}人体制での給与予算は実行可能な水準です。`;
+      }
+    }
+
+    function changeStep(direction) {
+      const nextStep = currentStep + direction;
+
+      if (nextStep > totalSteps || nextStep < 1) return;
+
+      if (direction > 0 && !validateStep(currentStep)) return;
+
+      currentStep = nextStep;
+      updateUI();
+    }
+
+    function updateUI() {
+      // Hide all steps
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.getElementById('step' + currentStep).classList.add('active');
+
+      // Update progress
+      const progress = (currentStep / totalSteps) * 100;
+      document.getElementById('progressFill').style.width = progress + '%';
+      document.getElementById('progressLabel').textContent = `Step ${currentStep} of ${totalSteps}`;
+
+      // Update step labels
+      for (let i = 1; i <= totalSteps; i++) {
+        const label = document.getElementById('stepLabel' + i);
+        label.classList.remove('active', 'completed');
+        if (i < currentStep) {
+          label.classList.add('completed');
+        } else if (i === currentStep) {
+          label.classList.add('active');
+        }
+      }
+
+      // Update button states
+      document.getElementById('prevBtn').style.display = currentStep === 1 ? 'none' : 'block';
+
+      if (currentStep === totalSteps) {
+        document.getElementById('nextBtn').textContent = '完了して始める';
+        updateConfirmation();
+      } else {
+        document.getElementById('nextBtn').textContent = '次へ';
+      }
+
+      // Handle completion
+      if (currentStep === totalSteps && document.getElementById('nextBtn').textContent === '完了して始める') {
+        document.getElementById('nextBtn').onclick = function() {
+          alert('部署がセットアップされました！\n\n翌朝から組織が動き始めます。');
+          // In real app, this would submit and redirect
+        };
+      } else {
+        document.getElementById('nextBtn').onclick = function() { changeStep(1); };
+      }
+    }
+
+    // Initialize
+    updateUI();
+  </script>
+</body>
+</html>

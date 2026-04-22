@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI コンサルタント Q&A - THEBRANCH</title>
+  <style>
+    :root {
+      --color-primary: #3B82F6;
+      --color-primary-dark: #1E40AF;
+      --color-success: #22C55E;
+      --color-warning: #FBBF24;
+      --color-error: #EF4444;
+      --color-text-primary: #1F2937;
+      --color-text-secondary: #6B7280;
+      --color-bg-primary: #FFFFFF;
+      --color-bg-secondary: #F9FAFB;
+      --color-border: #E5E7EB;
+      --color-shadow: rgba(0, 0, 0, 0.1);
+
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --spacing-xl: 32px;
+
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+
+      --transition: 200ms ease-out;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-text-primary: #F3F4F6;
+        --color-text-secondary: #D1D5DB;
+        --color-bg-primary: #111827;
+        --color-bg-secondary: #1F2937;
+        --color-border: #374151;
+        --color-shadow: rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+      color: var(--color-text-primary);
+      background: linear-gradient(135deg, var(--color-bg-secondary), var(--color-bg-primary));
+      line-height: 1.6;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .qa-header {
+      padding: var(--spacing-lg) var(--spacing-xl);
+      border-bottom: 1px solid var(--color-border);
+      background-color: var(--color-bg-primary);
+    }
+
+    .qa-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-text-primary);
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .qa-subtitle {
+      font-size: 14px;
+      color: var(--color-text-secondary);
+    }
+
+    /* Main Content */
+    .qa-main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .qa-chat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--color-bg-primary);
+    }
+
+    .qa-sidebar {
+      width: 280px;
+      background-color: var(--color-bg-secondary);
+      border-left: 1px solid var(--color-border);
+      overflow-y: auto;
+      display: none;
+    }
+
+    .qa-sidebar.active {
+      display: block;
+    }
+
+    /* Chat Messages */
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--spacing-lg) var(--spacing-xl);
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-lg);
+    }
+
+    .message {
+      display: flex;
+      gap: var(--spacing-md);
+      animation: messageSlide 300ms ease-out;
+    }
+
+    @keyframes messageSlide {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .message.user {
+      justify-content: flex-end;
+    }
+
+    .message-bubble {
+      max-width: 70%;
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius-lg);
+      word-wrap: break-word;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .message.user .message-bubble {
+      background-color: var(--color-primary);
+      color: white;
+      border-radius: var(--radius-lg) var(--spacing-xs) var(--radius-lg) var(--radius-lg);
+    }
+
+    .message.ai .message-bubble {
+      background-color: var(--color-bg-secondary);
+      color: var(--color-text-primary);
+      border-radius: var(--spacing-xs) var(--radius-lg) var(--radius-lg) var(--radius-lg);
+      border: 1px solid var(--color-border);
+    }
+
+    .message-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .message.user .message-avatar {
+      background-color: var(--color-primary);
+      color: white;
+    }
+
+    .message.ai .message-avatar {
+      background-color: var(--color-success);
+      color: white;
+    }
+
+    /* AI Response Details */
+    .ai-response-details {
+      margin-top: var(--spacing-sm);
+      padding: var(--spacing-md);
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.05), rgba(59, 130, 246, 0.05));
+      border-radius: var(--radius-md);
+      border-left: 3px solid var(--color-success);
+      font-size: 13px;
+    }
+
+    .response-section {
+      margin-bottom: var(--spacing-md);
+    }
+
+    .response-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .section-title {
+      font-weight: 600;
+      color: var(--color-text-primary);
+      margin-bottom: var(--spacing-xs);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+    }
+
+    .section-content {
+      color: var(--color-text-secondary);
+      line-height: 1.6;
+      margin-left: var(--spacing-md);
+    }
+
+    .confidence-badge {
+      display: inline-block;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: var(--spacing-xs);
+    }
+
+    .confidence-high {
+      background-color: rgba(34, 197, 94, 0.2);
+      color: var(--color-success);
+    }
+
+    .confidence-medium {
+      background-color: rgba(251, 191, 36, 0.2);
+      color: var(--color-warning);
+    }
+
+    .confidence-low {
+      background-color: rgba(239, 68, 68, 0.2);
+      color: var(--color-error);
+    }
+
+    /* Input Area */
+    .qa-input-area {
+      padding: var(--spacing-lg) var(--spacing-xl);
+      background-color: var(--color-bg-primary);
+      border-top: 1px solid var(--color-border);
+    }
+
+    .input-suggestions {
+      margin-bottom: var(--spacing-md);
+    }
+
+    .suggestion-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-text-secondary);
+      margin-bottom: var(--spacing-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .suggestion-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--spacing-sm);
+    }
+
+    .suggestion-pill {
+      padding: var(--spacing-sm) var(--spacing-md);
+      background-color: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all var(--transition);
+    }
+
+    .suggestion-pill:hover {
+      background-color: var(--color-primary);
+      color: white;
+      border-color: var(--color-primary);
+    }
+
+    .input-group {
+      display: flex;
+      gap: var(--spacing-sm);
+      align-items: flex-end;
+    }
+
+    #questionInput {
+      flex: 1;
+      padding: var(--spacing-md);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background-color: var(--color-bg-secondary);
+      color: var(--color-text-primary);
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      max-height: 100px;
+      transition: border-color var(--transition);
+    }
+
+    #questionInput:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    #questionInput::placeholder {
+      color: var(--color-text-secondary);
+    }
+
+    .btn-send {
+      padding: var(--spacing-md) var(--spacing-lg);
+      background-color: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+    }
+
+    .btn-send:hover {
+      background-color: var(--color-primary-dark);
+      transform: translateY(-2px);
+    }
+
+    .btn-send:active {
+      transform: translateY(0);
+    }
+
+    .btn-send:disabled {
+      background-color: var(--color-text-secondary);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Sidebar History */
+    .history-section {
+      padding: var(--spacing-lg);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .history-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--color-text-secondary);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .history-item {
+      padding: var(--spacing-md);
+      margin-bottom: var(--spacing-sm);
+      background-color: var(--color-bg-primary);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--color-text-secondary);
+      transition: all var(--transition);
+      border: 1px solid transparent;
+    }
+
+    .history-item:hover {
+      background-color: var(--color-bg-primary);
+      border-color: var(--color-primary);
+      color: var(--color-text-primary);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .qa-main {
+        flex-direction: column;
+      }
+
+      .qa-sidebar {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid var(--color-border);
+        max-height: 200px;
+        order: 2;
+      }
+
+      .qa-chat {
+        order: 1;
+      }
+
+      .message-bubble {
+        max-width: 85%;
+      }
+
+      .messages-container {
+        padding: var(--spacing-md);
+      }
+
+      .qa-input-area {
+        padding: var(--spacing-md);
+      }
+
+      .qa-header {
+        padding: var(--spacing-md);
+      }
+
+      .input-suggestions {
+        display: none;
+      }
+
+      .input-group {
+        flex-direction: column;
+      }
+
+      .btn-send {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="qa-header">
+      <h1 class="qa-title">🤖 AI コンサルタント Q&A</h1>
+      <p class="qa-subtitle">HR・財務・法務・運営に関する質問に30秒で回答。根拠付きで、あなたの意思決定をサポート。</p>
+    </div>
+
+    <!-- Main -->
+    <div class="qa-main">
+      <!-- Chat -->
+      <div class="qa-chat">
+        <div class="messages-container" id="messagesContainer">
+          <div class="message ai">
+            <div class="message-avatar">🤖</div>
+            <div class="message-bubble">
+              おはようございます！AI コンサルタントです。
+              <br><br>
+              「営業3人の給与予算は?」「このコスト構造は持続可能?」など、
+              経営判断に関するご質問にお答えします。
+              <br><br>
+              下の質問例から選ぶか、フリーテキストで質問してください。
+            </div>
+          </div>
+        </div>
+
+        <!-- Input -->
+        <div class="qa-input-area">
+          <div class="input-suggestions">
+            <div class="suggestion-title">よくある質問</div>
+            <div class="suggestion-pills" id="suggestionPills">
+              <div class="suggestion-pill" onclick="sendQuestion('営業3人の月給与予算は?')">営業3人の給与は?</div>
+              <div class="suggestion-pill" onclick="sendQuestion('採用コストの相場は?')">採用コストは?</div>
+              <div class="suggestion-pill" onclick="sendQuestion('この利益率は業界平均と比べてどう?')">利益率の比較</div>
+              <div class="suggestion-pill" onclick="sendQuestion('キャッシュフロー改善のアドバイス')">資金繰り改善</div>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <textarea id="questionInput" placeholder="質問を入力してください... (Enter で送信, Shift+Enter で改行)" rows="2"></textarea>
+            <button class="btn-send" id="sendBtn" onclick="sendQuestion()">
+              📤 送信
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="qa-sidebar" id="sidebar">
+        <div class="history-section">
+          <div class="history-title">📜 過去の Q&A</div>
+          <div class="history-item" onclick="loadHistory('給与体系の決め方')">
+            Q: 給与体系の決め方
+            <div style="font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;">昨日</div>
+          </div>
+          <div class="history-item" onclick="loadHistory('チーム拡大時の給与')">
+            Q: チーム3人→5人への給与
+            <div style="font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;">3日前</div>
+          </div>
+          <div class="history-item" onclick="loadHistory('採用予算の配分')">
+            Q: 採用予算の配分方法
+            <div style="font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;">1週間前</div>
+          </div>
+        </div>
+
+        <div class="history-section">
+          <div class="history-title">💾 保存済み</div>
+          <div class="history-item">
+            ✅ 営業チーム構成提案
+            <div style="font-size: 11px; margin-top: 4px;">「採択」を選択済み</div>
+          </div>
+          <div class="history-item">
+            ⏳ 給与交渉戦略
+            <div style="font-size: 11px; margin-top: 4px;">「検討中」</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const messagesContainer = document.getElementById('messagesContainer');
+    const questionInput = document.getElementById('questionInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    // Send question
+    function sendQuestion(question = null) {
+      const text = question || questionInput.value.trim();
+      if (!text) return;
+
+      // Add user message
+      addMessage('user', text);
+      questionInput.value = '';
+
+      // Simulate AI response after delay
+      setTimeout(() => {
+        const response = generateAIResponse(text);
+        addMessage('ai', response.message, response.details);
+      }, 800);
+    }
+
+    // Add message to chat
+    function addMessage(sender, message, details = null) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${sender}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'message-avatar';
+      avatar.textContent = sender === 'user' ? '👤' : '🤖';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+      bubble.textContent = message;
+
+      if (details && sender === 'ai') {
+        bubble.innerHTML = `<div>${message}</div>`;
+        const detailsDiv = document.createElement('div');
+        detailsDiv.className = 'ai-response-details';
+
+        if (details.reasoning) {
+          const reasoningSection = document.createElement('div');
+          reasoningSection.className = 'response-section';
+          reasoningSection.innerHTML = `
+            <div class="section-title">📊 根拠</div>
+            <div class="section-content">${details.reasoning}</div>
+          `;
+          detailsDiv.appendChild(reasoningSection);
+        }
+
+        if (details.risk) {
+          const riskSection = document.createElement('div');
+          riskSection.className = 'response-section';
+          riskSection.innerHTML = `
+            <div class="section-title">⚠️ リスク</div>
+            <div class="section-content">${details.risk}</div>
+          `;
+          detailsDiv.appendChild(riskSection);
+        }
+
+        if (details.confidence) {
+          const confidenceSection = document.createElement('div');
+          confidenceSection.className = 'response-section';
+          confidenceSection.innerHTML = `
+            <div class="section-title">信頼度</div>
+            <div class="confidence-badge confidence-${details.confidence.level}">
+              ${details.confidence.text}
+            </div>
+          `;
+          detailsDiv.appendChild(confidenceSection);
+        }
+
+        bubble.appendChild(detailsDiv);
+      }
+
+      messageDiv.appendChild(avatar);
+      messageDiv.appendChild(bubble);
+      messagesContainer.appendChild(messageDiv);
+
+      // Scroll to bottom
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // Generate AI response
+    function generateAIResponse(question) {
+      const lowerQuestion = question.toLowerCase();
+
+      const responses = {
+        '給与': {
+          message: '営業3人の月給与予算は、市場相場で 180～240万円が目安です。',
+          details: {
+            reasoning: '業界相場：営業職 月60～80万円 × 3人 = 180～240万円。地域・経験年数により変動。',
+            risk: '予算が150万円未満の場合、優秀層の採用が難しくなり、営業成果に影響する可能性があります。',
+            confidence: { level: 'high', text: '信頼度: 高 (95%)' }
+          }
+        },
+        '採用': {
+          message: '採用コストの相場は、1人あたり 30～50万円（AI スクリーニング活用時）です。',
+          details: {
+            reasoning: '従来の採用代行: 150～200万円。AI スクリーニング導入で、費用を 70～80% 削減可能。',
+            risk: 'AI スクリーニングの精度は 85% が目安。重要判断は人間がレビューしてください。',
+            confidence: { level: 'high', text: '信頼度: 高 (90%)' }
+          }
+        },
+        '利益率': {
+          message: 'この利益率は業界平均より 12% 高いです。持続可能性は良好な状態です。',
+          details: {
+            reasoning: 'IT業界平均: 20～25%。あなたの現在の利益率: 32%。',
+            risk: 'ただし、人件費比率が 45% と高めです。人員拡大時の給与設定に注意が必要。',
+            confidence: { level: 'medium', text: '信頼度: 中 (75%)' }
+          }
+        },
+        'キャッシュフロー': {
+          message: 'キャッシュフロー改善には、以下の3つの施策を推奨します。',
+          details: {
+            reasoning: '① 売上金の入金サイクルを 60日 → 30日に短縮（顧客との交渉）\n② 経費の支払いサイクルを 30日 → 45日に延長（仕入先との交渉）\n③ 売掛金管理の AI 自動化により、回収率を 5% 向上',
+            risk: '顧客・仕入先との関係を損なわないよう、段階的に実施してください。',
+            confidence: { level: 'high', text: '信頼度: 高 (85%)' }
+          }
+        }
+      };
+
+      // Find matching response
+      for (const [key, response] of Object.entries(responses)) {
+        if (lowerQuestion.includes(key)) {
+          return response;
+        }
+      }
+
+      // Default response
+      return {
+        message: 'それについては、詳しいデータが必要です。以下の情報があると、より正確な回答ができます：',
+        details: {
+          reasoning: '① あなたの事業規模（売上、利益）\n② チーム構成（人数、職種）\n③ 目標KPI（成約率、月商など）',
+          confidence: { level: 'medium', text: '信頼度: 中 (60%)' }
+        }
+      };
+    }
+
+    // Load history
+    function loadHistory(question) {
+      addMessage('user', 'Q: ' + question);
+      setTimeout(() => {
+        const response = generateAIResponse(question);
+        addMessage('ai', response.message, response.details);
+      }, 800);
+    }
+
+    // Keyboard shortcut
+    questionInput.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendQuestion();
+      }
+    });
+
+    // Toggle sidebar on mobile
+    if (window.innerWidth < 768) {
+      document.getElementById('sidebar').classList.add('active');
+    }
+  </script>
+</body>
+</html>
