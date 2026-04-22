@@ -4190,6 +4190,23 @@ async def list_departments(status: str = "", parent_id: int = None, page: int = 
         "pagination": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit}
     }
 
+@app.get("/api/departments/hierarchy")
+async def get_departments_hierarchy():
+    """Get all departments in hierarchical tree structure"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT id FROM departments WHERE parent_id IS NULL ORDER BY name")
+        root_ids = [r[0] for r in await cursor.fetchall()]
+
+        hierarchy = []
+        for root_id in root_ids:
+            dept = await _build_dept_tree(root_id, db)
+            if dept:
+                hierarchy.append(dept)
+
+    return hierarchy
+
 @app.get("/api/departments/{dept_id}")
 async def get_department(dept_id: int):
     await ensure_db_initialized()
@@ -4288,23 +4305,6 @@ async def _build_dept_tree(dept_id: int, db) -> dict:
             dept["children"].append(child)
 
     return dept
-
-@app.get("/api/departments/hierarchy")
-async def get_departments_hierarchy():
-    """Get all departments in hierarchical tree structure"""
-    await ensure_db_initialized()
-    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT id FROM departments WHERE parent_id IS NULL ORDER BY name")
-        root_ids = [r[0] for r in await cursor.fetchall()]
-
-        hierarchy = []
-        for root_id in root_ids:
-            dept = await _build_dept_tree(root_id, db)
-            if dept:
-                hierarchy.append(dept)
-
-    return hierarchy
 
 @app.put("/api/departments/{dept_id}/parent")
 async def change_department_parent(dept_id: int, parent_req: models.ParentChangeRequest):
