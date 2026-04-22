@@ -1149,6 +1149,97 @@
     color: var(--text);
     line-height: 1.4;
   }
+
+  .dept-tree-node {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .dept-tree-node-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+  }
+
+  .dept-tree-node-header:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .dept-tree-node.dragging {
+    opacity: 0.5;
+  }
+
+  .dept-tree-node.drag-over {
+    background-color: rgba(66, 153, 225, 0.1);
+    border-left: 3px solid #4299e1;
+    padding-left: 9px;
+  }
+
+  .dept-tree-toggle {
+    display: inline-block;
+    width: 20px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 12px;
+    transition: transform 0.2s ease;
+  }
+
+  .dept-tree-toggle.expanded {
+    transform: rotate(90deg);
+  }
+
+  .dept-tree-children {
+    list-style: none;
+    padding-left: 24px;
+    margin: 0;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    animation: treeCollapse 0.2s ease forwards;
+  }
+
+  .dept-tree-children.expanded {
+    max-height: 2000px;
+    opacity: 1;
+    animation: treeExpand 0.2s ease forwards;
+  }
+
+  @keyframes treeExpand {
+    from { opacity: 0; max-height: 0; }
+    to { opacity: 1; max-height: 2000px; }
+  }
+
+  @keyframes treeCollapse {
+    from { opacity: 1; max-height: 2000px; }
+    to { opacity: 0; max-height: 0; }
+  }
+
+  .dept-tree-root {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .dept-icon {
+    margin-right: 8px;
+    font-size: 14px;
+  }
+
+  .dept-name {
+    font-weight: 500;
+    flex: 1;
+  }
+
+  .dept-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 8px;
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -1209,6 +1300,7 @@
   <button class="tab-btn" data-tab="bubble">バブルチャート</button>
   <button class="tab-btn" data-tab="activity">アクティビティ</button>
   <button class="tab-btn" data-tab="rankings">ランキング</button>
+  <button class="tab-btn" data-tab="org-tree">組織ツリー</button>
 </div>
 
 <!-- Main -->
@@ -1391,6 +1483,7 @@
   <div class="tab-panel" id="tab-dept-templates">
     <div class="filter-bar">
       <button class="btn" id="refreshDeptTemplatesBtn">更新</button>
+      <button class="btn" id="createDeptFromTemplateBtn" style="background:var(--green);color:var(--bg);">+ 新規部署作成</button>
       <select id="deptTemplatesCategoryFilter" style="width:180px">
         <option value="">すべてのカテゴリ</option>
         <option value="back-office">バックオフィス</option>
@@ -1907,6 +2000,20 @@
     <div id="rankingsContainer" style="display:flex;flex-direction:column;gap:8px;">
       <div class="empty-state">読み込み中...</div>
     </div>
+  </div>
+
+  <!-- Organization Tree tab -->
+  <div class="tab-panel" id="tab-org-tree" style="display:none;">
+    <div id="orgTreeHeader" style="margin-bottom:16px;display:flex;gap:8px;align-items:center;">
+      <button id="expandAllBtn" class="btn" onclick="expandAllDeptNodes()">すべて展開</button>
+      <button id="collapseAllBtn" class="btn" onclick="collapseAllDeptNodes()" style="margin-left:0;">すべて折りたたむ</button>
+      <input id="deptSearchBox" type="text" placeholder="部署名で検索..."
+             style="margin-left:16px;padding:8px;border:1px solid var(--border);border-radius:4px;width:250px;flex:1;">
+    </div>
+    <div id="orgTreeContent" style="border:1px solid var(--border);border-radius:8px;padding:12px;max-height:600px;overflow-y:auto;">
+      <ul id="deptRootList" class="dept-tree-root"></ul>
+    </div>
+    <div id="orgTreeStatus" style="margin-top:8px;font-size:12px;color:var(--text-muted);"></div>
   </div>
 
   <!-- Department Creation Modal (#2362) -->
@@ -2761,11 +2868,12 @@ function renderProjects(projects) {
           const taskTitle = a.task_title || '';
           const progress = a.progress || '';
           return `
-          <div class="agent-row" style="flex-direction:column;align-items:flex-start;gap:2px;">
+          <div class="agent-row" style="flex-direction:column;align-items:flex-start;gap:2px;" data-agent-id="${a.id}">
             <div style="display:flex;align-items:center;gap:6px;width:100%;">
               <span style="color:var(--green)">●</span>
               <span>${escHtml(agentLabel)}${personaPart}</span>
               <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${escHtml(a.startedAt ? a.startedAt.slice(0,16) : '')}</span>
+              <button class="delegate-btn" onclick="delegateAgent(event, ${a.id}, '${escHtml(agentLabel)}', '${escHtml(taskTitle)}')" style="margin-left:8px;padding:4px 10px;font-size:11px;background:var(--accent);color:var(--bg);border:none;border-radius:4px;cursor:pointer;transition:opacity 0.2s;font-weight:500;">委譲</button>
             </div>
             ${taskTitle ? `<div style="padding-left:14px;display:flex;align-items:center;gap:6px;">
               <span style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;" title="${escHtml(taskTitle)}">${escHtml(taskTitle)}</span>
@@ -6716,6 +6824,304 @@ document.getElementById('onboardingModal')?.addEventListener('click', (e) => {
 // Initialize onboarding on page load
 document.addEventListener('DOMContentLoaded', initializeOnboarding);
 
+let _deptTreeDragSrc = null;
+
+async function loadDeptTree() {
+  const container = document.getElementById('orgTreeContent');
+  container.innerHTML = '<div class="empty-state">読み込み中...</div>';
+
+  try {
+    const res = await fetch('/api/departments/hierarchy');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    renderDeptTreeNodes(data, document.getElementById('deptRootList'));
+    initDeptTreeDragDrop();
+    document.getElementById('orgTreeStatus').textContent = `${countDeptNodes(data)} 個の部署`;
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state" style="color:var(--red)">エラー: ${e.message}</div>`;
+  }
+}
+
+function renderDeptTreeNodes(depts, container) {
+  container.innerHTML = '';
+  depts.forEach(dept => {
+    const li = document.createElement('li');
+    li.className = 'dept-tree-node';
+    li.dataset.deptId = dept.id;
+    li.draggable = true;
+
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'dept-tree-node-header';
+    headerDiv.innerHTML = `
+      <span class="dept-tree-toggle">▶</span>
+      <span class="dept-icon">📁</span>
+      <span class="dept-name">${escHtml(dept.name)}</span>
+      <span class="dept-meta">(${dept.agent_count}A, ${dept.team_count}T)</span>
+    `;
+    headerDiv.addEventListener('click', toggleDeptNode);
+    li.appendChild(headerDiv);
+
+    if (dept.children && dept.children.length > 0) {
+      const ul = document.createElement('ul');
+      ul.className = 'dept-tree-children';
+      renderDeptTreeNodes(dept.children, ul);
+      li.appendChild(ul);
+    }
+
+    container.appendChild(li);
+  });
+}
+
+function countDeptNodes(depts) {
+  let count = depts.length;
+  depts.forEach(dept => {
+    if (dept.children) count += countDeptNodes(dept.children);
+  });
+  return count;
+}
+
+function toggleDeptNode(event) {
+  if (event && event.stopPropagation) event.stopPropagation();
+  const li = this.closest('.dept-tree-node');
+  const children = li.querySelector('.dept-tree-children');
+  const toggle = li.querySelector('.dept-tree-toggle');
+
+  if (children) {
+    children.classList.toggle('expanded');
+    toggle.classList.toggle('expanded');
+  }
+}
+
+function expandAllDeptNodes() {
+  document.querySelectorAll('.dept-tree-toggle').forEach(t => {
+    t.classList.add('expanded');
+    const li = t.closest('.dept-tree-node');
+    li.querySelector('.dept-tree-children')?.classList.add('expanded');
+  });
+}
+
+function collapseAllDeptNodes() {
+  document.querySelectorAll('.dept-tree-toggle').forEach(t => {
+    t.classList.remove('expanded');
+    const li = t.closest('.dept-tree-node');
+    li.querySelector('.dept-tree-children')?.classList.remove('expanded');
+  });
+}
+
+function initDeptTreeDragDrop() {
+  document.querySelectorAll('.dept-tree-node').forEach(node => {
+    node.addEventListener('dragstart', handleDeptDragStart);
+    node.addEventListener('dragover', handleDeptDragOver);
+    node.addEventListener('dragleave', handleDeptDragLeave);
+    node.addEventListener('drop', handleDeptDrop);
+    node.addEventListener('dragend', handleDeptDragEnd);
+  });
+}
+
+function handleDeptDragStart(e) {
+  _deptTreeDragSrc = this;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', this.dataset.deptId);
+  this.classList.add('dragging');
+}
+
+function handleDeptDragOver(e) {
+  if (!_deptTreeDragSrc) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+
+  if (this !== _deptTreeDragSrc) {
+    this.classList.add('drag-over');
+  }
+}
+
+function handleDeptDragLeave(e) {
+  if (e.target === this) {
+    this.classList.remove('drag-over');
+  }
+}
+
+async function handleDeptDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  this.classList.remove('drag-over');
+
+  if (!_deptTreeDragSrc || _deptTreeDragSrc === this) return;
+
+  const childDeptId = parseInt(_deptTreeDragSrc.dataset.deptId, 10);
+  const newParentId = parseInt(this.dataset.deptId, 10);
+
+  await changeDeptParent(childDeptId, newParentId);
+}
+
+function handleDeptDragEnd(e) {
+  this.classList.remove('dragging');
+  document.querySelectorAll('.dept-tree-node').forEach(n => n.classList.remove('drag-over'));
+  _deptTreeDragSrc = null;
+}
+
+async function changeDeptParent(deptId, newParentId) {
+  try {
+    const res = await fetch(`/api/departments/${deptId}/parent`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent_id: newParentId })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      showToast(`エラー: ${errData.detail?.message || errData.detail || 'サーバーエラー'}`, 'error');
+      return;
+    }
+
+    showToast('親部署を変更しました');
+    loadDeptTree();
+  } catch(e) {
+    showToast(`エラー: ${e.message}`, 'error');
+  }
+}
+
+document.getElementById('deptSearchBox')?.addEventListener('keyup', (e) => {
+  const searchText = e.target.value;
+  document.querySelectorAll('.dept-tree-node').forEach(node => {
+    const name = node.querySelector('.dept-name').textContent;
+    if (searchText === '' || name.includes(searchText)) {
+      node.style.display = '';
+    } else {
+      node.style.display = 'none';
+    }
+  });
+});
+
+const orgTreeTabBtn = document.querySelector('[data-tab="org-tree"]');
+if (orgTreeTabBtn) {
+  orgTreeTabBtn.addEventListener('click', () => {
+    setTimeout(() => loadDeptTree(), 100);
+  });
+}
+
+// ══════════════════════════════════════════════
+// Agent Delegation Dialog
+// ══════════════════════════════════════════════
+
+function delegateAgent(event, agentId, agentLabel, taskTitle) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const dialog = document.getElementById('delegateDialog');
+  document.getElementById('delegateAgentId').value = agentId;
+  document.getElementById('delegateAgentLabel').textContent = agentLabel;
+  document.getElementById('delegateTaskTitle').textContent = taskTitle || '（タスク未割当）';
+
+  dialog.showModal();
+}
+
+function closeDelegateDialog() {
+  document.getElementById('delegateDialog').close();
+}
+
+async function confirmDelegate() {
+  const agentId = document.getElementById('delegateAgentId').value;
+  const delegateToId = document.getElementById('delegateToId').value;
+
+  if (!delegateToId) {
+    alert('委譲先エージェントを選択してください');
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/agents/${agentId}/delegate`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delegateToId })
+    });
+
+    if (response.ok) {
+      alert('委譲リクエストを送信しました');
+      closeDelegateDialog();
+      fetchProjects();
+    } else {
+      alert('委譲に失敗しました: ' + response.statusText);
+    }
+  } catch (err) {
+    alert('エラーが発生しました: ' + err.message);
+  }
+}
+
 </script>
+
+<!-- Department Creation Dialog -->
+<dialog id="createDeptDialog" style="border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);padding:0;max-width:500px;width:90%;">
+  <div style="padding:20px;border-bottom:1px solid var(--border);">
+    <h2 style="margin:0 0 12px 0;font-size:16px;" id="deptDialogTitle">新規部署作成</h2>
+    <p style="margin:0;font-size:13px;color:var(--text-muted);" id="deptDialogDesc">テンプレートから新しい部署を作成します。</p>
+  </div>
+
+  <div style="padding:16px;border-bottom:1px solid var(--border);max-height:400px;overflow-y:auto;" id="deptDialogContent">
+    <!-- Template selection or form will be rendered here -->
+  </div>
+
+  <div style="padding:16px;display:flex;gap:8px;justify-content:flex-end;">
+    <button onclick="closeDeptDialog()" style="padding:8px 16px;background:var(--gray);color:var(--text);border:none;border-radius:4px;cursor:pointer;font-size:13px;transition:opacity 0.2s;">キャンセル</button>
+    <button onclick="confirmCreateDept()" id="deptConfirmBtn" style="padding:8px 16px;background:var(--green);color:var(--bg);border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;transition:opacity 0.2s;display:none;">作成</button>
+  </div>
+</dialog>
+
+<!-- Department Creation Success Dialog -->
+<dialog id="deptSuccessDialog" style="border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);padding:0;max-width:500px;width:90%;">
+  <div style="padding:20px;border-bottom:1px solid var(--border);background:rgba(63,185,80,0.1);">
+    <h2 style="margin:0 0 12px 0;font-size:16px;color:var(--green);">✅ 部署作成成功</h2>
+    <p style="margin:0;font-size:13px;color:var(--text-muted);">新しい部署が作成されました。</p>
+  </div>
+
+  <div style="padding:16px;border-bottom:1px solid var(--border);" id="deptSuccessContent">
+    <!-- Success details will be rendered here -->
+  </div>
+
+  <div style="padding:16px;display:flex;gap:8px;justify-content:flex-end;">
+    <button onclick="closeDeptSuccessDialog()" style="padding:8px 16px;background:var(--green);color:var(--bg);border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;transition:opacity 0.2s;">完了</button>
+  </div>
+</dialog>
+
+<!-- Agent Delegation Dialog -->
+<dialog id="delegateDialog" style="border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);padding:0;max-width:400px;width:90%;">
+  <div style="padding:20px;border-bottom:1px solid var(--border);">
+    <h2 style="margin:0 0 12px 0;font-size:16px;">エージェント委譲</h2>
+    <p style="margin:0;font-size:13px;color:var(--text-muted);">選択したエージェントのタスクを別のエージェントに委譲します。</p>
+  </div>
+
+  <div style="padding:16px;border-bottom:1px solid var(--border);">
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-muted);">現在のエージェント</label>
+      <div style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;">
+        <span id="delegateAgentLabel" style="font-weight:500;">-</span>
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-muted);">タスク</label>
+      <div style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;">
+        <span id="delegateTaskTitle" style="font-size:13px;">-</span>
+      </div>
+    </div>
+
+    <div>
+      <label for="delegateToId" style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-muted);">委譲先エージェント</label>
+      <input type="hidden" id="delegateAgentId">
+      <select id="delegateToId" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;">
+        <option value="">選択してください</option>
+        <option value="1">エージェント A</option>
+        <option value="2">エージェント B</option>
+        <option value="3">エージェント C</option>
+      </select>
+    </div>
+  </div>
+
+  <div style="padding:16px;display:flex;gap:8px;justify-content:flex-end;">
+    <button onclick="closeDelegateDialog()" style="padding:8px 16px;background:var(--gray);color:var(--text);border:none;border-radius:4px;cursor:pointer;font-size:13px;transition:opacity 0.2s;">キャンセル</button>
+    <button onclick="confirmDelegate()" style="padding:8px 16px;background:var(--green);color:var(--bg);border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;transition:opacity 0.2s;">委譲確認</button>
+  </div>
+</dialog>
+
 </body>
 </html>

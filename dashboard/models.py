@@ -70,6 +70,11 @@ class DepartmentUpdate(BaseModel):
     description: Optional[str] = None
     budget: Optional[float] = None
     status: Optional[str] = None
+    parent_id: Optional[int] = None
+
+
+class ParentChangeRequest(BaseModel):
+    parent_id: Optional[int] = None
 
 
 class DepartmentResponse(BaseModel):
@@ -206,3 +211,146 @@ class OnboardingCompleteResponse(BaseModel):
     dept_id: int
     agent_id: int
     message: str = "ウィザード完了。エージェント起動中..."
+
+
+class APICallCreate(BaseModel):
+    department_id: int
+    agent_id: Optional[int] = None
+    api_provider: str
+    model_name: Optional[str] = None
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+    cost_usd: float
+    status: str = "completed"
+    error_message: Optional[str] = None
+    request_timestamp: int
+
+
+class APICallResponse(APICallCreate):
+    id: int
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class CostRecordResponse(BaseModel):
+    id: int
+    department_id: int
+    year: int
+    month: int
+    total_cost_usd: float
+    api_call_count: int
+    failed_call_count: int
+    average_cost_per_call: float
+    top_model: Optional[str]
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class MonthlyBudgetCreate(BaseModel):
+    department_id: int
+    year: int
+    month: int
+    budget_usd: float
+    notes: Optional[str] = None
+
+
+class MonthlyBudgetResponse(MonthlyBudgetCreate):
+    id: int
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class CostAlertResponse(BaseModel):
+    id: int
+    department_id: int
+    alert_type: str
+    threshold_percent: Optional[float]
+    current_cost_usd: float
+    budget_usd: float
+    message: str
+    status: str
+    resolved_at: Optional[str]
+    resolved_by: Optional[str]
+    resolution_note: Optional[str]
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class DepartmentCostSummary(BaseModel):
+    department_id: int
+    department_name: str
+    current_month: int
+    current_year: int
+    budget: Optional[float]
+    spent: float
+    remaining: float
+    utilization_percent: float
+    api_call_count: int
+
+
+class BudgetComparisonResponse(BaseModel):
+    budget: Optional[float]
+    spent: float
+    remaining: float
+    utilization_percent: float
+    alerts: List[CostAlertResponse] = []
+
+
+class RoleResponse(BaseModel):
+    role_key: str
+    role_label: str
+    min_members: int
+    max_members: int
+    supervisor_role_key: Optional[str] = None
+
+
+class ProcessResponse(BaseModel):
+    process_key: str
+    process_label: str
+    frequency: str
+    estimated_hours: Optional[float] = None
+
+
+class DepartmentTemplateDetailResponse(BaseModel):
+    id: int
+    name: str
+    category: str
+    total_roles: int
+    total_processes: int
+    roles: List[RoleResponse] = []
+    processes: List[ProcessResponse] = []
+
+
+class DepartmentTemplateListResponse(BaseModel):
+    id: int
+    name: str
+    category: str
+    total_roles: int
+    total_processes: int
+
+
+class DepartmentCreateRequest(BaseModel):
+    name: str
+    template_id: int
+    org_id: Optional[str] = None
+
+
+class DepartmentCreateResponse(BaseModel):
+    id: int
+    name: str
+    template_id: int
+    created_at: str

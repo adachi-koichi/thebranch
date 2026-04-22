@@ -521,6 +521,85 @@ async def get_department_templates():
     return [dict(row) for row in rows]
 
 
+@app.get("/api/departments_templates/{template_id}")
+async def get_department_template_detail(template_id: int):
+    if not THEBRANCH_DB.exists():
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        # Get template
+        cursor = await db.execute(
+            "SELECT id, name, category, total_roles, total_processes "
+            "FROM departments_templates WHERE id = ?",
+            (template_id,)
+        )
+        template_row = await cursor.fetchone()
+        if not template_row:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        template_dict = dict(template_row)
+
+        # Get roles
+        cursor = await db.execute(
+            "SELECT role_key, role_label, min_members, max_members, supervisor_role_key "
+            "FROM department_template_roles WHERE template_id = ? ORDER BY role_order ASC",
+            (template_id,)
+        )
+        roles_rows = await cursor.fetchall()
+        template_dict['roles'] = [dict(row) for row in roles_rows]
+
+        # Get processes
+        cursor = await db.execute(
+            "SELECT process_key, process_label, frequency, estimated_hours "
+            "FROM department_template_processes WHERE template_id = ? ORDER BY id ASC",
+            (template_id,)
+        )
+        processes_rows = await cursor.fetchall()
+        template_dict['processes'] = [dict(row) for row in processes_rows]
+
+    return template_dict
+
+
+@app.post("/api/departments")
+async def create_department(request: models.DepartmentCreateRequest):
+    if not THEBRANCH_DB.exists():
+        raise HTTPException(status_code=500, detail="Database not found")
+
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        try:
+            # Verify template exists
+            cursor = await db.execute(
+                "SELECT id FROM departments_templates WHERE id = ?",
+                (request.template_id,)
+            )
+            if not await cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Template not found")
+
+            # Create department instance
+            cursor = await db.execute(
+                "INSERT INTO department_instances (template_id, name, organization_id, status) VALUES (?, ?, ?, ?)",
+                (request.template_id, request.name, request.org_id or "default", "planning")
+            )
+            await db.commit()
+            dept_id = cursor.lastrowid
+
+            # Get current timestamp
+            now = datetime.utcnow().isoformat() + "Z"
+
+            return models.DepartmentCreateResponse(
+                id=dept_id,
+                name=request.name,
+                template_id=request.template_id,
+                created_at=now
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+
 # ──────────────────────────────────────────────
 # Agents
 # ──────────────────────────────────────────────
