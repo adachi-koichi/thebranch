@@ -744,6 +744,15 @@
     flex-direction: column;
     align-items: flex-start;
   }
+  .agent-card, .project-card, .daemon-card, .metric-card {
+    padding: 14px 16px;
+  }
+  .card-title {
+    font-size: 13px;
+  }
+  .alert-message {
+    font-size: 12px;
+  }
 }
 
   /* ── Pane Log Modal ── */
@@ -1239,6 +1248,49 @@
     font-size: 11px;
     color: var(--text-muted);
     margin-left: 8px;
+  }
+
+  /* ── Responsive Design: Inline Grid Overrides (Max 767px) ── */
+  @media (max-width: 767px) {
+    [style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+    [style*="repeat(auto-fit, minmax(120px"] { grid-template-columns: 1fr !important; }
+    [style*="repeat(auto-fill, minmax(180px"] { grid-template-columns: repeat(2, 1fr) !important; }
+    [style*="repeat(auto-fill, minmax(200px"] { grid-template-columns: 1fr !important; }
+    [style*="repeat(auto-fill, minmax(300px"] { grid-template-columns: 1fr !important; }
+    [style*="repeat(auto-fill, minmax(400px"] { grid-template-columns: 1fr !important; }
+    [style*="repeat(auto-fill, minmax(min(400px"] { grid-template-columns: 1fr !important; }
+    [style*="repeat(auto-fill, minmax(min(480px"] { grid-template-columns: 1fr !important; }
+    [style*="repeat(auto-fill, minmax(min(600px"] { grid-template-columns: 1fr !important; }
+
+    .kpi-value { font-size: 36px; }
+    .kpi-card { padding: 16px 20px; }
+    .agent-card, .project-card, .daemon-card { padding: 14px 18px; }
+    .metric-card { padding: 16px; }
+  }
+
+  /* ── Extra Small Devices (320px - 319px) ── */
+  @media (max-width: 319px) {
+    main { padding: 8px !important; }
+    header { padding: 8px 12px !important; }
+    header h1 { font-size: 13px !important; }
+    .tabs { padding: 0 !important; }
+    .hamburger { padding: 4px 8px; min-height: 32px; }
+    .agent-card, .project-card, .daemon-card { padding: 12px 14px !important; }
+    .metric-card { padding: 12px !important; }
+    .kpi-card { padding: 12px 14px !important; }
+    .kpi-value { font-size: 24px !important; }
+    .kpi-label { font-size: 11px; }
+    .card-title { font-size: 13px; }
+    .alert-message { font-size: 12px; }
+  }
+
+  /* ── Tablet (768px - 1023px) ── */
+  @media (min-width: 768px) and (max-width: 1023px) {
+    main { padding: 16px; }
+    header { padding: 12px 20px; }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    .agent-card, .project-card, .daemon-card { padding: 14px 18px; }
+    .kpi-value { font-size: 40px; }
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -2696,6 +2748,12 @@ function escHtml(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+function escJs(s) {
+  return String(s)
+    .replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"')
+    .replace(/\n/g,'\\n').replace(/\r/g,'\\r').replace(/\t/g,'\\t');
+}
+
 async function updateStatus(id, status) {
   try {
     const res = await fetch(`/api/tasks/${id}/status`, {
@@ -2933,6 +2991,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('wfInstanceStatusFilter').addEventListener('change', fetchWfInstances);
   document.getElementById('refreshDeptTemplatesBtn').addEventListener('click', fetchDeptTemplates);
   document.getElementById('deptTemplatesCategoryFilter').addEventListener('change', fetchDeptTemplates);
+  document.getElementById('createDeptFromTemplateBtn').addEventListener('click', () => {
+    const container = document.getElementById('deptTemplatesContainer');
+    if (!container.innerHTML.includes('このテンプレートで作成')) {
+      fetchDeptTemplates(); // テンプレート一覧を読み込んでからダイアログを表示
+    }
+  });
 });
 
 // ══════════════════════════════════════════════
@@ -3211,7 +3275,7 @@ async function fetchDeptTemplates() {
   container.innerHTML = '<div class="empty-state">読み込み中...</div>';
   try {
     const category = document.getElementById('deptTemplatesCategoryFilter').value;
-    const url = new URL('/api/departments/templates', window.location.origin);
+    const url = new URL('/api/department-templates', window.location.origin);
     if (category) url.searchParams.set('category', category);
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -3247,31 +3311,152 @@ function renderDeptTemplates(templates) {
             <span style="background:var(--gray);padding:2px 6px;border-radius:3px;">プロセス: ${tmpl.total_processes}個</span>
           </div>
         </div>
-        <button class="btn" onclick="createDeptFromTemplate(${tmpl.id}, '${escJs(tmpl.name)}')">このテンプレートで作成</button>
+        <button class="btn" onclick="showCreateDeptForm(${tmpl.id}, '${escJs(tmpl.name)}')">このテンプレートで作成</button>
       </div>
     `;
   }).join('');
 }
 
-function createDeptFromTemplate(templateId, templateName) {
-  const deptName = prompt(`部署名を入力してください\n(テンプレート: ${templateName}):`);
-  if (!deptName) return;
-  const slug = deptName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-  fetch('/api/departments', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: deptName,
-      slug: slug,
-      description: `${templateName}テンプレートから作成`,
-      parent_id: null,
-      budget: 0
-    })
-  }).then(res => {
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    alert('部署を作成しました');
-    fetchDeptTemplates();
-  }).catch(e => alert('エラー: ' + e.message));
+async function showCreateDeptForm(templateId, templateName) {
+  const dialog = document.getElementById('createDeptDialog');
+  const content = document.getElementById('deptDialogContent');
+  const confirmBtn = document.getElementById('deptConfirmBtn');
+
+  try {
+    // テンプレート詳細取得
+    const res = await fetch(`/api/departments_templates/${templateId}`);
+    if (!res.ok) throw new Error('テンプレート取得失敗');
+    const template = await res.json();
+
+    // フォーム HTML 生成
+    const rolesHtml = (template.roles || []).map(r =>
+      `<div style="font-size:12px;margin:4px 0;padding:6px;background:var(--bg);border-radius:3px;">
+        <strong>${escHtml(r.role_label)}</strong>
+        <span style="color:var(--text-muted);font-size:11px;"> (最小:${r.min_members}名 ~ 最大:${r.max_members}名)</span>
+      </div>`
+    ).join('');
+
+    const processesHtml = (template.processes || []).map(p =>
+      `<div style="font-size:12px;margin:4px 0;padding:6px;background:var(--bg);border-radius:3px;">
+        <strong>${escHtml(p.process_label)}</strong>
+        <span style="color:var(--text-muted);font-size:11px;"> (${p.frequency}, ${p.estimated_hours}時間)</span>
+      </div>`
+    ).join('');
+
+    content.innerHTML = `
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-muted);">部署名</label>
+        <input type="text" id="deptName" placeholder="例: マーケティング部 東京支社"
+          style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;box-sizing:border-box;">
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-muted);">組織ID (オプション)</label>
+        <input type="text" id="deptOrgId" placeholder="例: org-001"
+          style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;box-sizing:border-box;">
+      </div>
+
+      <div style="margin-bottom:16px;padding:12px;background:var(--bg);border-radius:4px;border-left:3px solid var(--blue);">
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">📋 テンプレート詳細</div>
+        <div style="font-size:13px;color:var(--text);margin-bottom:8px;">
+          <strong>カテゴリ:</strong> ${escHtml(template.category)} |
+          <strong>役職数:</strong> ${template.total_roles} |
+          <strong>プロセス数:</strong> ${template.total_processes}
+        </div>
+
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-top:8px;margin-bottom:4px;">役職:</div>
+        ${rolesHtml}
+
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-top:8px;margin-bottom:4px;">プロセス:</div>
+        ${processesHtml}
+      </div>
+    `;
+
+    // ダイアログ状態を保存
+    window._currentDeptTemplate = { id: templateId, name: templateName };
+
+    confirmBtn.style.display = 'block';
+    dialog.showModal();
+  } catch(e) {
+    content.innerHTML = `<div style="color:var(--red)">エラー: ${escHtml(e.message)}</div>`;
+    confirmBtn.style.display = 'none';
+  }
+}
+
+function closeDeptDialog() {
+  document.getElementById('createDeptDialog').close();
+  window._currentDeptTemplate = null;
+}
+
+async function confirmCreateDept() {
+  const deptName = document.getElementById('deptName').value.trim();
+  const deptOrgId = document.getElementById('deptOrgId').value.trim();
+  const template = window._currentDeptTemplate;
+
+  if (!deptName) {
+    alert('部署名を入力してください');
+    return;
+  }
+
+  if (!template) {
+    alert('テンプレートが選択されていません');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/departments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: deptName,
+        template_id: template.id,
+        org_id: deptOrgId || null
+      })
+    });
+
+    if (!res.ok) throw new Error('部署作成失敗');
+    const result = await res.json();
+
+    // 成功ダイアログを表示
+    closeDeptDialog();
+    showDeptSuccessDialog(result);
+  } catch(e) {
+    alert('エラー: ' + e.message);
+  }
+}
+
+function showDeptSuccessDialog(deptData) {
+  const dialog = document.getElementById('deptSuccessDialog');
+  const content = document.getElementById('deptSuccessContent');
+
+  content.innerHTML = `
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-muted);">部署ID</label>
+      <div style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-family:monospace;font-size:13px;color:var(--accent);">${deptData.id}</div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-muted);">部署名</label>
+      <div style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:13px;color:var(--text);">${escHtml(deptData.name)}</div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-muted);">テンプレート</label>
+      <div style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:13px;color:var(--text);">テンプレート ID: ${deptData.template_id}</div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-muted);">作成日時</label>
+      <div style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:13px;color:var(--text);">${escHtml(deptData.created_at)}</div>
+    </div>
+  `;
+
+  dialog.showModal();
+}
+
+function closeDeptSuccessDialog() {
+  document.getElementById('deptSuccessDialog').close();
+  fetchDeptTemplates(); // テンプレート一覧更新
 }
 
 function nodeTypeLabel(type) {
