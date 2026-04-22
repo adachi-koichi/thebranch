@@ -1,0 +1,15 @@
+phase,task_id,task_title,assignee,status,estimated_hours
+planning,1,Planning Task 1,alice@example.com,blocked,8.0
+planning,2,Planning Task 2,alice@example.com,blocked,8.0
+planning,3,Planning Task 3,alice@example.com,blocked,8.0
+development,4,Development Task 1,bob@example.com,blocked,8.0
+development,5,Development Task 2,bob@example.com,blocked,8.0
+development,6,Development Task 3,bob@example.com,blocked,8.0
+development,7,Development Task 4,bob@example.com,blocked,8.0
+development,8,Development Task 5,bob@example.com,blocked,8.0
+testing,9,Testing Task 1,carol@example.com,blocked,8.0
+testing,10,Testing Task 2,carol@example.com,blocked,8.0
+testing,11,Testing Task 3,carol@example.com,blocked,8.0
+testing,12,Testing Task 4,carol@example.com,blocked,8.0
+deployment,13,Deployment Task 1,dave@example.com,blocked,8.0
+deployment,14,Deployment Task 2,dave@example.com,blocked,8.0
