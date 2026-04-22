@@ -379,7 +379,30 @@ class DepartmentCreateResponse(BaseModel):
     created_at: str
 
 
+class ProcessConfig(BaseModel):
+    process_key: str
+    priority: str = "normal"
+    enabled: bool = True
+
+
+class CustomizeTemplateRequest(BaseModel):
+    template_id: int
+    department_name: str
+    manager_name: str
+    org_id: str
+    member_count: int
+    monthly_budget: int
+    processes: List[ProcessConfig] = []
+
+
+class CustomizeTemplateResponse(BaseModel):
+    department_id: int
+    organization_id: str
+    created_at: str
+
+
 class VisionInputRequest(BaseModel):
+    onboarding_id: str
     vision_input: str
 
 
@@ -443,9 +466,11 @@ class BudgetValidation(BaseModel):
 
 
 class SetupResponse(BaseModel):
-    dept_id: int
-    config_validated: bool
+    success: bool
     budget_validation: BudgetValidation
+    initial_tasks: List['InitialTask'] = []
+    current_step: int = 2
+    message: str = "セットアップ完了。初期タスクを生成しました"
 
 
 class InitialTask(BaseModel):

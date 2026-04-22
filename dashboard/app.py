@@ -604,6 +604,60 @@ async def create_department(request: models.DepartmentCreateRequest):
             raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/customize_template")
+async def customize_template(request: models.CustomizeTemplateRequest):
+    if not THEBRANCH_DB.exists():
+        raise HTTPException(status_code=500, detail="Database not found")
+
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        try:
+            # Verify template exists
+            cursor = await db.execute(
+                "SELECT id FROM departments_templates WHERE id = ?",
+                (request.template_id,)
+            )
+            if not await cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Template not found")
+
+            # Create department instance with customization
+            now = datetime.utcnow().isoformat() + "Z"
+            cursor = await db.execute(
+                "INSERT INTO department_instances (template_id, name, organization_id, member_count, status, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (request.template_id, request.department_name, request.org_id, request.member_count, "planning", now, now)
+            )
+            await db.commit()
+            dept_id = cursor.lastrowid
+
+            # Store process configurations
+            for process_config in request.processes:
+                # Get process_id from departments_templates
+                cursor = await db.execute(
+                    "SELECT id FROM department_template_processes WHERE template_id = ? AND process_key = ?",
+                    (request.template_id, process_config.process_key)
+                )
+                process_row = await cursor.fetchone()
+                if process_row:
+                    process_id = process_row[0]
+                    # Create workflow entry (status will be 'pending' initially)
+                    await db.execute(
+                        "INSERT INTO department_instance_workflows (instance_id, process_id, status) "
+                        "VALUES (?, ?, ?)",
+                        (dept_id, process_id, "pending")
+                    )
+            await db.commit()
+
+            return models.CustomizeTemplateResponse(
+                department_id=dept_id,
+                organization_id=request.org_id,
+                created_at=now
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+
 # ──────────────────────────────────────────────
 # Agents
 # ──────────────────────────────────────────────
@@ -5395,7 +5449,7 @@ async def post_onboarding_suggest(
         raise HTTPException(status_code=500, detail=f"部署提案取得エラー: {str(e)}")
 
 
-@app.post("/api/onboarding/setup")
+@app.post("/api/onboarding/setup", response_model=models.SetupResponse)
 async def post_onboarding_setup(
     req: models.DetailedSetupRequest,
     authorization: Optional[str] = Header(None)
@@ -5466,128 +5520,6 @@ async def post_onboarding_setup(
     except Exception as e:
         logger.error(f"Setup error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"セットアップエラー: {str(e)}")
-
-
-@app.post("/api/onboarding/initialize", status_code=201, response_model=models.SuggestResponse)
-async def initialize_onboarding(
-    req: models.VisionInputRequest,
-    authorization: Optional[str] = Header(None)
-):
-    """ビジョン入力 → AI分析 → テンプレート提案を返す"""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-
-    token = authorization[7:]
-    user_id = await auth.verify_token(token)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    if not req.vision_input or len(req.vision_input) < 10 or len(req.vision_input) > 500:
-        raise HTTPException(status_code=400, detail="Vision input must be 10-500 characters")
-
-    await ensure_db_initialized()
-
-    try:
-        import uuid
-        from workflow.services.onboarding import get_onboarding_service
-
-        # Generate onboarding_id
-        onboarding_id = str(uuid.uuid4())
-
-        # Save vision input
-        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
-            await db.execute(
-                """
-                INSERT INTO user_onboarding_progress
-                (onboarding_id, user_id, vision_input, current_step, created_at, updated_at)
-                VALUES (?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-                """,
-                (onboarding_id, user_id, req.vision_input, 0)
-            )
-            await db.commit()
-
-        # Analyze vision and get suggestions
-        onboarding_service = get_onboarding_service()
-        suggestions = onboarding_service.analyze_vision_for_templates(req.vision_input)
-
-        return {
-            "onboarding_id": onboarding_id,
-            "suggestions": suggestions
-        }
-    except Exception as e:
-        logger.error(f"Vision analysis error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Vision analysis error: {str(e)}")
-
-
-@app.post("/api/onboarding/setup", response_model=models.SetupResponse)
-async def setup_onboarding(
-    req: models.DetailedSetupRequest,
-    authorization: Optional[str] = Header(None)
-):
-    """詳細設定を保存 → 予算検証を実行"""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-
-    token = authorization[7:]
-    user_id = await auth.verify_token(token)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    await ensure_db_initialized()
-
-    try:
-        from workflow.services.onboarding import get_onboarding_service
-
-        # Validate budget
-        onboarding_service = get_onboarding_service()
-        budget_validation = onboarding_service.validate_budget(
-            members_count=req.members_count,
-            budget=float(req.budget),
-            dept_type="marketing"  # デフォルト値（実際はテンプレートタイプから決定）
-        )
-
-        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
-            # Update onboarding_progress with setup details
-            await db.execute(
-                """
-                UPDATE user_onboarding_progress
-                SET current_step = 1, updated_at = datetime('now','localtime')
-                WHERE onboarding_id = ? AND user_id = ?
-                """,
-                (req.onboarding_id, user_id)
-            )
-
-            # Create department_instances record (status='planning')
-            slug = req.dept_name.lower().replace(" ", "-")
-            cursor = await db.execute(
-                """
-                INSERT INTO departments
-                (name, slug, description, status, created_by, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-                """,
-                (req.dept_name, slug, f"Template {req.template_id}", "planning", user_id)
-            )
-            await db.commit()
-            dept_id = cursor.lastrowid
-
-            # Update onboarding_progress with dept_id
-            await db.execute(
-                """
-                UPDATE user_onboarding_progress
-                SET dept_id = ? WHERE onboarding_id = ?
-                """,
-                (dept_id, req.onboarding_id)
-            )
-            await db.commit()
-
-        return {
-            "dept_id": dept_id,
-            "config_validated": budget_validation["status"] != "error",
-            "budget_validation": budget_validation
-        }
-    except Exception as e:
-        logger.error(f"Setup error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Setup error: {str(e)}")
 
 
 @app.post("/api/onboarding/execute", response_model=models.ExecuteResponse)
