@@ -532,6 +532,79 @@
 
   .form-group textarea { resize: vertical; min-height: 70px; }
 
+  /* Onboarding wizard styles */
+  .onboarding-progress {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    justify-content: center;
+  }
+
+  .progress-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: all 0.3s;
+  }
+
+  .progress-dot.active { background: var(--accent); }
+  .progress-dot.completed { background: var(--green); }
+
+  .onboarding-step { display: none; }
+  .onboarding-step.active { display: block; animation: fadeIn 0.3s; }
+
+  .vision-textarea {
+    width: 100%;
+    min-height: 120px;
+    font-size: 14px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 6px;
+    font-family: inherit;
+    resize: vertical;
+  }
+
+  .vision-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .char-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  .completion-icon {
+    font-size: 48px;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  .summary-item {
+    padding: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .summary-label {
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .summary-value {
+    font-weight: 500;
+    color: var(--text);
+  }
+
   .modal-footer {
     display: flex;
     justify-content: flex-end;
@@ -2381,12 +2454,39 @@
   <div class="modal" style="max-width: 500px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
       <h2 style="margin:0;">THEBRANCH へようこそ</h2>
-      <span id="onboardingStep" style="font-size:12px;color:var(--text-muted);">Step <span id="currentStep">1</span>/3</span>
+      <span id="onboardingStep" style="font-size:12px;color:var(--text-muted);">Step <span id="currentStep">0</span>/4</span>
+    </div>
+
+    <!-- Progress Indicator -->
+    <div class="onboarding-progress">
+      <div class="progress-dot active" id="progressDot0"></div>
+      <div class="progress-dot" id="progressDot1"></div>
+      <div class="progress-dot" id="progressDot2"></div>
+      <div class="progress-dot" id="progressDot3"></div>
+      <div class="progress-dot" id="progressDot4"></div>
+    </div>
+
+    <!-- Step 0: Vision Input -->
+    <div id="onboardingStep0" class="onboarding-step active" style="display:block;">
+      <h3 style="margin-top:0;margin-bottom:12px;font-size:14px;font-weight:600;">ビジョンを入力してください</h3>
+      <p style="color:var(--text-muted);margin-bottom:16px;font-size:13px;">
+        組織のビジョン、ミッション、またはやりたいことを教えてください。AIがそれに最適な部署構成を提案します。
+      </p>
+      <div class="form-group" style="margin-bottom:0;">
+        <label for="onboarding-vision">ビジョン・ミッション *</label>
+        <textarea id="onboarding-vision" class="vision-textarea" placeholder="例: 日本全国のユーザーに高速で安全な決済サービスを提供する..." minlength="100" maxlength="500"></textarea>
+        <div class="char-count"><span id="charCount">0</span>/500</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:24px;">
+        <button type="button" class="btn btn-secondary" onclick="closeOnboarding()" style="flex:1;">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="nextStep1Btn" onclick="nextOnboardingStep(1)" style="flex:1;" disabled>AI提案を取得</button>
+      </div>
     </div>
 
     <!-- Step 1: Department Info -->
-    <div id="onboardingStep1" style="display:none;">
-      <p style="color:var(--text-muted);margin-bottom:16px;">AIエージェント部署を作成して、自動化を始めましょう</p>
+    <div id="onboardingStep1" class="onboarding-step" style="display:none;">
+      <h3 style="margin-top:0;margin-bottom:12px;font-size:14px;font-weight:600;">部署の基本情報</h3>
+      <p style="color:var(--text-muted);margin-bottom:16px;font-size:13px;">AIエージェント部署を作成して、自動化を始めましょう</p>
       <div class="form-group">
         <label for="onboarding-dept-name">部署名 *</label>
         <input type="text" id="onboarding-dept-name" placeholder="例: マーケティング部" required>
@@ -2404,8 +2504,9 @@
     </div>
 
     <!-- Step 2: Agent Config -->
-    <div id="onboardingStep2" style="display:none;">
-      <p style="color:var(--text-muted);margin-bottom:16px;">最初のAIエージェントを設定してください</p>
+    <div id="onboardingStep2" class="onboarding-step" style="display:none;">
+      <h3 style="margin-top:0;margin-bottom:12px;font-size:14px;font-weight:600;">エージェント設定</h3>
+      <p style="color:var(--text-muted);margin-bottom:16px;font-size:13px;">最初のAIエージェントを設定してください</p>
       <div class="form-group">
         <label for="onboarding-agent-role">エージェントの役割 *</label>
         <input type="text" id="onboarding-agent-role" placeholder="例: マネージャー、エンジニア" required>
@@ -2429,8 +2530,9 @@
     </div>
 
     <!-- Step 3: Confirmation -->
-    <div id="onboardingStep3" style="display:none;">
-      <p style="color:var(--text-muted);margin-bottom:16px;">以下の内容で部署とエージェントを作成します</p>
+    <div id="onboardingStep3" class="onboarding-step" style="display:none;">
+      <h3 style="margin-top:0;margin-bottom:12px;font-size:14px;font-weight:600;">セットアップ確認</h3>
+      <p style="color:var(--text-muted);margin-bottom:16px;font-size:13px;">以下の内容で部署とエージェントを作成します</p>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
           <span style="color:var(--text-muted);">部署名:</span>
@@ -2452,6 +2554,32 @@
       <div style="display:flex;gap:8px;margin-top:24px;">
         <button type="button" class="btn btn-secondary" onclick="previousOnboardingStep(2)" style="flex:1;">戻る</button>
         <button type="button" class="btn btn-primary" id="submitOnboardingBtn" onclick="submitOnboarding()" style="flex:1;">完了</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Completion -->
+    <div id="onboardingStep4" class="onboarding-step" style="display:none;">
+      <div class="completion-icon">✓</div>
+      <h3 style="margin-top:0;margin-bottom:12px;font-size:14px;font-weight:600;text-align:center;">セットアップ完了しました！</h3>
+      <p style="color:var(--text-muted);margin-bottom:20px;font-size:13px;text-align:center;">
+        部署とAIエージェントが正常に作成されました。ダッシュボードから管理を開始できます。
+      </p>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:20px;">
+        <div class="summary-item" style="margin-bottom:8px;">
+          <span class="summary-label">部署名</span>
+          <span class="summary-value" id="completionDeptName">-</span>
+        </div>
+        <div class="summary-item" style="margin-bottom:8px;">
+          <span class="summary-label">テンプレート</span>
+          <span class="summary-value" id="completionDeptType">-</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">エージェント役割</span>
+          <span class="summary-value" id="completionAgentRole">-</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:24px;">
+        <button type="button" class="btn btn-primary" onclick="closeOnboarding()" style="flex:1;">ダッシュボードへ</button>
       </div>
     </div>
   </div>
@@ -7191,11 +7319,24 @@ async function initializeOnboarding() {
 
     const user = await res.json();
     if (user.onboarding_completed === 0) {
+      setupOnboardingListeners();
       await loadOnboardingTemplates();
       openOnboardingModal();
     }
   } catch (e) {
     console.error('Onboarding init error:', e);
+  }
+}
+
+function setupOnboardingListeners() {
+  const visionInput = document.getElementById('onboarding-vision');
+  if (visionInput) {
+    visionInput.addEventListener('input', () => {
+      const len = visionInput.value.length;
+      document.getElementById('charCount').textContent = len;
+      const btn = document.getElementById('nextStep1Btn');
+      btn.disabled = len < 100 || len > 500;
+    });
   }
 }
 
@@ -7222,7 +7363,7 @@ function openOnboardingModal() {
   const modal = document.getElementById('onboardingModal');
   if (modal) {
     modal.classList.add('open');
-    showOnboardingStep(1);
+    showOnboardingStep(0);
   }
 }
 
@@ -7233,22 +7374,44 @@ function closeOnboarding() {
 }
 
 function resetOnboarding() {
+  document.getElementById('onboarding-vision').value = '';
+  document.getElementById('charCount').textContent = '0';
   document.getElementById('onboarding-dept-name').value = '';
   document.getElementById('onboarding-dept-type').value = '';
   document.getElementById('onboarding-agent-role').value = '';
   document.getElementById('onboarding-agent-tasks').value = '';
   document.getElementById('onboarding-agent-model').value = 'claude-sonnet-4-6';
+  updateOnboardingProgress(0);
 }
 
 function showOnboardingStep(stepNum) {
-  document.getElementById('onboardingStep1').style.display = stepNum === 1 ? 'block' : 'none';
-  document.getElementById('onboardingStep2').style.display = stepNum === 2 ? 'block' : 'none';
-  document.getElementById('onboardingStep3').style.display = stepNum === 3 ? 'block' : 'none';
+  for (let i = 0; i <= 4; i++) {
+    const step = document.getElementById(`onboardingStep${i}`);
+    if (step) step.style.display = stepNum === i ? 'block' : 'none';
+  }
   document.getElementById('currentStep').textContent = stepNum;
+  updateOnboardingProgress(stepNum);
+}
+
+function updateOnboardingProgress(stepNum) {
+  for (let i = 0; i <= 4; i++) {
+    const dot = document.getElementById(`progressDot${i}`);
+    if (dot) {
+      dot.classList.remove('active', 'completed');
+      if (i === stepNum) dot.classList.add('active');
+      else if (i < stepNum) dot.classList.add('completed');
+    }
+  }
 }
 
 function nextOnboardingStep(stepNum) {
-  if (stepNum === 2) {
+  if (stepNum === 1) {
+    const vision = document.getElementById('onboarding-vision').value.trim();
+    if (vision.length < 100 || vision.length > 500) {
+      showToast('ビジョンは100文字以上500文字以下で入力してください', 'error');
+      return;
+    }
+  } else if (stepNum === 2) {
     const deptName = document.getElementById('onboarding-dept-name').value.trim();
     const deptType = document.getElementById('onboarding-dept-type').value.trim();
     if (!deptName || !deptType) {
@@ -7278,7 +7441,12 @@ function nextOnboardingStep(stepNum) {
 }
 
 function previousOnboardingStep(stepNum) {
-  showOnboardingStep(stepNum);
+  // Show the previous step
+  if (stepNum === 0) {
+    closeOnboarding();
+  } else {
+    showOnboardingStep(stepNum);
+  }
 }
 
 async function submitOnboarding() {
@@ -7313,9 +7481,12 @@ async function submitOnboarding() {
       return;
     }
 
-    showToast('ウィザード完了。エージェント起動中...', 'success');
-    closeOnboarding();
-    setTimeout(() => location.reload(), 1500);
+    // Display completion screen (Step 4)
+    document.getElementById('completionDeptName').textContent = data.dept_name;
+    document.getElementById('completionDeptType').textContent = data.dept_type;
+    document.getElementById('completionAgentRole').textContent = data.agent_role;
+    showOnboardingStep(4);
+    showToast('ウィザード完了！', 'success');
   } catch (e) {
     console.error('Onboarding submit error:', e);
     showToast('エラーが発生しました: ' + e.message, 'error');
