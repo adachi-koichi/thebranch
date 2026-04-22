@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THEBRANCH - 組織ダッシュボード</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Primary Colors */
+            --primary-50: #EFF6FF;
+            --primary-100: #DBEAFE;
+            --primary-500: #3B82F6;
+            --primary-600: #2563EB;
+            --primary-700: #1D4ED8;
+
+            /* Semantic Colors */
+            --success-50: #F0FDF4;
+            --success-500: #22C55E;
+            --success-700: #15803D;
+
+            --warning-50: #FFFBEB;
+            --warning-500: #FBBF24;
+            --warning-700: #B45309;
+
+            --error-50: #FEF2F2;
+            --error-500: #EF4444;
+            --error-700: #B91C1C;
+
+            --info-500: #3B82F6;
+
+            /* Gray Scale */
+            --gray-50: #FAFAFA;
+            --gray-100: #F3F4F6;
+            --gray-200: #E5E7EB;
+            --gray-300: #D1D5DB;
+            --gray-400: #9CA3AF;
+            --gray-500: #6B7280;
+            --gray-600: #4B5563;
+            --gray-700: #374151;
+            --gray-800: #1F2937;
+            --gray-900: #111827;
+
+            /* Spacing */
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+
+            /* Shadow */
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Light Mode (Default) */
+        body {
+            background-color: var(--gray-50);
+            color: var(--gray-900);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* Dark Mode */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: var(--gray-900);
+                color: var(--gray-50);
+            }
+        }
+
+        /* Header */
+        header {
+            background: white;
+            border-bottom: 1px solid var(--gray-200);
+            padding: var(--space-lg);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            header {
+                background: var(--gray-800);
+                border-bottom-color: var(--gray-700);
+            }
+        }
+
+        .header-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-logo {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: var(--primary-600);
+        }
+
+        .header-nav {
+            display: flex;
+            gap: var(--space-lg);
+            align-items: center;
+        }
+
+        .header-nav button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background-color 200ms ease-out;
+        }
+
+        .header-nav button:hover {
+            background-color: var(--gray-100);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .header-nav button:hover {
+                background-color: var(--gray-700);
+            }
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--space-xl);
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: var(--space-lg);
+            letter-spacing: -0.5px;
+        }
+
+        h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: var(--space-md);
+        }
+
+        h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: var(--space-sm);
+        }
+
+        /* Overview Cards */
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-lg);
+            margin-bottom: var(--space-xl);
+        }
+
+        .card {
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            padding: var(--space-lg);
+            box-shadow: var(--shadow-sm);
+            transition: box-shadow 200ms ease-out, transform 200ms ease-out;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .card {
+                background: var(--gray-800);
+                border-color: var(--gray-700);
+            }
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            margin-bottom: var(--space-md);
+        }
+
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .card-icon.primary {
+            background-color: var(--primary-50);
+            color: var(--primary-600);
+        }
+
+        .card-icon.success {
+            background-color: var(--success-50);
+            color: var(--success-700);
+        }
+
+        .card-icon.warning {
+            background-color: var(--warning-50);
+            color: var(--warning-700);
+        }
+
+        .card-icon.error {
+            background-color: var(--error-50);
+            color: var(--error-700);
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--gray-600);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .card-title {
+                color: var(--gray-400);
+            }
+        }
+
+        .card-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: var(--space-sm);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .card-value {
+                color: var(--gray-50);
+            }
+        }
+
+        .card-meta {
+            font-size: 12px;
+            color: var(--gray-500);
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            margin-top: var(--space-md);
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: var(--space-xs);
+            font-size: 12px;
+            color: var(--gray-600);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .progress-label {
+                color: var(--gray-400);
+            }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background-color: var(--gray-200);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .progress-bar {
+                background-color: var(--gray-700);
+            }
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+            width: 0%;
+            transition: width 800ms ease-out;
+            animation: fill-bar 1.2s ease-out forwards;
+        }
+
+        @keyframes fill-bar {
+            to { width: var(--fill-width, 100%); }
+        }
+
+        /* Resource Section */
+        .resources-section {
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            padding: var(--space-lg);
+            margin-bottom: var(--space-xl);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .resources-section {
+                background: var(--gray-800);
+                border-color: var(--gray-700);
+            }
+        }
+
+        .resource-item {
+            margin-bottom: var(--space-lg);
+        }
+
+        .resource-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .resource-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: var(--space-xs);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Kanban Board */
+        .kanban-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-lg);
+            margin-bottom: var(--space-xl);
+        }
+
+        .kanban-column {
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            padding: var(--space-md);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .kanban-column {
+                background: var(--gray-800);
+                border-color: var(--gray-700);
+            }
+        }
+
+        .kanban-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-md);
+            padding-bottom: var(--space-md);
+            border-bottom: 2px solid var(--gray-200);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .kanban-header {
+                border-bottom-color: var(--gray-700);
+            }
+        }
+
+        .kanban-title {
+            font-size: 14px;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .kanban-count {
+            background-color: var(--gray-200);
+            color: var(--gray-700);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .kanban-count {
+                background-color: var(--gray-700);
+                color: var(--gray-300);
+            }
+        }
+
+        .task-card {
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: 6px;
+            padding: var(--space-md);
+            margin-bottom: var(--space-md);
+            transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+            cursor: pointer;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .task-card {
+                background: var(--gray-700);
+                border-color: var(--gray-600);
+            }
+        }
+
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: var(--space-xs);
+        }
+
+        .task-id {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary-600);
+        }
+
+        .task-priority {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .task-priority.p1 {
+            background: var(--error-50);
+            color: var(--error-700);
+        }
+
+        .task-priority.p2 {
+            background: var(--warning-50);
+            color: var(--warning-700);
+        }
+
+        .task-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: var(--space-xs);
+        }
+
+        .task-meta {
+            display: flex;
+            gap: var(--space-sm);
+            font-size: 12px;
+            color: var(--gray-500);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .task-meta {
+                color: var(--gray-400);
+            }
+        }
+
+        .task-progress {
+            width: 100%;
+            height: 4px;
+            background-color: var(--gray-200);
+            border-radius: 2px;
+            margin-top: var(--space-sm);
+            overflow: hidden;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .task-progress {
+                background-color: var(--gray-600);
+            }
+        }
+
+        .task-progress-fill {
+            height: 100%;
+            background: var(--primary-500);
+        }
+
+        /* Analytics Section */
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: var(--space-lg);
+            margin-bottom: var(--space-xl);
+        }
+
+        .analytics-card {
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            padding: var(--space-lg);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .analytics-card {
+                background: var(--gray-800);
+                border-color: var(--gray-700);
+            }
+        }
+
+        .chart-placeholder {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(135deg, var(--primary-50) 0%, var(--gray-100) 100%);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray-500);
+            font-size: 12px;
+            margin-top: var(--space-md);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .chart-placeholder {
+                background: linear-gradient(135deg, var(--gray-700) 0%, var(--gray-600) 100%);
+                color: var(--gray-400);
+            }
+        }
+
+        /* Risk Panel */
+        .risk-item {
+            padding: var(--space-md);
+            border-left: 3px solid var(--warning-500);
+            background: var(--warning-50);
+            border-radius: 4px;
+            margin-bottom: var(--space-md);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .risk-item {
+                background: rgba(251, 191, 36, 0.1);
+            }
+        }
+
+        .risk-item.critical {
+            border-left-color: var(--error-500);
+            background: var(--error-50);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .risk-item.critical {
+                background: rgba(239, 68, 68, 0.1);
+            }
+        }
+
+        .risk-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--warning-700);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: var(--space-xs);
+        }
+
+        .risk-item.critical .risk-label {
+            color: var(--error-700);
+        }
+
+        .risk-description {
+            font-size: 14px;
+            color: var(--gray-700);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .risk-description {
+                color: var(--gray-300);
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: var(--space-lg);
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .overview-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .kanban-container {
+                grid-template-columns: 1fr;
+            }
+
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card, .kanban-column, .analytics-card {
+            animation: fadeIn 600ms ease-out forwards;
+        }
+
+        .card:nth-child(1) { animation-delay: 0ms; }
+        .card:nth-child(2) { animation-delay: 100ms; }
+        .card:nth-child(3) { animation-delay: 200ms; }
+        .card:nth-child(4) { animation-delay: 300ms; }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-container">
+            <div class="header-logo">🌿 THEBRANCH</div>
+            <nav class="header-nav">
+                <button>ダッシュボード</button>
+                <button>部署設定</button>
+                <button>設定</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container">
+        <h1>組織ダッシュボード</h1>
+
+        <!-- Overview Section -->
+        <div class="overview-grid">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon primary">📌</div>
+                    <div>
+                        <div class="card-title">進行中</div>
+                    </div>
+                </div>
+                <div class="card-value">12</div>
+                <div class="card-meta">アクティブなタスク</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon success">✅</div>
+                    <div>
+                        <div class="card-title">完了</div>
+                    </div>
+                </div>
+                <div class="card-value">45</div>
+                <div class="card-meta">本週: 15 / 目標 20</div>
+                <div class="progress-container">
+                    <div class="progress-label">
+                        <span>進度</span>
+                        <span>75%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="--fill-width: 75%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon warning">⏸️</div>
+                    <div>
+                        <div class="card-title">保留中</div>
+                    </div>
+                </div>
+                <div class="card-value">3</div>
+                <div class="card-meta">ブロッカー待ち</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon error">❌</div>
+                    <div>
+                        <div class="card-title">失敗</div>
+                    </div>
+                </div>
+                <div class="card-value">1</div>
+                <div class="card-meta">リトライ可能</div>
+            </div>
+        </div>
+
+        <!-- Resources Section -->
+        <div class="resources-section">
+            <h2>リソース利用状況</h2>
+
+            <div class="resource-item">
+                <div class="resource-label">
+                    <span>アクティブエージェント</span>
+                    <span>8 / 20 (40%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="--fill-width: 40%; background: var(--primary-500);"></div>
+                </div>
+            </div>
+
+            <div class="resource-item">
+                <div class="resource-label">
+                    <span>同時処理タスク数</span>
+                    <span>18 / 30 (60%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="--fill-width: 60%; background: var(--success-500);"></div>
+                </div>
+            </div>
+
+            <div class="resource-item">
+                <div class="resource-label">
+                    <span>CPU 使用率</span>
+                    <span>62% (正常)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="--fill-width: 62%; background: var(--success-500);"></div>
+                </div>
+            </div>
+
+            <div class="resource-item">
+                <div class="resource-label">
+                    <span>メモリ使用率</span>
+                    <span>71% (正常)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="--fill-width: 71%; background: var(--warning-500);"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kanban Board -->
+        <h2 style="margin-bottom: var(--space-lg);">タスク進捗</h2>
+        <div class="kanban-container">
+            <!-- Pending -->
+            <div class="kanban-column">
+                <div class="kanban-header">
+                    <div class="kanban-title">⭕ Pending</div>
+                    <div class="kanban-count">5</div>
+                </div>
+                <div class="task-card">
+                    <div class="task-header">
+                        <div class="task-id">TASK #001</div>
+                        <div class="task-priority p1">P1</div>
+                    </div>
+                    <div class="task-title">API仕様定義</div>
+                    <div class="task-meta">Engineering • 割り当て待ち</div>
+                </div>
+                <div class="task-card">
+                    <div class="task-header">
+                        <div class="task-id">TASK #003</div>
+                        <div class="task-priority p2">P2</div>
+                    </div>
+                    <div class="task-title">ドキュメント作成</div>
+                    <div class="task-meta">Documentation • 16h</div>
+                </div>
+            </div>
+
+            <!-- In Progress -->
+            <div class="kanban-column">
+                <div class="kanban-header">
+                    <div class="kanban-title">🔵 In Progress</div>
+                    <div class="kanban-count">12</div>
+                </div>
+                <div class="task-card">
+                    <div class="task-header">
+                        <div class="task-id">TASK #008</div>
+                        <div class="task-priority p1">P1</div>
+                    </div>
+                    <div class="task-title">バックエンド実装</div>
+                    <div class="task-meta">Engineer #1 • 24h</div>
+                    <div class="task-progress">
+                        <div class="task-progress-fill" style="width: 65%;"></div>
+                    </div>
+                </div>
+                <div class="task-card">
+                    <div class="task-header">
+                        <div class="task-id">TASK #009</div>
+                        <div class="task-priority p1">P1</div>
+                    </div>
+                    <div class="task-title">フロントエンド実装</div>
+                    <div class="task-meta">Designer #2 • 16h</div>
+                    <div class="task-progress">
+                        <div class="task-progress-fill" style="width: 40%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Blocked -->
+            <div class="kanban-column">
+                <div class="kanban-header">
+                    <div class="kanban-title">⚠️ Blocked</div>
+                    <div class="kanban-count">2</div>
+                </div>
+                <div class="task-card" style="opacity: 0.7; cursor: not-allowed;">
+                    <div class="task-header">
+                        <div class="task-id">TASK #002</div>
+                        <div class="task-priority p1">P1</div>
+                    </div>
+                    <div class="task-title">QAレビュー待ち</div>
+                    <div class="task-meta">QA Engineer • TASK #008 に依存</div>
+                </div>
+            </div>
+
+            <!-- Done -->
+            <div class="kanban-column">
+                <div class="kanban-header">
+                    <div class="kanban-title">✅ Done</div>
+                    <div class="kanban-count">45</div>
+                </div>
+                <div class="task-card" style="opacity: 0.8;">
+                    <div class="task-header">
+                        <div class="task-id">TASK #010</div>
+                    </div>
+                    <div class="task-title">サーバーセットアップ完了</div>
+                    <div class="task-meta">DevOps • 完了: 2h ago</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Risk & Analytics Section -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: var(--space-lg); margin-bottom: var(--space-xl);">
+            <!-- Risks -->
+            <div class="card">
+                <h2>🚨 リスク & ブロッカー</h2>
+
+                <div class="risk-item critical">
+                    <div class="risk-label">緊急</div>
+                    <div class="risk-description">Task #15 (95分) - 割り当て待ち - サポートが必要</div>
+                </div>
+
+                <div class="risk-item">
+                    <div class="risk-label">注意</div>
+                    <div class="risk-description">Task #12 (42分) - In Progress - Eng #1 が実装中</div>
+                </div>
+
+                <div class="risk-item">
+                    <div class="risk-label">依存関係</div>
+                    <div class="risk-description">Task #2 は Task #8 (PR レビュー待ち) によってブロック中</div>
+                </div>
+            </div>
+
+            <!-- Analytics -->
+            <div class="analytics-card">
+                <h2>📊 パフォーマンス指標</h2>
+
+                <div style="margin-top: var(--space-md); font-size: 14px;">
+                    <div style="margin-bottom: var(--space-md);">
+                        <div style="color: var(--gray-600); margin-bottom: 4px;">タスク完了率</div>
+                        <div style="font-size: 24px; font-weight: 700; color: var(--success-500);">95.6%</div>
+                    </div>
+                    <div style="margin-bottom: var(--space-md);">
+                        <div style="color: var(--gray-600); margin-bottom: 4px;">エラー率</div>
+                        <div style="font-size: 24px; font-weight: 700; color: var(--error-500);">2.1%</div>
+                    </div>
+                    <div style="margin-bottom: var(--space-md);">
+                        <div style="color: var(--gray-600); margin-bottom: 4px;">平均リードタイム</div>
+                        <div style="font-size: 24px; font-weight: 700; color: var(--primary-600);">2.3日</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart Placeholders -->
+        <div class="analytics-grid">
+            <div class="analytics-card">
+                <h3>部署別完了数 (本週)</h3>
+                <div class="chart-placeholder">
+                    📊 棒グラフ: Engineering, Design, Operations 別の完了タスク数
+                </div>
+            </div>
+
+            <div class="analytics-card">
+                <h3>平均処理時間トレンド</h3>
+                <div class="chart-placeholder">
+                    📈 折れ線グラフ: W1-W4 の平均処理時間推移
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

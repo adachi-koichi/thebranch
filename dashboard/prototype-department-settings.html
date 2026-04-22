@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>部署設定 - THEBRANCH</title>
+  <style>
+    :root {
+      --color-primary: #3B82F6;
+      --color-primary-dark: #1E40AF;
+      --color-success: #22C55E;
+      --color-warning: #FBBF24;
+      --color-error: #EF4444;
+      --color-text-primary: #1F2937;
+      --color-text-secondary: #6B7280;
+      --color-bg-primary: #FFFFFF;
+      --color-bg-secondary: #F9FAFB;
+      --color-border: #E5E7EB;
+      --color-shadow: rgba(0, 0, 0, 0.1);
+      --color-active: #3B82F6;
+
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --spacing-xl: 32px;
+
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+
+      --shadow-sm: 0 1px 2px var(--color-shadow);
+      --shadow-md: 0 4px 6px var(--color-shadow);
+      --shadow-lg: 0 10px 15px var(--color-shadow);
+
+      --transition: 200ms ease-out;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-text-primary: #F3F4F6;
+        --color-text-secondary: #D1D5DB;
+        --color-bg-primary: #111827;
+        --color-bg-secondary: #1F2937;
+        --color-border: #374151;
+        --color-shadow: rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+      color: var(--color-text-primary);
+      background-color: var(--color-bg-secondary);
+      line-height: 1.6;
+    }
+
+    /* Header */
+    .header {
+      background-color: var(--color-bg-primary);
+      padding: var(--spacing-lg) var(--spacing-xl);
+      border-bottom: 1px solid var(--color-border);
+      animation: slideDown 300ms ease-out;
+    }
+
+    @keyframes slideDown {
+      from {
+        transform: translateY(-20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+    }
+
+    .back-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 20px;
+      color: var(--color-text-secondary);
+      transition: color var(--transition);
+      padding: var(--spacing-sm);
+    }
+
+    .back-btn:hover {
+      color: var(--color-text-primary);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--color-text-primary);
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 1200px;
+      margin: var(--spacing-xl) auto;
+      padding: 0 var(--spacing-xl);
+    }
+
+    .settings-layout {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: var(--spacing-xl);
+    }
+
+    /* Tabs */
+    .tabs-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+
+    .tab-btn {
+      padding: var(--spacing-md);
+      background: none;
+      border: none;
+      text-align: left;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--color-text-secondary);
+      transition: all var(--transition);
+      border-left: 3px solid transparent;
+      border-radius: var(--radius-md);
+    }
+
+    .tab-btn:hover {
+      background-color: var(--color-bg-secondary);
+      color: var(--color-primary);
+    }
+
+    .tab-btn.active {
+      color: var(--color-primary);
+      background-color: var(--color-bg-secondary);
+      border-left-color: var(--color-primary);
+      font-weight: 600;
+    }
+
+    /* Content Panel */
+    .tab-content {
+      background-color: var(--color-bg-primary);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg);
+      box-shadow: var(--shadow-sm);
+      animation: fadeIn 300ms ease-out;
+      display: none;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .tab-content h2 {
+      font-size: 20px;
+      margin-bottom: var(--spacing-lg);
+      color: var(--color-text-primary);
+    }
+
+    /* Members Tab */
+    .members-actions {
+      margin-bottom: var(--spacing-lg);
+      display: flex;
+      gap: var(--spacing-md);
+    }
+
+    .btn-add {
+      padding: var(--spacing-sm) var(--spacing-md);
+      background-color: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all var(--transition);
+    }
+
+    .btn-add:hover {
+      background-color: var(--color-primary-dark);
+      box-shadow: var(--shadow-md);
+    }
+
+    .members-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .members-table thead {
+      background-color: var(--color-bg-secondary);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .members-table th {
+      padding: var(--spacing-md);
+      text-align: left;
+      font-weight: 600;
+      color: var(--color-text-secondary);
+    }
+
+    .members-table td {
+      padding: var(--spacing-md);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .members-table tbody tr:hover {
+      background-color: var(--color-bg-secondary);
+    }
+
+    .member-name {
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+
+    .member-status {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      font-size: 12px;
+      padding: 4px 8px;
+      background-color: var(--color-bg-secondary);
+      border-radius: var(--radius-sm);
+    }
+
+    .status-active {
+      color: var(--color-success);
+    }
+
+    .status-idle {
+      color: var(--color-warning);
+    }
+
+    .status-archived {
+      color: var(--color-text-secondary);
+    }
+
+    .member-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+    }
+
+    .btn-action {
+      padding: 4px 8px;
+      background-color: transparent;
+      border: 1px solid var(--color-border);
+      color: var(--color-primary);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 12px;
+      transition: all var(--transition);
+    }
+
+    .btn-action:hover {
+      background-color: var(--color-primary);
+      color: white;
+      border-color: var(--color-primary);
+    }
+
+    /* Profile Tab */
+    .form-group {
+      margin-bottom: var(--spacing-lg);
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: var(--spacing-sm);
+      color: var(--color-text-primary);
+      font-size: 14px;
+    }
+
+    .form-required::after {
+      content: ' *';
+      color: var(--color-error);
+    }
+
+    input[type="text"],
+    input[type="email"],
+    textarea,
+    select {
+      width: 100%;
+      padding: var(--spacing-md);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--color-text-primary);
+      background-color: var(--color-bg-primary);
+      transition: border-color var(--transition);
+    }
+
+    input[type="text"]:focus,
+    input[type="email"]:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--spacing-lg);
+    }
+
+    .color-picker-group {
+      display: flex;
+      gap: var(--spacing-md);
+      align-items: flex-end;
+    }
+
+    .color-input {
+      width: 60px;
+      height: 40px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+    }
+
+    /* Skills Tab */
+    .skills-section {
+      margin-bottom: var(--spacing-2xl);
+    }
+
+    .skills-section h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: var(--spacing-md);
+      color: var(--color-text-primary);
+    }
+
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      padding: 4px 12px;
+      background-color: var(--color-primary);
+      color: white;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .tag-remove {
+      cursor: pointer;
+      font-weight: bold;
+      transition: opacity var(--transition);
+    }
+
+    .tag-remove:hover {
+      opacity: 0.7;
+    }
+
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--color-primary);
+    }
+
+    .checkbox-label {
+      cursor: pointer;
+      font-weight: 500;
+      color: var(--color-text-primary);
+    }
+
+    /* Permissions Tab */
+    .permission-item {
+      padding: var(--spacing-md);
+      background-color: var(--color-bg-secondary);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--spacing-md);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .permission-info h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: var(--spacing-sm);
+      color: var(--color-text-primary);
+    }
+
+    .permission-info p {
+      font-size: 12px;
+      color: var(--color-text-secondary);
+    }
+
+    /* Footer Actions */
+    .settings-footer {
+      display: flex;
+      gap: var(--spacing-md);
+      margin-top: var(--spacing-2xl);
+      padding-top: var(--spacing-lg);
+      border-top: 1px solid var(--color-border);
+    }
+
+    .btn-save {
+      padding: var(--spacing-md) var(--spacing-xl);
+      background-color: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-weight: 600;
+      transition: all var(--transition);
+    }
+
+    .btn-save:hover {
+      background-color: var(--color-primary-dark);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-cancel {
+      padding: var(--spacing-md) var(--spacing-xl);
+      background-color: transparent;
+      color: var(--color-text-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-weight: 600;
+      transition: all var(--transition);
+    }
+
+    .btn-cancel:hover {
+      background-color: var(--color-bg-secondary);
+      border-color: var(--color-text-secondary);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .settings-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .tabs-sidebar {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-lg);
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .settings-footer {
+        flex-direction: column;
+      }
+
+      .btn-save,
+      .btn-cancel {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-btn" onclick="history.back()">←</button>
+      <h1>🏢 AI エンジニアリング部署 設定</h1>
+    </div>
+  </div>
+
+  <!-- Container -->
+  <div class="container">
+    <div class="settings-layout">
+      <!-- Sidebar Tabs -->
+      <div class="tabs-sidebar">
+        <button class="tab-btn active" data-tab="members">📋 メンバー管理</button>
+        <button class="tab-btn" data-tab="profile">👤 部署プロファイル</button>
+        <button class="tab-btn" data-tab="skills">🎓 スキル・専門領域</button>
+        <button class="tab-btn" data-tab="permissions">🔐 権限・アクセス制御</button>
+      </div>
+
+      <!-- Tab Contents -->
+      <div class="tab-content active" id="members">
+        <h2>メンバー管理</h2>
+        <div class="members-actions">
+          <button class="btn-add" onclick="alert('メンバー追加モーダルが開きます')">+ メンバーを追加</button>
+        </div>
+        <table class="members-table">
+          <thead>
+            <tr>
+              <th>名前</th>
+              <th>役職</th>
+              <th>ステータス</th>
+              <th>アクション</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="member-name">Engineer #1</td>
+              <td>Engineer</td>
+              <td>
+                <div class="member-status status-active">
+                  🟢 Active
+                </div>
+              </td>
+              <td>
+                <div class="member-actions">
+                  <button class="btn-action" onclick="alert('編集')">編集</button>
+                  <button class="btn-action" onclick="alert('削除')">削除</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="member-name">Engineer #2</td>
+              <td>Engineer</td>
+              <td>
+                <div class="member-status status-active">
+                  🟢 Active
+                </div>
+              </td>
+              <td>
+                <div class="member-actions">
+                  <button class="btn-action" onclick="alert('編集')">編集</button>
+                  <button class="btn-action" onclick="alert('削除')">削除</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="member-name">QA #1</td>
+              <td>QA Engineer</td>
+              <td>
+                <div class="member-status status-idle">
+                  🟡 Idle
+                </div>
+              </td>
+              <td>
+                <div class="member-actions">
+                  <button class="btn-action" onclick="alert('編集')">編集</button>
+                  <button class="btn-action" onclick="alert('削除')">削除</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="member-name">Tech Lead</td>
+              <td>Lead</td>
+              <td>
+                <div class="member-status status-active">
+                  🟢 Active
+                </div>
+              </td>
+              <td>
+                <div class="member-actions">
+                  <button class="btn-action" onclick="alert('編集')">編集</button>
+                  <button class="btn-action" onclick="alert('削除')">削除</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tab-content" id="profile">
+        <h2>部署プロファイル</h2>
+        <div class="form-group">
+          <label for="dept-name" class="form-required">部署名</label>
+          <input type="text" id="dept-name" placeholder="例: AI エンジニアリング部署" value="AI エンジニアリング部署">
+        </div>
+        <div class="form-group">
+          <label for="dept-desc">説明</label>
+          <textarea id="dept-desc" placeholder="部署の説明を入力">このチームは、バックエンド開発・API設計・システムアーキテクチャを担当しています。</textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="theme-color">カラーテーマ</label>
+            <div class="color-picker-group">
+              <input type="color" id="theme-color" class="color-input" value="#3B82F6">
+              <span>Primary Blue</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="max-tasks">最大同時タスク数</label>
+            <input type="text" id="max-tasks" placeholder="10" value="10">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="sla-response">平均応答時間 (SLA)</label>
+          <select id="sla-response">
+            <option>5分</option>
+            <option selected>15分</option>
+            <option>30分</option>
+            <option>1時間</option>
+            <option>4時間</option>
+          </select>
+        </div>
+
+        <h3 style="margin-top: var(--spacing-2xl); margin-bottom: var(--spacing-lg); font-size: 16px; font-weight: 600;">統合サービス設定</h3>
+        <div class="permission-item">
+          <div class="permission-info">
+            <h3>🔗 Slack 連携</h3>
+            <p>タスク更新をSlackチャンネルで通知</p>
+          </div>
+          <button class="btn-action" onclick="alert('Slack認証画面へ')">接続</button>
+        </div>
+        <div class="permission-item">
+          <div class="permission-info">
+            <h3>💬 Discord 連携</h3>
+            <p>リアルタイム通知とチャネル連携</p>
+          </div>
+          <button class="btn-action" onclick="alert('Discord認証画面へ')">接続</button>
+        </div>
+      </div>
+
+      <div class="tab-content" id="skills">
+        <h2>スキル・専門領域</h2>
+
+        <div class="skills-section">
+          <h3>技術スタック</h3>
+          <div class="tags-container">
+            <span class="tag">Python <span class="tag-remove">×</span></span>
+            <span class="tag">JavaScript <span class="tag-remove">×</span></span>
+            <span class="tag">React <span class="tag-remove">×</span></span>
+            <span class="tag">Docker <span class="tag-remove">×</span></span>
+          </div>
+          <input type="text" placeholder="スキルを入力して Enter キー" onkeypress="if(event.key==='Enter') alert('スキルを追加')">
+        </div>
+
+        <div class="skills-section">
+          <h3>ドメインナレッジ</h3>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <input type="checkbox" id="agile" checked>
+              <label for="agile" class="checkbox-label">アジャイル開発</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="microservices" checked>
+              <label for="microservices" class="checkbox-label">マイクロサービス</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="cloud">
+              <label for="cloud" class="checkbox-label">クラウドネイティブ</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="devops" checked>
+              <label for="devops" class="checkbox-label">DevOps</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="skills-section">
+          <h3>カスタムプロンプト</h3>
+          <textarea placeholder="部署メンバーへの追加指示・コンテキストを入力...">このチームは、スケーラビリティと保守性を重視して設計します。すべてのコードはコードレビューを通じて検証されます。</textarea>
+        </div>
+      </div>
+
+      <div class="tab-content" id="permissions">
+        <h2>権限・アクセス制御</h2>
+
+        <h3 style="margin-bottom: var(--spacing-lg); font-size: 16px; font-weight: 600;">全メンバーのデフォルト権限</h3>
+        <div class="permission-item">
+          <div class="permission-info">
+            <h3>📖 タスク閲覧</h3>
+            <p>割り当てられたタスクを確認できます</p>
+          </div>
+          <input type="checkbox" checked>
+        </div>
+        <div class="permission-item">
+          <div class="permission-info">
+            <h3>✏️ タスク作成</h3>
+            <p>新しいタスクを作成できます</p>
+          </div>
+          <input type="checkbox" checked>
+        </div>
+        <div class="permission-item">
+          <div class="permission-info">
+            <h3>✅ 承認権限</h3>
+            <p>タスク完了を承認できます</p>
+          </div>
+          <input type="checkbox">
+        </div>
+        <div class="permission-item">
+          <div class="permission-info">
+            <h3>⚙️ 部署設定変更</h3>
+            <p>メンバーや設定を管理できます</p>
+          </div>
+          <input type="checkbox">
+        </div>
+        <div class="permission-item">
+          <div class="permission-info">
+            <h3>📊 分析・レポート閲覧</h3>
+            <p>パフォーマンスダッシュボードにアクセスできます</p>
+          </div>
+          <input type="checkbox" checked>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer Actions -->
+    <div class="settings-footer">
+      <button class="btn-save" onclick="alert('設定を保存しました')">保存</button>
+      <button class="btn-cancel" onclick="history.back()">キャンセル</button>
+    </div>
+  </div>
+
+  <script>
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Remove active from all tabs and contents
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+        // Add active to clicked tab
+        btn.classList.add('active');
+        const tabId = btn.getAttribute('data-tab');
+        document.getElementById(tabId).classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

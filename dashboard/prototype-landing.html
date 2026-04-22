@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>THEBRANCH - AI部署で組織を動かす</title>
+  <style>
+    :root {
+      --color-primary: #3B82F6;
+      --color-primary-dark: #1E40AF;
+      --color-success: #22C55E;
+      --color-warning: #FBBF24;
+      --color-error: #EF4444;
+      --color-text-primary: #1F2937;
+      --color-text-secondary: #6B7280;
+      --color-bg-primary: #FFFFFF;
+      --color-bg-secondary: #F9FAFB;
+      --color-border: #E5E7EB;
+      --color-shadow: rgba(0, 0, 0, 0.1);
+
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --spacing-xl: 32px;
+      --spacing-2xl: 48px;
+      --spacing-3xl: 64px;
+
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+
+      --font-display: 'Segoe UI', 'Helvetica Neue', sans-serif;
+      --font-body: 'Segoe UI', 'Helvetica Neue', sans-serif;
+
+      --shadow-sm: 0 1px 2px var(--color-shadow);
+      --shadow-md: 0 4px 6px var(--color-shadow);
+      --shadow-lg: 0 10px 15px var(--color-shadow);
+
+      --transition: 200ms ease-out;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-text-primary: #F3F4F6;
+        --color-text-secondary: #D1D5DB;
+        --color-bg-primary: #111827;
+        --color-bg-secondary: #1F2937;
+        --color-border: #374151;
+        --color-shadow: rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-body);
+      color: var(--color-text-primary);
+      background-color: var(--color-bg-primary);
+      line-height: 1.6;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--spacing-lg) var(--spacing-xl);
+      border-bottom: 1px solid var(--color-border);
+      position: sticky;
+      top: 0;
+      background-color: var(--color-bg-primary);
+      z-index: 100;
+      animation: slideDown 300ms ease-out;
+    }
+
+    @keyframes slideDown {
+      from {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-primary);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--color-primary), #60A5FA);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+
+    nav {
+      display: flex;
+      gap: var(--spacing-xl);
+      align-items: center;
+    }
+
+    .nav-link {
+      text-decoration: none;
+      color: var(--color-text-secondary);
+      font-size: 14px;
+      transition: color var(--transition);
+    }
+
+    .nav-link:hover {
+      color: var(--color-primary);
+    }
+
+    .btn-signin {
+      padding: var(--spacing-sm) var(--spacing-md);
+      background-color: transparent;
+      border: 1px solid var(--color-border);
+      color: var(--color-text-primary);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .btn-signin:hover {
+      background-color: var(--color-bg-secondary);
+      border-color: var(--color-primary);
+    }
+
+    /* Hero Section */
+    .hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 600px;
+      padding: var(--spacing-3xl) var(--spacing-xl);
+      text-align: center;
+      background: linear-gradient(135deg, var(--color-bg-secondary) 0%, var(--color-bg-primary) 100%);
+      animation: fadeInUp 600ms ease-out;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: var(--spacing-md);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      max-width: 800px;
+      line-height: 1.2;
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: var(--color-text-secondary);
+      margin-bottom: var(--spacing-2xl);
+      max-width: 700px;
+      line-height: 1.8;
+    }
+
+    .hero-features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: var(--spacing-lg);
+      margin-bottom: var(--spacing-3xl);
+      max-width: 900px;
+      width: 100%;
+    }
+
+    .feature-card {
+      padding: var(--spacing-lg);
+      background-color: var(--color-bg-primary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      transition: all var(--transition);
+      animation: fadeInUp 600ms ease-out;
+    }
+
+    .feature-card:nth-child(2) {
+      animation-delay: 100ms;
+    }
+
+    .feature-card:nth-child(3) {
+      animation-delay: 200ms;
+    }
+
+    .feature-card:nth-child(4) {
+      animation-delay: 300ms;
+    }
+
+    .feature-card:hover {
+      border-color: var(--color-primary);
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-4px);
+    }
+
+    .feature-icon {
+      font-size: 32px;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .feature-card h3 {
+      font-size: 16px;
+      margin-bottom: var(--spacing-sm);
+      color: var(--color-text-primary);
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: var(--color-text-secondary);
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: var(--spacing-md);
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      padding: var(--spacing-md) var(--spacing-2xl);
+      background-color: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary:hover {
+      background-color: var(--color-primary-dark);
+      box-shadow: var(--shadow-lg);
+      transform: scale(1.02);
+    }
+
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+
+    .btn-secondary {
+      padding: var(--spacing-md) var(--spacing-2xl);
+      background-color: transparent;
+      color: var(--color-primary);
+      border: 2px solid var(--color-primary);
+      border-radius: var(--radius-md);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--color-primary);
+      color: white;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      header {
+        flex-direction: column;
+        gap: var(--spacing-md);
+        padding: var(--spacing-md);
+      }
+
+      nav {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .hero {
+        min-height: 500px;
+        padding: var(--spacing-2xl) var(--spacing-md);
+      }
+
+      .hero h1 {
+        font-size: 32px;
+      }
+
+      .hero p {
+        font-size: 16px;
+      }
+
+      .hero-features {
+        grid-template-columns: 1fr;
+      }
+
+      .cta-buttons {
+        flex-direction: column;
+      }
+
+      .btn-primary,
+      .btn-secondary {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .logo {
+        font-size: 20px;
+      }
+
+      .hero h1 {
+        font-size: 24px;
+      }
+
+      .hero p {
+        font-size: 14px;
+      }
+
+      nav {
+        gap: var(--spacing-sm);
+      }
+
+      .nav-link {
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header role="banner">
+    <div class="logo">
+      <div class="logo-icon">🌿</div>
+      THEBRANCH
+    </div>
+    <nav role="navigation">
+      <a href="#" class="nav-link">機能</a>
+      <a href="#" class="nav-link">価格</a>
+      <a href="#" class="nav-link">ドキュメント</a>
+      <button class="btn-signin">サインイン</button>
+    </nav>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero" role="main">
+    <h1>翌朝から組織を持てる</h1>
+    <p>採用でも外注でもなく、部署ごとAIで動かす。ひとりがユニコーンになれる時代へ。</p>
+
+    <!-- Features -->
+    <div class="hero-features">
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>数分で AI チーム編成完了</h3>
+        <p>テンプレートから選ぶだけで、即座に稼働できる AI 部署が完成します。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🎯</div>
+        <h3>カスタマイズ可能な部署構成</h3>
+        <p>メンバー、スキル、タスク管理など、あなたの組織に合わせて自由に編成できます。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>リアルタイムタスク管理</h3>
+        <p>Kanban ボード、進捗管理、リソース利用状況を一元的に監視・制御。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🔗</div>
+        <h3>主要サービス連携</h3>
+        <p>Slack, Discord, GitHub など、既存ツールとシームレスに連携し、ワークフローを統一化。</p>
+      </div>
+    </div>
+
+    <!-- CTA Buttons -->
+    <div class="cta-buttons">
+      <button class="btn-primary" onclick="alert('サインアップページへ遷移します')">今すぐ始める</button>
+      <button class="btn-secondary" onclick="alert('デモへ遷移します')">デモを見る</button>
+    </div>
+  </section>
+</body>
+</html>
