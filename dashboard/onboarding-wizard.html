@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>オンボーディングウィザー - THEBRANCH</title>
+  <style>
+    :root {
+      --primary: #3B82F6;
+      --success: #10B981;
+      --error: #EF4444;
+      --border: #E5E7EB;
+      --bg: #F9FAFB;
+      --card: #FFFFFF;
+      --text: #1F2937;
+      --text-muted: #6B7280;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --card: #1F2937;
+        --text: #F3F4F6;
+        --text-muted: #D1D5DB;
+        --border: #374151;
+      }
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .wizard-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .wizard-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .wizard-subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--primary);
+      transition: width 200ms ease-out;
+    }
+
+    .step-labels {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .step-label {
+      flex: 1;
+      padding: 8px 12px;
+      text-align: center;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--border);
+      color: var(--text-muted);
+      transition: all 200ms ease-out;
+    }
+
+    .step-label.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    .step-label.completed {
+      background: var(--success);
+      color: white;
+    }
+
+    .wizard-content {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      min-height: 400px;
+      animation: fadeIn 300ms ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .step {
+      display: none;
+    }
+
+    .step.active {
+      display: block;
+    }
+
+    .step-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    .form-group textarea,
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 14px;
+      background: var(--card);
+      color: var(--text);
+      transition: border-color 200ms ease-out;
+    }
+
+    .form-group textarea:focus,
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .char-count {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .loading-spinner {
+      text-align: center;
+      padding: 32px 0;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 600ms linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .spinner-text {
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .suggestions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .suggestion-card {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 200ms ease-out;
+      background: var(--bg);
+    }
+
+    .suggestion-card:hover {
+      border-color: var(--primary);
+      background: var(--card);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .suggestion-card.selected {
+      border-color: var(--primary);
+      background: rgba(59, 130, 246, 0.05);
+    }
+
+    .suggestion-name {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .suggestion-reason {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .suggestion-info {
+      font-size: 12px;
+      display: flex;
+      gap: 16px;
+    }
+
+    .error-message {
+      background: #FEE2E2;
+      color: var(--error);
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .error-message.show {
+      display: block;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+      justify-content: space-between;
+    }
+
+    button {
+      padding: 10px 16px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 200ms ease-out;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563EB;
+    }
+
+    .btn-primary:disabled {
+      background: var(--border);
+      color: var(--text-muted);
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .btn-secondary:hover {
+      background: #D1D5DB;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 0;
+      }
+
+      .step-labels {
+        gap: 8px;
+      }
+
+      .step-label {
+        padding: 6px 8px;
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="wizard-header">
+      <h1 class="wizard-title">部署セットアップ</h1>
+      <p class="wizard-subtitle">あなたのビジョンからAIが最適な部署構成を提案します</p>
+    </div>
+
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill" style="width: 50%;"></div>
+    </div>
+
+    <div class="step-labels">
+      <div class="step-label completed" id="stepLabel0">Step 0: ビジョン</div>
+      <div class="step-label active" id="stepLabel1">Step 1: 提案</div>
+    </div>
+
+    <div class="wizard-content">
+      <div class="error-message" id="errorMessage"></div>
+
+      <!-- Step 0: Vision Input -->
+      <div class="step active" id="step0">
+        <h2 class="step-title">ビジョンを入力してください</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+          組織のビジョン、ミッション、またはやりたいことを教えてください。AIがそれに最適な部署構成を提案します。
+        </p>
+
+        <div class="form-group">
+          <label for="visionInput">ビジョン・ミッション *</label>
+          <textarea id="visionInput" placeholder="例: 日本全国のユーザーに高速で安全な決済サービスを提供する..." minlength="100" maxlength="500"></textarea>
+          <div class="char-count"><span id="charCount">0</span>/500</div>
+        </div>
+
+        <div class="button-group">
+          <button class="btn-primary" id="nextStep1Btn" disabled>AI提案を取得</button>
+        </div>
+      </div>
+
+      <!-- Step 1: Suggestions -->
+      <div class="step" id="step1">
+        <h2 class="step-title">AIが提案する部署構成</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+          あなたのビジョンに基づいて、AIが提案する部署テンプレートです。最適なものを選択してください。
+        </p>
+
+        <div id="suggestionsContainer"></div>
+
+        <div class="button-group">
+          <button class="btn-secondary" id="backToStep0Btn">戻る</button>
+          <button class="btn-primary" id="proceedStep2Btn" disabled>選択内容で進む</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ONBOARDING_ID = new URLSearchParams(window.location.search).get('onboarding_id') || '';
+    const TOKEN = localStorage.getItem('token');
+
+    let currentStep = 0;
+    let selectedTemplate = null;
+
+    const els = {
+      progressFill: document.getElementById('progressFill'),
+      stepLabel0: document.getElementById('stepLabel0'),
+      stepLabel1: document.getElementById('stepLabel1'),
+      step0: document.getElementById('step0'),
+      step1: document.getElementById('step1'),
+      visionInput: document.getElementById('visionInput'),
+      charCount: document.getElementById('charCount'),
+      nextStep1Btn: document.getElementById('nextStep1Btn'),
+      backToStep0Btn: document.getElementById('backToStep0Btn'),
+      proceedStep2Btn: document.getElementById('proceedStep2Btn'),
+      suggestionsContainer: document.getElementById('suggestionsContainer'),
+      errorMessage: document.getElementById('errorMessage')
+    };
+
+    // Vision input validation
+    els.visionInput.addEventListener('input', (e) => {
+      const len = e.target.value.length;
+      els.charCount.textContent = len;
+      els.nextStep1Btn.disabled = len < 100;
+    });
+
+    // Step 0 -> Step 1
+    els.nextStep1Btn.addEventListener('click', async () => {
+      const vision = els.visionInput.value.trim();
+      if (vision.length < 100) return;
+
+      try {
+        els.nextStep1Btn.disabled = true;
+        els.nextStep1Btn.textContent = '取得中...';
+        showError('');
+
+        // Save vision
+        const saveResp = await fetch('/api/onboarding/vision', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}`
+          },
+          body: JSON.stringify({
+            onboarding_id: ONBOARDING_ID,
+            vision_input: vision
+          })
+        });
+
+        if (!saveResp.ok) {
+          throw new Error('ビジョン保存に失敗しました');
+        }
+
+        // Get suggestions
+        const suggestResp = await fetch('/api/onboarding/suggest', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}`
+          },
+          body: JSON.stringify({ onboarding_id: ONBOARDING_ID })
+        });
+
+        if (!suggestResp.ok) {
+          throw new Error('部署提案取得に失敗しました');
+        }
+
+        const data = await suggestResp.json();
+        renderSuggestions(data.suggestions || []);
+        goToStep(1);
+      } catch (err) {
+        showError(err.message);
+        els.nextStep1Btn.disabled = false;
+        els.nextStep1Btn.textContent = 'AI提案を取得';
+      }
+    });
+
+    // Step 1 -> Step 0
+    els.backToStep0Btn.addEventListener('click', () => {
+      selectedTemplate = null;
+      goToStep(0);
+    });
+
+    // Step 1 -> Step 2 (next page)
+    els.proceedStep2Btn.addEventListener('click', () => {
+      if (!selectedTemplate) return;
+      // TODO: Navigate to Step 2-3
+      alert(`選択テンプレート: ${selectedTemplate.name}`);
+    });
+
+    function goToStep(stepNum) {
+      currentStep = stepNum;
+
+      els.step0.classList.toggle('active', stepNum === 0);
+      els.step1.classList.toggle('active', stepNum === 1);
+
+      els.stepLabel0.className = stepNum > 0 ? 'step-label completed' : 'step-label active';
+      els.stepLabel1.className = stepNum === 1 ? 'step-label active' : 'step-label';
+
+      const progress = (stepNum === 0) ? 50 : 100;
+      els.progressFill.style.width = progress + '%';
+    }
+
+    function renderSuggestions(suggestions) {
+      els.suggestionsContainer.innerHTML = suggestions.length === 0
+        ? '<p style="text-align: center; color: var(--text-muted);">提案がありません</p>'
+        : '';
+
+      suggestions.forEach(template => {
+        const card = document.createElement('div');
+        card.className = 'suggestion-card';
+        card.innerHTML = `
+          <div class="suggestion-name">${template.name}</div>
+          <div class="suggestion-reason">${template.reason}</div>
+          <div class="suggestion-info">
+            <span>${template.total_roles} ロール</span>
+            <span>${template.total_processes} プロセス</span>
+          </div>
+        `;
+
+        card.addEventListener('click', () => {
+          document.querySelectorAll('.suggestion-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          selectedTemplate = template;
+          els.proceedStep2Btn.disabled = false;
+        });
+
+        els.suggestionsContainer.appendChild(card);
+      });
+    }
+
+    function showError(msg) {
+      if (msg) {
+        els.errorMessage.textContent = msg;
+        els.errorMessage.classList.add('show');
+      } else {
+        els.errorMessage.classList.remove('show');
+      }
+    }
+
+    // Initialize
+    if (!ONBOARDING_ID || !TOKEN) {
+      showError('認証情報が不足しています');
+    }
+  </script>
+</body>
+</html>

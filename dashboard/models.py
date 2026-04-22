@@ -48,6 +48,29 @@ class UserRoleResponse(BaseModel):
 
 class UserDetailResponse(UserResponse):
     roles: List[UserRoleResponse] = []
+
+
+class UserOnboardingProgressCreate(BaseModel):
+    user_id: str
+    current_step: int = 0
+    vision_input: Optional[str] = None
+
+
+class UserOnboardingProgressUpdate(BaseModel):
+    current_step: Optional[int] = None
+    vision_input: Optional[str] = None
+
+
+class UserOnboardingProgressResponse(BaseModel):
+    onboarding_id: str
+    user_id: str
+    current_step: int
+    vision_input: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
     onboarding_completed: int = 0
 
 
@@ -354,3 +377,95 @@ class DepartmentCreateResponse(BaseModel):
     name: str
     template_id: int
     created_at: str
+
+
+class VisionInputRequest(BaseModel):
+    onboarding_id: str
+    vision_input: str
+
+
+class VisionInputResponse(BaseModel):
+    success: bool
+    onboarding_id: str
+    current_step: int
+    message: str = "ビジョンを保存しました"
+
+
+class TemplateSuggestion(BaseModel):
+    template_id: int
+    name: str
+    category: str
+    total_roles: int
+    total_processes: int
+    reason: str
+    rank: int
+
+
+class DepartmentSuggestionRequest(BaseModel):
+    onboarding_id: str
+
+
+class DepartmentSuggestionResponse(BaseModel):
+    success: bool
+    suggestions: List[TemplateSuggestion]
+    current_step: int = 1
+    message: str = "部署提案を取得しました"
+
+
+# Step 2-3 用追加モデル
+
+class TemplateConfig(BaseModel):
+    members_count: int
+    budget_monthly: int
+    roles: List[str]
+
+
+class SuggestResponse(BaseModel):
+    onboarding_id: str
+    suggestions: List[TemplateSuggestion]
+
+
+class DetailedSetupRequest(BaseModel):
+    onboarding_id: str
+    template_id: int
+    dept_name: str
+    manager_name: str
+    members_count: int
+    budget: int
+    kpi: str
+    integrations: Optional[dict] = None
+
+
+class BudgetValidation(BaseModel):
+    status: str
+    monthly_per_person: float
+    market_benchmark: float
+    message: str
+
+
+class SetupResponse(BaseModel):
+    dept_id: int
+    config_validated: bool
+    budget_validation: BudgetValidation
+
+
+class InitialTask(BaseModel):
+    task_id: str
+    title: str
+    description: str
+    budget: int
+    deadline: str
+    assigned_to: str
+
+
+class ExecuteRequest(BaseModel):
+    onboarding_id: str
+    dept_id: int
+
+
+class ExecuteResponse(BaseModel):
+    dept_id: int
+    tasks_created: List[InitialTask]
+    agent_status: str
+    dashboard_url: str
+    completed_at: str

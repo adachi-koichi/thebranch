@@ -4968,6 +4968,111 @@ async def generate_monthly_report(department_id: int, year: int, month: int):
 # Onboarding
 # ──────────────────────────────────────────────
 
+@app.get("/onboarding", response_class=HTMLResponse)
+async def get_onboarding_page():
+    """オンボーディングウィザードページを提供"""
+    html_path = DASHBOARD_DIR / "onboarding-wizard.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
+@app.post("/api/onboarding/vision", status_code=201, response_model=models.VisionInputResponse)
+async def post_onboarding_vision(
+    req: models.VisionInputRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """ビジョン入力を保存"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    user_id = await auth.verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    await ensure_db_initialized()
+
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO user_onboarding_progress
+                (onboarding_id, user_id, vision_input, current_step, created_at, updated_at)
+                VALUES (?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
+                """,
+                (req.onboarding_id, user_id, req.vision_input, 0)
+            )
+            await db.commit()
+
+        return {
+            "success": True,
+            "onboarding_id": req.onboarding_id,
+            "current_step": 0,
+            "message": "ビジョンを保存しました"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ビジョン保存エラー: {str(e)}")
+
+
+@app.post("/api/onboarding/suggest", response_model=models.DepartmentSuggestionResponse)
+async def post_onboarding_suggest(
+    req: models.DepartmentSuggestionRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """AI が部署を提案"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    user_id = await auth.verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    await ensure_db_initialized()
+
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            # Get vision input
+            cursor = await db.execute(
+                "SELECT vision_input FROM user_onboarding_progress WHERE onboarding_id = ? AND user_id = ?",
+                (req.onboarding_id, user_id)
+            )
+            row = await cursor.fetchone()
+            if not row or not row[0]:
+                raise HTTPException(status_code=400, detail="ビジョン入力が見つかりません")
+
+            vision_input = row[0]
+
+            # Get suggestion service
+            init_workflow_services()
+            from workflow.services.department_suggestion_service import DepartmentSuggestionService
+
+            suggestion_service = DepartmentSuggestionService(
+                db_path=str(THEBRANCH_DB),
+                cost_service=cost_service
+            )
+
+            # Get suggestions from Claude API
+            suggestions = suggestion_service.suggest_departments(vision_input)
+
+            # Update current step
+            await db.execute(
+                "UPDATE user_onboarding_progress SET current_step = 1 WHERE onboarding_id = ?",
+                (req.onboarding_id,)
+            )
+            await db.commit()
+
+        return {
+            "success": True,
+            "suggestions": suggestions,
+            "current_step": 1,
+            "message": "部署提案を取得しました"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"部署提案取得エラー: {str(e)}")
+
+
 @app.post("/api/onboarding/complete", status_code=201, response_model=models.OnboardingCompleteResponse)
 async def complete_onboarding(
     req: models.OnboardingRequest,
