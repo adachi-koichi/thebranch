@@ -5364,17 +5364,17 @@ async def post_onboarding_suggest(
 
             vision_input = row[0]
 
-            # Get suggestion service
-            init_workflow_services()
-            from workflow.services.department_suggestion_service import DepartmentSuggestionService
-
-            suggestion_service = DepartmentSuggestionService(
-                db_path=str(THEBRANCH_DB),
-                cost_service=cost_service
-            )
+            # Get onboarding service and analyze vision
+            from workflow.services.onboarding import get_onboarding_service
+            onboarding_service = get_onboarding_service()
 
             # Get suggestions from Claude API
-            suggestions = suggestion_service.suggest_departments(vision_input)
+            suggestions_data = onboarding_service.analyze_vision_for_templates(vision_input)
+
+            # Convert to TemplateSuggestion models
+            suggestions = [
+                models.TemplateSuggestion(**s) for s in suggestions_data
+            ]
 
             # Update current step
             await db.execute(
@@ -5393,6 +5393,79 @@ async def post_onboarding_suggest(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"部署提案取得エラー: {str(e)}")
+
+
+@app.post("/api/onboarding/setup")
+async def post_onboarding_setup(
+    req: models.DetailedSetupRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """部署の詳細設定・予算検証・初期タスク生成"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    user_id = await auth.verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    await ensure_db_initialized()
+
+    try:
+        from workflow.services.onboarding import get_onboarding_service
+
+        onboarding_service = get_onboarding_service()
+
+        # Validate budget
+        budget_validation = onboarding_service.validate_budget(
+            members_count=req.members_count,
+            budget=req.budget,
+            dept_type=req.dept_name.lower()
+        )
+
+        # Generate initial tasks
+        initial_tasks = onboarding_service.generate_initial_tasks(
+            dept_name=req.dept_name,
+            kpi=req.kpi,
+            budget=req.budget,
+            members_count=req.members_count
+        )
+
+        # Update onboarding progress
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            await db.execute(
+                """UPDATE user_onboarding_progress
+                SET current_step = 2,
+                    dept_name = ?,
+                    manager_name = ?,
+                    members_count = ?,
+                    budget = ?,
+                    kpi = ?,
+                    integrations = ?
+                WHERE onboarding_id = ? AND user_id = ?""",
+                (req.dept_name, req.manager_name, req.members_count, req.budget, req.kpi,
+                 json.dumps(req.integrations or {}),
+                 req.onboarding_id, user_id)
+            )
+            await db.commit()
+
+        # Convert to response models
+        tasks_data = [
+            models.InitialTask(**task) for task in initial_tasks
+        ]
+
+        return {
+            "success": True,
+            "budget_validation": models.BudgetValidation(**budget_validation),
+            "initial_tasks": tasks_data,
+            "current_step": 2,
+            "message": "セットアップ完了。初期タスクを生成しました"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Setup error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"セットアップエラー: {str(e)}")
 
 
 @app.post("/api/onboarding/initialize", status_code=201, response_model=models.SuggestResponse)
