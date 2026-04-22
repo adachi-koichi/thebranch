@@ -3512,6 +3512,121 @@ async def get_activity(limit: int = 50):
     return {"events": all_events[:limit]}
 
 
+@app.get("/api/agent-chat-history")
+async def get_agent_chat_history(
+    agent_id: str = None,
+    event_type: str = None,
+    date_from: str = None,
+    date_to: str = None,
+    limit: int = 50
+):
+    items = []
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        # delegation_events の取得
+        query = "SELECT id, event_type, actor_id, actor_name, message, metadata, event_timestamp FROM delegation_events WHERE 1=1"
+        params = []
+        if agent_id:
+            query += " AND actor_id = ?"
+            params.append(agent_id)
+        if event_type:
+            query += " AND event_type = ?"
+            params.append(event_type)
+        if date_from:
+            query += " AND DATE(event_timestamp) >= DATE(?)"
+            params.append(date_from)
+        if date_to:
+            query += " AND DATE(event_timestamp) <= DATE(?)"
+            params.append(date_to)
+        query += " ORDER BY event_timestamp DESC LIMIT ?"
+        params.append(limit * 2)
+
+        async with db.execute(query, params) as cursor:
+            async for row in cursor:
+                try:
+                    metadata = json.loads(row[5]) if row[5] else {}
+                except:
+                    metadata = {}
+                items.append({
+                    "id": f"delev-{row[0]}",
+                    "timestamp": row[6],
+                    "agent_id": row[2],
+                    "agent_name": row[3] or row[2],
+                    "event_type": "delegation",
+                    "message": row[4],
+                    "metadata": metadata
+                })
+
+        # delegation_comments の取得
+        if not event_type or event_type == "comment":
+            query = "SELECT id, author_id, content, comment_type, created_at FROM delegation_comments WHERE 1=1"
+            params = []
+            if agent_id:
+                query += " AND author_id = ?"
+                params.append(agent_id)
+            if date_from:
+                query += " AND DATE(created_at) >= DATE(?)"
+                params.append(date_from)
+            if date_to:
+                query += " AND DATE(created_at) <= DATE(?)"
+                params.append(date_to)
+            query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit * 2)
+
+            async with db.execute(query, params) as cursor:
+                async for row in cursor:
+                    items.append({
+                        "id": f"dlcmt-{row[0]}",
+                        "timestamp": row[4],
+                        "agent_id": row[1],
+                        "agent_name": row[1],
+                        "event_type": "comment",
+                        "message": row[2],
+                        "metadata": {"comment_type": row[3]}
+                    })
+
+        # agent_logs の取得
+        if not event_type or event_type == "log":
+            query = "SELECT al.id, al.agent_id, al.action, al.detail, al.created_at, a.role FROM agent_logs al LEFT JOIN agents a ON al.agent_id = a.id WHERE 1=1"
+            params = []
+            if agent_id:
+                query += " AND al.agent_id = ?"
+                params.append(agent_id)
+            if date_from:
+                query += " AND DATE(al.created_at) >= DATE(?)"
+                params.append(date_from)
+            if date_to:
+                query += " AND DATE(al.created_at) <= DATE(?)"
+                params.append(date_to)
+            query += " ORDER BY al.created_at DESC LIMIT ?"
+            params.append(limit * 2)
+
+            async with db.execute(query, params) as cursor:
+                async for row in cursor:
+                    items.append({
+                        "id": f"aglog-{row[0]}",
+                        "timestamp": row[4],
+                        "agent_id": str(row[1]),
+                        "agent_name": row[5] or f"Agent {row[1]}",
+                        "event_type": "log",
+                        "message": row[3] or row[2],
+                        "metadata": {"action": row[2]}
+                    })
+
+    # タイムスタンプでソート＆制限
+    items.sort(key=lambda x: x["timestamp"], reverse=True)
+    items = items[:limit]
+
+    return {
+        "items": items,
+        "total": len(items),
+        "filters_applied": {
+            "agent_id": agent_id,
+            "event_type": event_type,
+            "date_range": [date_from, date_to] if date_from or date_to else None
+        }
+    }
+
+
 @app.websocket("/ws/activity")
 async def websocket_activity(websocket: WebSocket):
     """アクティビティフィードをWebSocketでリアルタイム配信（3秒ごとに差分チェック）。"""

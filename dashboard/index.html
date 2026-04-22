@@ -62,6 +62,23 @@
     overflow-x: hidden;
   }
 
+  /* Skip to content link */
+  .skip-to-content {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--accent);
+    color: #0d1117;
+    padding: 8px 16px;
+    text-decoration: none;
+    z-index: 100;
+    font-weight: 600;
+  }
+
+  .skip-to-content:focus {
+    top: 0;
+  }
+
   /* ── Header ── */
   header {
     display: flex;
@@ -1299,6 +1316,9 @@
 </head>
 <body>
 
+<!-- Skip to content link for keyboard navigation -->
+<a href="#main" class="skip-to-content">メインコンテンツへスキップ</a>
+
 <!-- Header -->
 <header>
   <h1>THEBRANCH Dashboard</h1>
@@ -1327,7 +1347,7 @@
 </div>
 
 <!-- Tabs -->
-<div class="tabs" id="tabsContainer">
+<nav class="tabs" id="tabsContainer" aria-label="Dashboard tabs navigation">
   <button class="tab-btn active" data-tab="tasks">Tasks</button>
   <button class="tab-btn" data-tab="agents">Agents</button>
   <button class="tab-btn" data-tab="projects">Applications</button>
@@ -1343,6 +1363,7 @@
   <button class="tab-btn" data-tab="dag">タスクDAG</button>
   <button class="tab-btn" data-tab="stats">Stats</button>
   <button class="tab-btn" data-tab="charts">Charts</button>
+  <button class="tab-btn" data-tab="agent-chat">💬 エージェントチャット</button>
   <button class="tab-btn" data-tab="project-summary">プロジェクト一覧</button>
   <button class="tab-btn" data-tab="trend">トレンド</button>
   <button class="tab-btn" data-tab="session-tasks">セッション別タスク</button>
@@ -1353,7 +1374,7 @@
   <button class="tab-btn" data-tab="activity">アクティビティ</button>
   <button class="tab-btn" data-tab="rankings">ランキング</button>
   <button class="tab-btn" data-tab="org-tree">組織ツリー</button>
-</div>
+</nav>
 
 <!-- Main -->
 <main>
@@ -1382,12 +1403,12 @@
 
   <!-- Quick Access Section -->
   <div style="margin-top:24px;margin-bottom:24px;">
-    <h3 style="font-size:14px;color:var(--text-muted);font-weight:600;margin-bottom:12px;text-transform:uppercase;">
+    <h2 style="font-size:14px;color:var(--text-muted);font-weight:600;margin-bottom:12px;text-transform:uppercase;">
       ⚡ クイックアクセス
       <button onclick="openTabSearchModal()" style="float:right;background:rgba(88,166,255,0.15);border:1px solid rgba(88,166,255,0.3);color:var(--accent);border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer;transition:all 0.2s;">
         🔍 すべて見る (Ctrl+K)
       </button>
-    </h3>
+    </h2>
     <div id="quickAccessGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:8px;">
       <!-- Populated by JS -->
     </div>
@@ -2042,6 +2063,44 @@
     </div>
   </div>
 
+  <!-- Agent Chat History tab -->
+  <div class="tab-panel" id="tab-agent-chat">
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 0 8px;">
+      <span style="font-size:13px;font-weight:600;color:var(--text)">エージェント チャット履歴</span>
+      <button id="agentChatRefreshBtn" class="btn btn-secondary" style="font-size:12px;padding:3px 10px;">更新</button>
+      <span id="agentChatStatus" style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--border);color:var(--text-muted)">読み込み中...</span>
+    </div>
+
+    <!-- フィルタセクション -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <select id="agentChatAgentFilter" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;">
+        <option value="">すべてのエージェント</option>
+      </select>
+      <select id="agentChatTypeFilter" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;">
+        <option value="">すべてのタイプ</option>
+        <option value="delegation">委譲</option>
+        <option value="comment">コメント</option>
+        <option value="log">ログ</option>
+      </select>
+      <input type="date" id="agentChatDateFrom" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;">
+      <input type="date" id="agentChatDateTo" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;">
+      <button id="agentChatApplyBtn" class="btn btn-primary" style="font-size:12px;padding:6px 12px;">絞り込む</button>
+    </div>
+
+    <!-- チャット履歴リスト -->
+    <div id="agentChatList" style="
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:8px;
+      height:calc(100vh - 220px);
+      overflow-y:auto;
+      font-size:13px;
+    ">
+      <div class="empty-state">読み込み中...</div>
+    </div>
+  </div>
+
   <!-- Rankings tab -->
   <div class="tab-panel" id="tab-rankings">
     <div style="display:flex;align-items:center;gap:12px;padding:12px 0 8px;">
@@ -2591,7 +2650,7 @@ function formatDate(d) {
 const TAB_GROUPS = {
   '🔧 管理': ['tasks', 'agents', 'projects', 'daemons', 'panes'],
   '🔄 ワークフロー': ['wf-instances', 'wf-templates', 'dept-templates'],
-  '📊 分析': ['costs', 'metrics', 'alerts', 'gantt', 'dag', 'stats', 'charts'],
+  '📊 分析': ['costs', 'metrics', 'alerts', 'gantt', 'dag', 'stats', 'charts', 'agent-chat'],
   '📈 その他': ['trend', 'project-summary', 'session-tasks', 'heatmap', 'logs', 'health-hist', 'bubble', 'activity', 'rankings']
 };
 
@@ -2723,6 +2782,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       stopActivityFeed();
       stopAgentActivityFeed();
     }
+    if (btn.dataset.tab === 'agent-chat') { initAgentChatTab(); }
     if (btn.dataset.tab === 'rankings') { fetchRankings(); }
   });
 });
@@ -6112,6 +6172,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (tab === 'health-hist') fetchHealthHist();
       if (tab === 'bubble') fetchBubble();
       if (tab === 'activity') startActivityFeed(); else stopActivityFeed();
+      if (tab === 'agent-chat') initAgentChatTab();
       if (tab === 'rankings') fetchRankings();
     });
   });
@@ -6390,6 +6451,134 @@ function _renderAgentActivityLogs() {
       <div style="color:var(--text-secondary);">${log.detail || '-'}</div>
     </div>`;
   }).join('');
+}
+
+// ══════════════════════════════════════════════
+// Agent Chat History
+// ══════════════════════════════════════════════
+
+async function loadAgentChatHistory(filters = {}) {
+  const container = document.getElementById('agentChatList');
+  const statusEl = document.getElementById('agentChatStatus');
+  if (!container) return;
+
+  statusEl.textContent = '読み込み中...';
+  container.innerHTML = '<div class="empty-state">読み込み中...</div>';
+
+  try {
+    const params = new URLSearchParams();
+    if (filters.agent_id) params.append('agent_id', filters.agent_id);
+    if (filters.event_type) params.append('event_type', filters.event_type);
+    if (filters.date_from) params.append('date_from', filters.date_from);
+    if (filters.date_to) params.append('date_to', filters.date_to);
+    if (filters.limit) params.append('limit', filters.limit);
+
+    const res = await fetch(`/api/agent-chat-history?${params.toString()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    renderAgentChatHistory(data);
+    statusEl.textContent = `${data.items.length} 件`;
+  } catch (e) {
+    console.error('Failed to load agent chat history:', e);
+    container.innerHTML = `<div class="empty-state">読み込みエラー: ${e.message}</div>`;
+    statusEl.textContent = 'エラー';
+  }
+}
+
+function renderAgentChatHistory(data) {
+  const container = document.getElementById('agentChatList');
+  if (!container) return;
+
+  if (!data.items || data.items.length === 0) {
+    container.innerHTML = '<div class="empty-state">チャット履歴がありません</div>';
+    return;
+  }
+
+  container.innerHTML = data.items.map(item => {
+    const typeLabel = {
+      'delegation': '委譲',
+      'comment': 'コメント',
+      'log': 'ログ'
+    }[item.event_type] || item.event_type;
+
+    const typeBadgeColor = {
+      'delegation': 'var(--blue)',
+      'comment': 'var(--green)',
+      'log': 'var(--text-muted)'
+    }[item.event_type] || 'var(--text-secondary)';
+
+    const timestamp = new Date(item.timestamp).toLocaleString('ja-JP');
+    const agentInitial = item.agent_name ? item.agent_name.charAt(0).toUpperCase() : '?';
+
+    return `<div style="padding:12px;border-bottom:1px solid var(--border);display:flex;gap:12px;">
+      <div style="width:40px;height:40px;border-radius:50%;background:rgba(88,166,255,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--accent);font-weight:600;font-size:16px;">
+        ${agentInitial}
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="font-weight:600;color:var(--text);">${escHtml(item.agent_name)}</span>
+          <span style="padding:2px 6px;border-radius:4px;background:${typeBadgeColor};color:white;font-size:10px;font-weight:600;">${typeLabel}</span>
+        </div>
+        <div style="color:var(--text-secondary);font-size:13px;margin-bottom:4px;word-wrap:break-word;white-space:pre-wrap;">
+          ${escHtml(item.message || '-')}
+        </div>
+        <div style="color:var(--text-muted);font-size:11px;">
+          ${timestamp}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function initAgentChatTab() {
+  // エージェント一覧を取得してフィルタドロップダウンを生成
+  try {
+    const res = await fetch('/api/agents');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const agents = await res.json();
+
+    const agentSelect = document.getElementById('agentChatAgentFilter');
+    if (agentSelect && Array.isArray(agents)) {
+      agents.forEach(agent => {
+        const option = document.createElement('option');
+        option.value = agent.session_id || agent.id;
+        option.textContent = agent.role || `Agent ${agent.id}`;
+        agentSelect.appendChild(option);
+      });
+    }
+  } catch (e) {
+    console.error('Failed to load agents for filter:', e);
+  }
+
+  // 初期データ読み込み
+  loadAgentChatHistory({ limit: 50 });
+
+  // イベントリスナー
+  const applyBtn = document.getElementById('agentChatApplyBtn');
+  if (applyBtn) {
+    applyBtn.onclick = applyAgentChatFilter;
+  }
+
+  const refreshBtn = document.getElementById('agentChatRefreshBtn');
+  if (refreshBtn) {
+    refreshBtn.onclick = applyAgentChatFilter;
+  }
+}
+
+function applyAgentChatFilter() {
+  const agent_id = document.getElementById('agentChatAgentFilter')?.value || null;
+  const event_type = document.getElementById('agentChatTypeFilter')?.value || null;
+  const date_from = document.getElementById('agentChatDateFrom')?.value || null;
+  const date_to = document.getElementById('agentChatDateTo')?.value || null;
+
+  loadAgentChatHistory({
+    agent_id: agent_id || undefined,
+    event_type: event_type || undefined,
+    date_from: date_from || undefined,
+    date_to: date_to || undefined,
+    limit: 50
+  });
 }
 
 // ══════════════════════════════════════════════

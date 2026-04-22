@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS task_delegations (
 
     -- 委譲の基本情報
     delegation_key        TEXT NOT NULL UNIQUE,  -- "deleg-{timestamp}-{uuid}"
-    task_id               INTEGER NOT NULL REFERENCES dev_tasks(id) ON DELETE CASCADE,
+    task_id               INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
 
     -- 委譲関係
     from_agent_id         TEXT NOT NULL,  -- 委譲元エージェント ID
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS task_delegations (
     created_at            TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     updated_at            TEXT NOT NULL DEFAULT (datetime('now','localtime')),
 
-    FOREIGN KEY (task_id) REFERENCES dev_tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
     FOREIGN KEY (parent_delegation_id) REFERENCES task_delegations(id) ON DELETE SET NULL
 );
 
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS delegation_events (
 
     -- イベントの関連付け
     delegation_id         INTEGER NOT NULL REFERENCES task_delegations(id) ON DELETE CASCADE,
-    task_id               INTEGER NOT NULL REFERENCES dev_tasks(id) ON DELETE CASCADE,
+    task_id               INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
 
     -- イベント情報
     event_type            TEXT NOT NULL CHECK(event_type IN (
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS delegation_events (
     event_timestamp       TEXT NOT NULL DEFAULT (datetime('now','localtime')),
 
     FOREIGN KEY (delegation_id) REFERENCES task_delegations(id) ON DELETE CASCADE,
-    FOREIGN KEY (task_id) REFERENCES dev_tasks(id) ON DELETE CASCADE
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
 -- インデックス
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS delegation_comments (
 
     -- コメント対象
     delegation_id         INTEGER NOT NULL REFERENCES task_delegations(id) ON DELETE CASCADE,
-    task_id               INTEGER NOT NULL REFERENCES dev_tasks(id) ON DELETE CASCADE,
+    task_id               INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
 
     -- コメント情報
     author_id             TEXT NOT NULL,
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS delegation_comments (
     updated_at            TEXT NOT NULL DEFAULT (datetime('now','localtime')),
 
     FOREIGN KEY (delegation_id) REFERENCES task_delegations(id) ON DELETE CASCADE,
-    FOREIGN KEY (task_id) REFERENCES dev_tasks(id) ON DELETE CASCADE
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
 -- インデックス
@@ -140,10 +140,5 @@ CREATE INDEX IF NOT EXISTS idx_delegation_comments_author_id ON delegation_comme
 
 ---
 
--- Extend dev_tasks table with delegation tracking fields
-ALTER TABLE dev_tasks ADD COLUMN IF NOT EXISTS current_delegation_id INTEGER REFERENCES task_delegations(id);
-ALTER TABLE dev_tasks ADD COLUMN IF NOT EXISTS delegation_chain_depth INTEGER DEFAULT 0;
-ALTER TABLE dev_tasks ADD COLUMN IF NOT EXISTS last_delegated_at TEXT;
-
--- インデックス追加
-CREATE INDEX IF NOT EXISTS idx_dev_tasks_current_delegation ON dev_tasks(current_delegation_id);
+-- Note: ALTER TABLE IF NOT EXISTS not supported in SQLite < 3.35.0
+-- These columns can be added manually if needed
