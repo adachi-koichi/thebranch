@@ -336,6 +336,8 @@
     <div class="step-labels">
       <div class="step-label completed" id="stepLabel0">Step 0: ビジョン</div>
       <div class="step-label active" id="stepLabel1">Step 1: 提案</div>
+      <div class="step-label" id="stepLabel2">Step 2: 詳細設定</div>
+      <div class="step-label" id="stepLabel3">Step 3: 実行</div>
     </div>
 
     <div class="wizard-content">
@@ -373,6 +375,72 @@
           <button class="btn-primary" id="proceedStep2Btn" disabled>選択内容で進む</button>
         </div>
       </div>
+
+      <!-- Step 2: Detailed Setup -->
+      <div class="step" id="step2">
+        <h2 class="step-title">部署詳細設定</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+          部署の詳細情報を入力してください。予算と市場基準を比較検証します。
+        </p>
+
+        <div class="form-group">
+          <label for="deptNameInput">部署名 *</label>
+          <input id="deptNameInput" type="text" placeholder="例: マーケティング部" maxlength="100" required>
+        </div>
+
+        <div class="form-group">
+          <label for="managerNameInput">マネージャー名 *</label>
+          <input id="managerNameInput" type="text" placeholder="例: 山田太郎" maxlength="100" required>
+        </div>
+
+        <div class="form-group">
+          <label for="membersCountInput">チーム人数 *</label>
+          <input id="membersCountInput" type="number" min="1" max="100" placeholder="例: 5" required>
+        </div>
+
+        <div class="form-group">
+          <label for="budgetInput">月間予算 (USD) *</label>
+          <input id="budgetInput" type="number" min="1000" max="500000" step="100" placeholder="例: 20000" required>
+        </div>
+
+        <div class="form-group">
+          <label for="kpiInput">KPI (期間と目標) *</label>
+          <textarea id="kpiInput" placeholder="例: 3ヶ月で売上30%増加、コンバージョン率を2%向上させる" maxlength="500" required></textarea>
+        </div>
+
+        <div id="budgetValidationResult" class="error-message" style="background: transparent; color: var(--text); border: 1px solid var(--border); padding: 12px; margin-bottom: 16px; display: none;">
+          <div style="margin-bottom: 8px;">
+            <span style="font-weight: 600; margin-right: 8px;">予算検証:</span>
+            <span id="budgetValidationStatus" style="font-weight: 600;"></span>
+          </div>
+          <div id="budgetValidationMessage" style="font-size: 12px; color: var(--text-muted);"></div>
+        </div>
+
+        <div class="button-group">
+          <button class="btn-secondary" id="backToStep1Btn">戻る</button>
+          <button class="btn-primary" id="proceedStep3Btn" disabled>初期タスク生成</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Execute -->
+      <div class="step" id="step3">
+        <h2 class="step-title">セットアップ完了・実行</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+          AIが生成した初期タスクです。確認したら「実行」ボタンで部署とエージェントを作成します。
+        </p>
+
+        <div id="initialTasksContainer" style="margin-bottom: 16px;"></div>
+
+        <div id="executingLoader" class="loading-spinner" style="display: none;">
+          <div class="spinner"></div>
+          <div class="spinner-text">エージェント起動中...</div>
+        </div>
+
+        <div class="button-group" id="step3ButtonGroup">
+          <button class="btn-secondary" id="backToStep2Btn">戻る</button>
+          <button class="btn-primary" id="executeBtn">実行</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -382,20 +450,40 @@
 
     let currentStep = 0;
     let selectedTemplate = null;
+    let setupData = null;
 
     const els = {
       progressFill: document.getElementById('progressFill'),
       stepLabel0: document.getElementById('stepLabel0'),
       stepLabel1: document.getElementById('stepLabel1'),
+      stepLabel2: document.getElementById('stepLabel2'),
+      stepLabel3: document.getElementById('stepLabel3'),
       step0: document.getElementById('step0'),
       step1: document.getElementById('step1'),
+      step2: document.getElementById('step2'),
+      step3: document.getElementById('step3'),
       visionInput: document.getElementById('visionInput'),
       charCount: document.getElementById('charCount'),
       nextStep1Btn: document.getElementById('nextStep1Btn'),
       backToStep0Btn: document.getElementById('backToStep0Btn'),
       proceedStep2Btn: document.getElementById('proceedStep2Btn'),
       suggestionsContainer: document.getElementById('suggestionsContainer'),
-      errorMessage: document.getElementById('errorMessage')
+      errorMessage: document.getElementById('errorMessage'),
+      deptNameInput: document.getElementById('deptNameInput'),
+      managerNameInput: document.getElementById('managerNameInput'),
+      membersCountInput: document.getElementById('membersCountInput'),
+      budgetInput: document.getElementById('budgetInput'),
+      kpiInput: document.getElementById('kpiInput'),
+      budgetValidationResult: document.getElementById('budgetValidationResult'),
+      budgetValidationStatus: document.getElementById('budgetValidationStatus'),
+      budgetValidationMessage: document.getElementById('budgetValidationMessage'),
+      backToStep1Btn: document.getElementById('backToStep1Btn'),
+      proceedStep3Btn: document.getElementById('proceedStep3Btn'),
+      initialTasksContainer: document.getElementById('initialTasksContainer'),
+      executingLoader: document.getElementById('executingLoader'),
+      step3ButtonGroup: document.getElementById('step3ButtonGroup'),
+      backToStep2Btn: document.getElementById('backToStep2Btn'),
+      executeBtn: document.getElementById('executeBtn')
     };
 
     // Vision input validation
@@ -462,11 +550,112 @@
       goToStep(0);
     });
 
-    // Step 1 -> Step 2 (next page)
+    // Step 1 -> Step 2
     els.proceedStep2Btn.addEventListener('click', () => {
       if (!selectedTemplate) return;
-      // TODO: Navigate to Step 2-3
-      alert(`選択テンプレート: ${selectedTemplate.name}`);
+      goToStep(2);
+    });
+
+    // Step 2 -> Step 1
+    els.backToStep1Btn.addEventListener('click', () => {
+      goToStep(1);
+    });
+
+    // Step 2 -> Step 3
+    els.proceedStep3Btn.addEventListener('click', async () => {
+      const deptName = els.deptNameInput.value.trim();
+      const managerName = els.managerNameInput.value.trim();
+      const membersCount = parseInt(els.membersCountInput.value);
+      const budget = parseFloat(els.budgetInput.value);
+      const kpi = els.kpiInput.value.trim();
+
+      if (!deptName || !managerName || !membersCount || !budget || !kpi) {
+        showError('全てのフィールドを入力してください');
+        return;
+      }
+
+      try {
+        els.proceedStep3Btn.disabled = true;
+        els.proceedStep3Btn.textContent = '生成中...';
+        showError('');
+
+        // Call setup endpoint
+        const setupResp = await fetch('/api/onboarding/setup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}`
+          },
+          body: JSON.stringify({
+            onboarding_id: ONBOARDING_ID,
+            template_id: selectedTemplate.template_id,
+            dept_name: deptName,
+            manager_name: managerName,
+            members_count: membersCount,
+            budget: budget,
+            kpi: kpi
+          })
+        });
+
+        if (!setupResp.ok) {
+          throw new Error('セットアップに失敗しました');
+        }
+
+        const data = await setupResp.json();
+        setupData = data;
+        renderInitialTasks(data.initial_tasks || []);
+        goToStep(3);
+      } catch (err) {
+        showError(err.message);
+        els.proceedStep3Btn.disabled = false;
+        els.proceedStep3Btn.textContent = '初期タスク生成';
+      }
+    });
+
+    // Step 3 -> Step 2
+    els.backToStep2Btn.addEventListener('click', () => {
+      goToStep(2);
+    });
+
+    // Step 3 -> Execute
+    els.executeBtn.addEventListener('click', async () => {
+      if (!setupData) return;
+
+      try {
+        els.executeBtn.disabled = true;
+        els.step3ButtonGroup.style.display = 'none';
+        els.executingLoader.style.display = 'block';
+        showError('');
+
+        // Call execute endpoint
+        const execResp = await fetch('/api/onboarding/execute', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}`
+          },
+          body: JSON.stringify({
+            onboarding_id: ONBOARDING_ID,
+            template_id: selectedTemplate.template_id,
+            dept_name: els.deptNameInput.value.trim()
+          })
+        });
+
+        if (!execResp.ok) {
+          throw new Error('実行に失敗しました');
+        }
+
+        const data = await execResp.json();
+        // Redirect to dashboard after 2 seconds
+        setTimeout(() => {
+          window.location.href = data.dashboard_url || '/dashboard';
+        }, 2000);
+      } catch (err) {
+        showError(err.message);
+        els.executeBtn.disabled = false;
+        els.step3ButtonGroup.style.display = 'flex';
+        els.executingLoader.style.display = 'none';
+      }
     });
 
     function goToStep(stepNum) {
@@ -474,12 +663,18 @@
 
       els.step0.classList.toggle('active', stepNum === 0);
       els.step1.classList.toggle('active', stepNum === 1);
+      els.step2.classList.toggle('active', stepNum === 2);
+      els.step3.classList.toggle('active', stepNum === 3);
 
+      // Update step labels
       els.stepLabel0.className = stepNum > 0 ? 'step-label completed' : 'step-label active';
-      els.stepLabel1.className = stepNum === 1 ? 'step-label active' : 'step-label';
+      els.stepLabel1.className = stepNum === 1 ? 'step-label active' : (stepNum > 1 ? 'step-label completed' : 'step-label');
+      els.stepLabel2.className = stepNum === 2 ? 'step-label active' : (stepNum > 2 ? 'step-label completed' : 'step-label');
+      els.stepLabel3.className = stepNum === 3 ? 'step-label active' : (stepNum > 3 ? 'step-label completed' : 'step-label');
 
-      const progress = (stepNum === 0) ? 50 : 100;
-      els.progressFill.style.width = progress + '%';
+      // Update progress
+      const progressMap = { 0: 25, 1: 50, 2: 75, 3: 100 };
+      els.progressFill.style.width = (progressMap[stepNum] || 0) + '%';
     }
 
     function renderSuggestions(suggestions) {
@@ -510,6 +705,27 @@
       });
     }
 
+    function renderInitialTasks(tasks) {
+      els.initialTasksContainer.innerHTML = tasks.length === 0
+        ? '<p style="text-align: center; color: var(--text-muted);">初期タスクなし</p>'
+        : '';
+
+      tasks.forEach((task, idx) => {
+        const taskCard = document.createElement('div');
+        taskCard.className = 'suggestion-card';
+        taskCard.innerHTML = `
+          <div class="suggestion-name">タスク ${idx + 1}: ${task.title}</div>
+          <div class="suggestion-reason">${task.description}</div>
+          <div class="suggestion-info">
+            <span>予算: $${task.budget}</span>
+            <span>期限: ${task.deadline}</span>
+            <span>担当: ${task.assigned_to}</span>
+          </div>
+        `;
+        els.initialTasksContainer.appendChild(taskCard);
+      });
+    }
+
     function showError(msg) {
       if (msg) {
         els.errorMessage.textContent = msg;
@@ -523,6 +739,14 @@
     if (!ONBOARDING_ID || !TOKEN) {
       showError('認証情報が不足しています');
     }
+
+    // Form validation for Step 2
+    const step2Inputs = [els.deptNameInput, els.managerNameInput, els.membersCountInput, els.budgetInput, els.kpiInput];
+    const validateStep2 = () => {
+      const allFilled = step2Inputs.every(input => input.value.trim() !== '');
+      els.proceedStep3Btn.disabled = !allFilled;
+    };
+    step2Inputs.forEach(input => input.addEventListener('input', validateStep2));
   </script>
 </body>
 </html>
