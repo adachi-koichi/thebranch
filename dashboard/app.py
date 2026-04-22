@@ -22,6 +22,12 @@ from . import models
 from workflow.repositories.template import TemplateRepository
 from workflow.services.template import TemplateService
 from workflow.validation.template import TemplateValidator
+from workflow.repositories.graph_repository_departments import GraphRepositoryDepartments
+from workflow.repositories.kuzu_connection import KuzuConnection
+from workflow.repositories.cost_repository import CostRepository
+from workflow.services.cost_service import CostTrackingService
+from workflow.repositories.accounting_repository import AccountingRepository
+from workflow.services.accounting_service import AccountingService
 
 TASKS_DB = Path.home() / ".claude" / "skills" / "task-manager-sqlite" / "data" / "tasks.sqlite"
 SESSIONS_DIR = Path.home() / ".claude" / "sessions"
@@ -42,12 +48,27 @@ THEBRANCH_DB = DASHBOARD_DIR / "data" / "thebranch.sqlite"
 
 template_repo = None
 template_service = None
+kuzu_conn = None
+graph_repo_dept = None
+cost_repo = None
+cost_service = None
+accounting_repo = None
+accounting_service = None
 
 def init_workflow_services():
-    global template_repo, template_service
+    global template_repo, template_service, kuzu_conn, graph_repo_dept, cost_repo, cost_service, accounting_repo, accounting_service
     if template_repo is None:
         template_repo = TemplateRepository(str(THEBRANCH_DB))
         template_service = TemplateService(template_repo, TemplateValidator(template_repo))
+    if kuzu_conn is None:
+        kuzu_conn = KuzuConnection()
+        graph_repo_dept = GraphRepositoryDepartments(kuzu_conn)
+    if cost_repo is None:
+        cost_repo = CostRepository(str(THEBRANCH_DB))
+        cost_service = CostTrackingService(cost_repo)
+    if accounting_repo is None:
+        accounting_repo = AccountingRepository(str(THEBRANCH_DB))
+        accounting_service = AccountingService(accounting_repo)
 
 def get_template_service():
     if template_service is None:
@@ -58,6 +79,11 @@ def get_template_repo():
     if template_repo is None:
         init_workflow_services()
     return template_repo
+
+def get_accounting_service():
+    if accounting_service is None:
+        init_workflow_services()
+    return accounting_service
 
 
 # ──────────────────────────────────────────────
@@ -738,6 +764,42 @@ async def get_agents_data() -> list:
 @app.get("/api/agents")
 async def get_agents():
     return await get_agents_data()
+
+
+class DelegateRequest(BaseModel):
+    delegateToId: str
+
+
+@app.put("/api/agents/{agent_id}/delegate")
+async def delegate_agent(agent_id: int, req: DelegateRequest):
+    """エージェントのタスクを別のエージェントに委譲"""
+    try:
+        if not req.delegateToId:
+            raise HTTPException(status_code=400, detail="委譲先エージェントが指定されていません")
+
+        agents = await get_agents_data()
+        agent = next((a for a in agents if a.get('id') == agent_id), None)
+
+        if not agent:
+            raise HTTPException(status_code=404, detail=f"エージェント {agent_id} が見つかりません")
+
+        task_title = agent.get('task_title', '')
+        delegate_info = {
+            "from_agent_id": agent_id,
+            "to_agent_id": req.delegateToId,
+            "task_title": task_title,
+            "delegated_at": datetime.now().isoformat()
+        }
+
+        return {
+            "success": True,
+            "message": f"タスク「{task_title}」をエージェント {req.delegateToId} に委譲しました",
+            "delegate_info": delegate_info
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"委譲処理エラー: {str(e)}")
 
 
 # ──────────────────────────────────────────────
@@ -1504,6 +1566,104 @@ async def get_costs():
         "by_project": by_project_list,
         "by_date": by_date_list,
     }
+
+
+# ──────────────────────────────────────────────
+# Cost Tracking
+# ──────────────────────────────────────────────
+
+@app.post("/api/cost-records")
+async def record_api_call(request: models.APICallCreate):
+    """Record API call and return id"""
+    try:
+        init_workflow_services()
+        call_id = cost_service.record_api_call(
+            department_id=request.department_id,
+            agent_id=request.agent_id,
+            api_provider=request.api_provider,
+            model_name=request.model_name,
+            input_tokens=request.input_tokens,
+            output_tokens=request.output_tokens,
+            cache_read_tokens=request.cache_read_tokens,
+            cache_creation_tokens=request.cache_creation_tokens,
+            cost_usd=request.cost_usd,
+            status=request.status,
+            error_message=request.error_message,
+            request_timestamp=request.request_timestamp,
+        )
+        return {"ok": True, "id": call_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/departments/{dept_id}/costs")
+async def get_department_costs(dept_id: int, year: Optional[int] = None, month: Optional[int] = None):
+    """Get department cost summary"""
+    try:
+        init_workflow_services()
+        if year is None or month is None:
+            now = datetime.now()
+            year = year or now.year
+            month = month or now.month
+
+        summary = cost_service.get_department_cost_summary(dept_id)
+        trend = cost_service.get_monthly_cost_trend(dept_id, months=12)
+
+        return {
+            "ok": True,
+            "summary": summary,
+            "trend": trend,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/departments/{dept_id}/budget")
+async def get_budget_comparison(dept_id: int):
+    """Get budget vs cost comparison with alerts"""
+    try:
+        init_workflow_services()
+        summary = cost_service.get_department_cost_summary(dept_id)
+
+        now = datetime.now()
+        alerts = cost_service.check_budget_alerts(
+            dept_id, now.year, now.month, summary.get("budget")
+        )
+
+        return {
+            "budget": summary.get("budget"),
+            "spent": summary.get("spent"),
+            "remaining": summary.get("remaining"),
+            "utilization_percent": summary.get("utilization_percent"),
+            "alerts": alerts,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/cost-alerts")
+async def list_cost_alerts(department_id: Optional[int] = None, status: str = "unresolved"):
+    """List cost alerts"""
+    try:
+        init_workflow_services()
+        alerts = cost_service.get_cost_alerts(department_id, status)
+        return {"ok": True, "alerts": alerts}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/cost-alerts/{alert_id}/resolve")
+async def resolve_cost_alert(alert_id: int, request_data: dict):
+    """Resolve cost alert"""
+    try:
+        init_workflow_services()
+        resolved_by = request_data.get("resolved_by", "system")
+        note = request_data.get("note")
+
+        cost_service.resolve_alert(alert_id, resolved_by, note)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ──────────────────────────────────────────────
@@ -3659,6 +3819,7 @@ async def get_department(dept_id: int):
 @app.put("/api/departments/{dept_id}")
 async def update_department(dept_id: int, update_req: models.DepartmentUpdate):
     await ensure_db_initialized()
+    init_workflow_services()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
         updates = []
@@ -3676,6 +3837,11 @@ async def update_department(dept_id: int, update_req: models.DepartmentUpdate):
         if update_req.status:
             updates.append("status = ?")
             params.append(update_req.status)
+        if update_req.parent_id is not None:
+            if graph_repo_dept and graph_repo_dept.detect_circular_parent_assignment(dept_id, update_req.parent_id):
+                raise HTTPException(status_code=400, detail={"error": "CIRCULAR_REFERENCE", "message": "循環参照が検出されました"})
+            updates.append("parent_id = ?")
+            params.append(update_req.parent_id)
 
         if not updates:
             raise HTTPException(status_code=400, detail="更新フィールドがありません")
@@ -3689,6 +3855,88 @@ async def update_department(dept_id: int, update_req: models.DepartmentUpdate):
         cursor = await db.execute(
             "SELECT id, name, slug, description, parent_id, budget, status, created_at, updated_at FROM departments WHERE id = ?",
             (dept_id,),
+        )
+        row = await cursor.fetchone()
+
+    return dict(row) if row else {"error": "更新失敗"}
+
+async def _build_dept_tree(dept_id: int, db) -> dict:
+    """Build hierarchical tree structure for a department"""
+    cursor = await db.execute(
+        "SELECT id, name, slug, description, parent_id, budget, status, created_at, updated_at FROM departments WHERE id = ?",
+        (dept_id,)
+    )
+    row = await cursor.fetchone()
+    if not row:
+        return None
+
+    dept = dict(row)
+    cursor = await db.execute("SELECT COUNT(*) FROM department_agents WHERE department_id = ?", (dept_id,))
+    agent_count = (await cursor.fetchone())[0]
+    cursor = await db.execute("SELECT COUNT(*) FROM teams WHERE department_id = ?", (dept_id,))
+    team_count = (await cursor.fetchone())[0]
+    dept["agent_count"] = agent_count
+    dept["team_count"] = team_count
+
+    cursor = await db.execute("SELECT id FROM departments WHERE parent_id = ? ORDER BY name", (dept_id,))
+    children_ids = [r[0] for r in await cursor.fetchall()]
+    dept["children"] = []
+    for child_id in children_ids:
+        child = await _build_dept_tree(child_id, db)
+        if child:
+            dept["children"].append(child)
+
+    return dept
+
+@app.get("/api/departments/hierarchy")
+async def get_departments_hierarchy():
+    """Get all departments in hierarchical tree structure"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT id FROM departments WHERE parent_id IS NULL ORDER BY name")
+        root_ids = [r[0] for r in await cursor.fetchall()]
+
+        hierarchy = []
+        for root_id in root_ids:
+            dept = await _build_dept_tree(root_id, db)
+            if dept:
+                hierarchy.append(dept)
+
+    return hierarchy
+
+@app.put("/api/departments/{dept_id}/parent")
+async def change_department_parent(dept_id: int, parent_req: models.ParentChangeRequest):
+    """Change a department's parent"""
+    await ensure_db_initialized()
+    init_workflow_services()
+
+    if not parent_req.parent_id:
+        new_parent_id = None
+    else:
+        new_parent_id = parent_req.parent_id
+
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (dept_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="部署が見つかりません")
+
+        if new_parent_id:
+            cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (new_parent_id,))
+            if not await cursor.fetchone():
+                raise HTTPException(status_code=404, detail="親部署が見つかりません")
+
+            if graph_repo_dept and graph_repo_dept.detect_circular_parent_assignment(dept_id, new_parent_id):
+                raise HTTPException(status_code=400, detail={"error": "CIRCULAR_REFERENCE", "message": "循環参照が検出されました"})
+
+        await db.execute("UPDATE departments SET parent_id = ?, updated_at = datetime('now','localtime') WHERE id = ?", (new_parent_id, dept_id))
+        await db.commit()
+
+        cursor = await db.execute(
+            "SELECT id, name, slug, description, parent_id, budget, status, created_at, updated_at FROM departments WHERE id = ?",
+            (dept_id,)
         )
         row = await cursor.fetchone()
 
@@ -4501,6 +4749,143 @@ async def publish_template(template_id: int):
 
 
 # ──────────────────────────────────────────────
+# Accounting
+# ──────────────────────────────────────────────
+
+class InvoiceCreateRequest(BaseModel):
+    department_id: int
+    invoice_number: str
+    vendor_name: str
+    invoice_date: str
+    due_date: str
+    amount_jpy: float
+    tax_amount_jpy: float = 0
+    description: Optional[str] = None
+    items: list = []
+
+class ExpenseSubmissionRequest(BaseModel):
+    department_id: int
+    submission_number: str
+    employee_name: str
+    submission_date: str
+    period_start: str
+    period_end: str
+    total_amount_jpy: float
+    description: Optional[str] = None
+    items: list = []
+
+@app.post("/api/accounting/invoices", status_code=201)
+async def create_invoice(req: InvoiceCreateRequest):
+    try:
+        init_workflow_services()
+        service = get_accounting_service()
+        invoice_id = service.create_invoice(
+            department_id=req.department_id,
+            invoice_number=req.invoice_number,
+            vendor_name=req.vendor_name,
+            invoice_date=req.invoice_date,
+            due_date=req.due_date,
+            amount_jpy=req.amount_jpy,
+            tax_amount_jpy=req.tax_amount_jpy,
+            description=req.description,
+        )
+        if req.items:
+            service.add_invoice_items(invoice_id, req.items)
+        return {
+            "invoice_id": invoice_id,
+            "invoice_number": req.invoice_number,
+            "status": "pending"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/accounting/invoices/{invoice_id}")
+async def get_invoice(invoice_id: int):
+    try:
+        init_workflow_services()
+        service = get_accounting_service()
+        invoice = service.get_invoice_detail(invoice_id)
+        return invoice
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.post("/api/accounting/invoices/{invoice_id}/approve")
+async def approve_invoice(invoice_id: int, approver_id: int):
+    try:
+        init_workflow_services()
+        service = get_accounting_service()
+        service.approve_invoice(invoice_id, approver_id)
+        return {"invoice_id": invoice_id, "status": "approved"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/accounting/expenses", status_code=201)
+async def submit_expense(req: ExpenseSubmissionRequest):
+    try:
+        init_workflow_services()
+        service = get_accounting_service()
+        submission_id = service.submit_expense(
+            department_id=req.department_id,
+            submission_number=req.submission_number,
+            employee_name=req.employee_name,
+            submission_date=req.submission_date,
+            period_start=req.period_start,
+            period_end=req.period_end,
+            total_amount_jpy=req.total_amount_jpy,
+            description=req.description,
+        )
+        if req.items:
+            service.add_expense_items(submission_id, req.items)
+        return {
+            "submission_id": submission_id,
+            "submission_number": req.submission_number,
+            "status": "pending"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/accounting/expenses/{submission_id}")
+async def get_expense(submission_id: int):
+    try:
+        init_workflow_services()
+        service = get_accounting_service()
+        submission = service.get_expense_detail(submission_id)
+        return submission
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.post("/api/accounting/expenses/{submission_id}/approve")
+async def approve_expense(submission_id: int, approver_id: int):
+    try:
+        init_workflow_services()
+        service = get_accounting_service()
+        service.approve_expense_submission(submission_id, approver_id)
+        return {"submission_id": submission_id, "status": "approved"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/accounting/departments/{department_id}/summary")
+async def get_accounting_summary(department_id: int):
+    try:
+        init_workflow_services()
+        service = get_accounting_service()
+        summary = service.get_department_summary(department_id)
+        return summary
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.post("/api/accounting/reports/monthly")
+async def generate_monthly_report(department_id: int, year: int, month: int):
+    try:
+        init_workflow_services()
+        service = get_accounting_service()
+        report = service.generate_monthly_report(department_id, year, month)
+        return report
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ──────────────────────────────────────────────
 # Onboarding
 # ──────────────────────────────────────────────
 
@@ -4554,6 +4939,231 @@ async def complete_onboarding(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ウィザード実行エラー: {str(e)}")
+
+
+# ──────────────────────────────────────────────
+# Accounting (会計部)
+# ──────────────────────────────────────────────
+
+# Initialize accounting service
+accounting_repo = None
+accounting_service = None
+
+def init_accounting_services():
+    global accounting_repo, accounting_service
+    if accounting_repo is None:
+        from workflow.repositories.accounting_repository import AccountingRepository
+        from workflow.services.accounting_service import AccountingService
+        accounting_repo = AccountingRepository(str(THEBRANCH_DB))
+        accounting_service = AccountingService(accounting_repo)
+
+# Pydantic models for requests
+class InvoiceCreate(BaseModel):
+    invoice_number: str
+    vendor_name: str
+    invoice_date: str
+    due_date: str
+    amount_jpy: float
+    tax_amount_jpy: float = 0.0
+    description: Optional[str] = None
+    vendor_id: Optional[int] = None
+
+class InvoiceItemCreate(BaseModel):
+    item_description: str
+    quantity: float
+    unit_price_jpy: float
+    line_amount_jpy: float
+
+class ExpenseSubmissionCreate(BaseModel):
+    submission_number: str
+    employee_name: str
+    submission_date: str
+    period_start: str
+    period_end: str
+    total_amount_jpy: float
+    description: Optional[str] = None
+    employee_id: Optional[int] = None
+
+class ExpenseItemCreate(BaseModel):
+    expense_category: str
+    expense_date: str
+    description: str
+    amount_jpy: float
+    receipt_file_path: Optional[str] = None
+
+# Invoice endpoints
+@app.post("/api/accounting/invoices")
+async def create_invoice(department_id: int, invoice: InvoiceCreate):
+    init_accounting_services()
+    try:
+        invoice_id = accounting_service.create_invoice(
+            department_id=department_id,
+            invoice_number=invoice.invoice_number,
+            vendor_name=invoice.vendor_name,
+            invoice_date=invoice.invoice_date,
+            due_date=invoice.due_date,
+            amount_jpy=invoice.amount_jpy,
+            tax_amount_jpy=invoice.tax_amount_jpy,
+            description=invoice.description,
+            vendor_id=invoice.vendor_id,
+        )
+        return {"id": invoice_id, "status": "created"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/accounting/invoices/{invoice_id}")
+async def get_invoice(invoice_id: int):
+    init_accounting_services()
+    try:
+        invoice = accounting_service.get_invoice(invoice_id)
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        return invoice
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/accounting/invoices")
+async def list_invoices(department_id: int, status: Optional[str] = None):
+    init_accounting_services()
+    try:
+        invoices = accounting_service.get_invoices(department_id, status)
+        return {"invoices": invoices}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/accounting/invoices/{invoice_id}/items")
+async def add_invoice_item(invoice_id: int, item: InvoiceItemCreate):
+    init_accounting_services()
+    try:
+        item_id = accounting_service.add_invoice_item(
+            invoice_id=invoice_id,
+            item_description=item.item_description,
+            quantity=item.quantity,
+            unit_price_jpy=item.unit_price_jpy,
+            line_amount_jpy=item.line_amount_jpy,
+        )
+        return {"id": item_id, "status": "created"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/accounting/invoices/{invoice_id}/approve")
+async def approve_invoice(invoice_id: int, approver_id: int):
+    init_accounting_services()
+    try:
+        accounting_service.approve_invoice(invoice_id, approver_id)
+        return {"status": "approved"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.put("/api/accounting/invoices/{invoice_id}/status")
+async def update_invoice_status(
+    invoice_id: int, status: str, approval_status: Optional[str] = None
+):
+    init_accounting_services()
+    try:
+        accounting_service.update_invoice_status(invoice_id, status, approval_status)
+        return {"status": "updated"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Expense endpoints
+@app.post("/api/accounting/expenses")
+async def create_expense_submission(
+    department_id: int, submission: ExpenseSubmissionCreate
+):
+    init_accounting_services()
+    try:
+        submission_id = accounting_service.create_expense_submission(
+            department_id=department_id,
+            submission_number=submission.submission_number,
+            employee_name=submission.employee_name,
+            submission_date=submission.submission_date,
+            period_start=submission.period_start,
+            period_end=submission.period_end,
+            total_amount_jpy=submission.total_amount_jpy,
+            description=submission.description,
+            employee_id=submission.employee_id,
+        )
+        return {"id": submission_id, "status": "created"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/accounting/expenses/{submission_id}")
+async def get_expense_submission(submission_id: int):
+    init_accounting_services()
+    try:
+        submission = accounting_service.get_expense_submission(submission_id)
+        if not submission:
+            raise HTTPException(status_code=404, detail="Expense submission not found")
+        return submission
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/accounting/expenses")
+async def list_expense_submissions(department_id: int, status: Optional[str] = None):
+    init_accounting_services()
+    try:
+        submissions = accounting_service.get_expense_submissions(department_id, status)
+        return {"submissions": submissions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/accounting/expenses/{submission_id}/items")
+async def add_expense_item(submission_id: int, item: ExpenseItemCreate):
+    init_accounting_services()
+    try:
+        item_id = accounting_service.add_expense_item(
+            submission_id=submission_id,
+            expense_category=item.expense_category,
+            expense_date=item.expense_date,
+            description=item.description,
+            amount_jpy=item.amount_jpy,
+            receipt_file_path=item.receipt_file_path,
+        )
+        return {"id": item_id, "status": "created"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/accounting/expenses/{submission_id}/approve")
+async def approve_expense_submission(submission_id: int, approver_id: int):
+    init_accounting_services()
+    try:
+        accounting_service.approve_expense_submission(submission_id, approver_id)
+        return {"status": "approved"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Report endpoints
+@app.get("/api/accounting/reports/monthly/{year}/{month}")
+async def get_monthly_report(department_id: int, year: int, month: int):
+    init_accounting_services()
+    try:
+        report = accounting_service.generate_monthly_report(department_id, year, month)
+        return report
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/accounting/reports/pending-approvals")
+async def get_pending_approvals(department_id: int):
+    init_accounting_services()
+    try:
+        result = accounting_service.get_pending_approvals(department_id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/accounting/reports/expenses-by-category")
+async def get_expenses_by_category(
+    department_id: int, year: int, month: int
+):
+    init_accounting_services()
+    try:
+        result = accounting_service.get_expense_summary_by_category(
+            department_id, year, month
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ──────────────────────────────────────────────

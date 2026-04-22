@@ -12,7 +12,7 @@ import sys
 
 DASHBOARD_DIR = Path(__file__).parent
 MIGRATIONS_DIR = DASHBOARD_DIR / "migrations"
-DB_PATH = DASHBOARD_DIR / "app.sqlite"
+DB_PATH = DASHBOARD_DIR / "data" / "thebranch.sqlite"
 
 
 def get_db_connection():
