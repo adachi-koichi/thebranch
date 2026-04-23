@@ -1530,6 +1530,10 @@
   <button onclick="openDepartmentModal()" style="background:var(--accent);border:none;border-radius:8px;color:#0d1117;cursor:pointer;font-size:13px;font-weight:600;padding:4px 12px;margin-right:8px;transition:opacity 0.2s;" title="部署を作成">➕ 部署を作成</button>
   <button id="kbd-shortcut-btn" title="キーボードショートカット (? キー)" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text-muted);cursor:pointer;font-size:14px;padding:4px 10px;margin-right:8px;transition:all 0.2s;">?</button>
   <button id="theme-toggle" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text-muted);cursor:pointer;font-size:16px;padding:4px 10px;margin-right:8px;transition:all 0.2s;" title="テーマ切り替え">🌙</button>
+  <button id="notificationBellBtn" title="通知" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px 10px;margin-right:8px;transition:all 0.2s;position:relative;">
+    🔔
+    <span id="unreadBadge" style="position:absolute;top:-2px;right:-2px;background:var(--red);color:white;border-radius:50%;width:20px;height:20px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;display:none;">0</span>
+  </button>
   <span id="wsBadge" title="WebSocket接続状態" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;border:1px solid var(--border);color:var(--text-muted);margin-right:6px;">
     <span id="wsDot" style="width:7px;height:7px;border-radius:50%;background:var(--gray);display:inline-block;transition:background 0.3s;"></span>
     <span id="wsText">WS</span>
@@ -1579,6 +1583,7 @@
   <button class="tab-btn" data-tab="resource-management">⚙️ リソース管理</button>
   <button class="tab-btn" data-tab="marketplace">🛒 マーケットプレイス</button>
   <button class="tab-btn" data-tab="sla">📊 SLAダッシュボード</button>
+  <button class="tab-btn" data-tab="integrations">🔗 統合設定</button>
 </nav>
 
 <!-- Main -->
@@ -2703,7 +2708,56 @@
     </div>
   </div>
 
+  <!-- Integrations Settings Tab -->
+  <div class="tab-panel" id="tab-integrations" style="display:none;">
+    <div style="padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h2 style="margin:0;">🔗 統合設定</h2>
+        <button onclick="openIntegrationModal()" style="padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;">➕ 新規統合を追加</button>
+      </div>
+
+      <!-- Integrations List -->
+      <div id="integrationsList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;">
+        <div style="text-align:center;color:var(--text-muted);padding:40px;background:var(--card);border-radius:8px;grid-column:1/-1;">統合が登録されていません</div>
+      </div>
+    </div>
+  </div>
+
 </main>
+
+<!-- Notification Panel -->
+<div id="notificationPanel" style="display:none;position:fixed;top:56px;right:20px;width:400px;max-height:600px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:280;">
+  <div style="padding:16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+    <h3 style="margin:0;font-size:14px;font-weight:600;">通知</h3>
+    <button onclick="toggleNotificationPanel()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">&times;</button>
+  </div>
+
+  <!-- Filter Section -->
+  <div style="padding:12px;border-bottom:1px solid var(--border);display:flex;gap:8px;">
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+      <input type="checkbox" id="notifFilterUnread" style="cursor:pointer;"> 未読のみ
+    </label>
+    <select id="notifFilterType" style="padding:4px 8px;font-size:13px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);cursor:pointer;">
+      <option value="">すべての種別</option>
+      <option value="agent_status">エージェント状態</option>
+      <option value="task_delegation">タスク委譲</option>
+      <option value="cost_alert">コスト警告</option>
+      <option value="approval_request">承認申請</option>
+      <option value="error_event">エラー</option>
+      <option value="system_alert">システム警告</option>
+    </select>
+  </div>
+
+  <!-- Notification List -->
+  <div id="notificationList" style="flex:1;overflow-y:auto;max-height:400px;">
+    <div style="text-align:center;color:var(--text-muted);padding:40px 20px;font-size:13px;">通知を読み込んでいます...</div>
+  </div>
+
+  <!-- Footer -->
+  <div style="padding:12px;border-top:1px solid var(--border);text-align:center;">
+    <button onclick="markAllNotificationsAsRead()" style="font-size:13px;background:none;border:none;color:var(--accent);cursor:pointer;text-decoration:underline;">すべて既読にする</button>
+  </div>
+</div>
 
 <!-- Keyboard Shortcuts Panel (#1633) -->
 <div id="kbdShortcutPanel" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:300;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px;min-width:400px;max-width:520px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
@@ -2733,6 +2787,122 @@
     <pre id="paneModalLog" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;font-family:monospace;overflow:auto;max-height:420px;white-space:pre-wrap;word-break:break-all;color:var(--text)"></pre>
     <div class="modal-footer">
       <button class="btn btn-secondary" id="closePaneModalBtn">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- Integration Modal -->
+<div class="modal-overlay" id="integrationModal" style="display:none;">
+  <div class="modal" style="max-width:500px;width:90%;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h2 style="margin:0;" id="integrationModalTitle">新規統合を追加</h2>
+      <button onclick="closeIntegrationModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;">&times;</button>
+    </div>
+
+    <form id="integrationForm">
+      <div class="form-group">
+        <label>統合タイプ <span style="color:var(--red)">*</span></label>
+        <select id="integration_type" required style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+          <option value="">選択してください</option>
+          <option value="slack">Slack</option>
+          <option value="discord">Discord</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Webhook URL <span style="color:var(--red)">*</span></label>
+        <input type="url" id="webhook_url" placeholder="https://hooks.slack.com/..." required style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);box-sizing:border-box;">
+        <small style="display:block;margin-top:4px;color:var(--text-muted);">
+          <button type="button" onclick="showWebhookGuide(event)" style="background:none;border:none;color:var(--accent);cursor:pointer;text-decoration:underline;padding:0;">Webhook URL の取得方法</button>
+        </small>
+      </div>
+
+      <div class="form-group">
+        <label>Webhook Secret <span style="color:var(--red)">*</span></label>
+        <input type="password" id="webhook_secret" placeholder="Webhook Secret キー" required style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);box-sizing:border-box;">
+      </div>
+
+      <div class="form-group">
+        <label>チャネル ID</label>
+        <input type="text" id="channel_id" placeholder="（任意）" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);box-sizing:border-box;">
+      </div>
+
+      <div class="form-group">
+        <label>チャネル名</label>
+        <input type="text" id="channel_name" placeholder="（任意）" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);box-sizing:border-box;">
+      </div>
+
+      <!-- Notification Filters -->
+      <div style="margin:20px 0;padding:16px;background:var(--bg);border-radius:6px;">
+        <p style="margin:0 0 12px 0;font-size:13px;font-weight:600;color:var(--text);">通知フィルタ</p>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="notify_on_agent_status" checked style="cursor:pointer;"> エージェント状態
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="notify_on_task_delegation" checked style="cursor:pointer;"> タスク委譲
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="notify_on_cost_alert" checked style="cursor:pointer;"> コスト警告
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="notify_on_approval_request" checked style="cursor:pointer;"> 承認申請
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="notify_on_error_event" checked style="cursor:pointer;"> エラーイベント
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="notify_on_system_alert" checked style="cursor:pointer;"> システム警告
+        </label>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:20px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="is_active" checked style="cursor:pointer;"> 有効
+      </label>
+
+      <!-- Verification Result -->
+      <div id="verificationResult" style="margin-bottom:16px;padding:12px;background:var(--bg);border-radius:6px;display:none;font-size:13px;"></div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeIntegrationModal()">キャンセル</button>
+        <button type="button" id="verifyBtn" class="btn btn-secondary">Webhook を検証</button>
+        <button type="submit" class="btn" style="background:var(--accent);color:white;border:none;">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Webhook Guide Modal -->
+<div class="modal-overlay" id="webhookGuideModal" style="display:none;">
+  <div class="modal" style="max-width:600px;width:90%;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h2 style="margin:0;">Webhook URL の取得方法</h2>
+      <button onclick="closeWebhookGuideModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;">&times;</button>
+    </div>
+
+    <!-- Slack Guide -->
+    <div style="margin-bottom:24px;">
+      <h3 style="color:var(--accent);font-size:15px;margin-bottom:12px;">Slack</h3>
+      <ol style="color:var(--text);font-size:13px;line-height:1.6;">
+        <li><strong>Slack Workspace の設定</strong> へアクセスします</li>
+        <li><strong>アプリ</strong> → <strong>アプリを検索</strong> から "Incoming Webhooks" を検索</li>
+        <li><strong>Add to Slack</strong> をクリック</li>
+        <li>通知を受け取るチャネルを選択</li>
+        <li><strong>Incoming Webhook URL</strong> をコピー</li>
+        <li>各 Slack Workspace の Signing Secret が必要な場合は、同じアプリ設定ページから取得</li>
+      </ol>
+    </div>
+
+    <!-- Discord Guide -->
+    <div>
+      <h3 style="color:var(--accent);font-size:15px;margin-bottom:12px;">Discord</h3>
+      <ol style="color:var(--text);font-size:13px;line-height:1.6;">
+        <li><strong>Discord サーバー</strong> で、通知を受け取るチャネルを右クリック</li>
+        <li><strong>チャネルの編集</strong> → <strong>ウェブフック</strong></li>
+        <li><strong>新しいウェブフック</strong> ボタンをクリック</li>
+        <li>ウェブフック名を設定（例：THEBRANCH Notifications）</li>
+        <li><strong>ウェブフック URL をコピー</strong></li>
+        <li>Secret キーは Discord 公開ウェブフックの場合は不要（空にできます）</li>
+      </ol>
     </div>
   </div>
 </div>
@@ -3139,7 +3309,7 @@ function formatDate(d) {
 // ══════════════════════════════════════════════
 
 const TAB_GROUPS = {
-  '🔧 管理': ['tasks', 'agents', 'projects', 'daemons', 'panes'],
+  '🔧 管理': ['tasks', 'agents', 'projects', 'daemons', 'panes', 'integrations'],
   '🔄 ワークフロー': ['wf-instances', 'wf-templates', 'dept-templates'],
   '📊 分析': ['costs', 'metrics', 'alerts', 'gantt', 'dag', 'stats', 'charts', 'agent-chat'],
   '📈 その他': ['trend', 'project-summary', 'session-tasks', 'heatmap', 'logs', 'health-hist', 'bubble', 'activity', 'rankings']
@@ -3279,6 +3449,365 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'sla') { fetchSLAPolicies(); if (!_slaTimer) _slaTimer = setInterval(fetchSLAPolicies, 30000); }
     else { if (_slaTimer) { clearInterval(_slaTimer); _slaTimer = null; } }
   });
+});
+
+// ══════════════════════════════════════════════
+// Notifications & Integrations
+// ══════════════════════════════════════════════
+
+let _notificationPollingTimer = null;
+
+function updateNotificationBadge(count) {
+  const badge = document.getElementById('unreadBadge');
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function toggleNotificationPanel() {
+  const panel = document.getElementById('notificationPanel');
+  if (panel.style.display === 'block') {
+    panel.style.display = 'none';
+  } else {
+    panel.style.display = 'block';
+    fetchNotifications();
+  }
+}
+
+async function fetchNotifications() {
+  try {
+    const filterUnread = document.getElementById('notifFilterUnread').checked;
+    const filterType = document.getElementById('notifFilterType').value;
+    const params = new URLSearchParams();
+    if (filterUnread) params.set('unread', '1');
+    if (filterType) params.set('type', filterType);
+
+    const res = await fetch(`/api/notifications?${params}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const data = await res.json();
+    renderNotificationList(data.notifications || []);
+    updateNotificationBadge(data.unread_count || 0);
+  } catch (e) {
+    console.error('Failed to fetch notifications:', e);
+    const list = document.getElementById('notificationList');
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">通知の読み込みに失敗しました</div>';
+  }
+}
+
+function renderNotificationList(notifications) {
+  const list = document.getElementById('notificationList');
+  if (!notifications || notifications.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 20px;font-size:13px;">通知はありません</div>';
+    return;
+  }
+
+  list.innerHTML = notifications.map(notif => {
+    const timestamp = formatDate(notif.created_at);
+    const isRead = notif.is_read ? 'opacity:0.6;' : '';
+    const severityColor = notif.severity === 'error' ? 'var(--red)' :
+                          notif.severity === 'warning' ? '#ffd33d' :
+                          notif.severity === 'critical' ? 'var(--red)' : 'var(--green)';
+    return `
+      <div style="padding:12px;border-bottom:1px solid var(--border);${isRead}cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+        <div style="display:flex;gap:10px;">
+          <div style="width:8px;height:8px;border-radius:50%;background:${severityColor};margin-top:4px;flex-shrink:0;"></div>
+          <div style="flex:1;font-size:13px;">
+            <div style="font-weight:600;color:var(--text);">${escHtml(notif.title)}</div>
+            <div style="color:var(--text-muted);font-size:12px;margin-top:4px;">${escHtml(notif.message)}</div>
+            <div style="color:var(--text-muted);font-size:11px;margin-top:6px;">${timestamp}</div>
+          </div>
+          <button onclick="markNotificationAsRead(${notif.id});event.stopPropagation();" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;flex-shrink:0;">✓</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function markNotificationAsRead(id) {
+  try {
+    const res = await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    fetchNotifications();
+  } catch (e) {
+    console.error('Failed to mark notification as read:', e);
+  }
+}
+
+async function markAllNotificationsAsRead() {
+  try {
+    const res = await fetch(`/api/notifications/read-all`, { method: 'POST' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    fetchNotifications();
+    showToast('すべての通知を既読にしました', 'success');
+  } catch (e) {
+    console.error('Failed to mark all as read:', e);
+  }
+}
+
+function startNotificationPolling(interval = 30000) {
+  if (_notificationPollingTimer) return;
+  _notificationPollingTimer = setInterval(fetchNotifications, interval);
+  fetchNotifications();
+}
+
+// Extend WebSocket handler to update badge on new notifications
+const _origConnectNotificationsWebSocket = connectNotificationsWebSocket;
+connectNotificationsWebSocket = function() {
+  _origConnectNotificationsWebSocket.call(this);
+  const origWs = _notificationsWs;
+  Object.defineProperty(_notificationsWs, 'onmessage', {
+    value: function(event) {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'notification') {
+          updateNotificationBadge((window._unreadCount || 0) + 1);
+          const toastType = msg.severity === 'error' ? 'error' :
+                           msg.severity === 'warning' ? 'warning' :
+                           msg.severity === 'critical' ? 'error' : 'info';
+          Toast.create(`${msg.title}: ${msg.message}`, toastType, 4000);
+        }
+      } catch (e) {
+        console.error('Failed to parse notification:', e);
+      }
+    },
+    writable: false
+  });
+};
+
+// Integrations Functions
+async function fetchIntegrations() {
+  try {
+    const res = await fetch('/api/integrations/configs');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    renderIntegrationsList(data.configs || []);
+  } catch (e) {
+    console.error('Failed to fetch integrations:', e);
+    showToast('統合設定の読み込みに失敗しました', 'error');
+  }
+}
+
+function renderIntegrationsList(configs) {
+  const list = document.getElementById('integrationsList');
+  if (!configs || configs.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px;background:var(--card);border-radius:8px;grid-column:1/-1;">統合が登録されていません</div>';
+    return;
+  }
+
+  list.innerHTML = configs.map(config => `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px;">
+        <div>
+          <h3 style="margin:0;font-size:14px;font-weight:600;color:var(--text);">${config.integration_type.toUpperCase()}</h3>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${escHtml(config.channel_name || config.channel_id || 'N/A')}</div>
+        </div>
+        <span style="padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${config.is_active ? 'var(--green)' : 'var(--red)'};color:white;">
+          ${config.is_active ? '有効' : '無効'}
+        </span>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(config.webhook_url)}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;font-size:11px;color:var(--text-muted);">
+        <div>●エージェント状態</div>
+        <div>●タスク委譲</div>
+        <div>●コスト警告</div>
+        <div>●承認申請</div>
+        <div>●エラー</div>
+        <div>●システム警告</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="editIntegration(${config.id})" style="flex:1;padding:6px;background:var(--border);border:none;border-radius:4px;color:var(--text);cursor:pointer;font-size:12px;font-weight:600;">編集</button>
+        <button onclick="if(confirm('削除しますか？')) deleteIntegration(${config.id})" style="flex:1;padding:6px;background:var(--red);border:none;border-radius:4px;color:white;cursor:pointer;font-size:12px;font-weight:600;">削除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openIntegrationModal(id) {
+  const modal = document.getElementById('integrationModal');
+  const form = document.getElementById('integrationForm');
+  const title = document.getElementById('integrationModalTitle');
+
+  if (id) {
+    title.textContent = '統合設定を編集';
+    editIntegration(id);
+  } else {
+    title.textContent = '新規統合を追加';
+    form.reset();
+    document.getElementById('verificationResult').style.display = 'none';
+    modal.style.display = 'flex';
+  }
+}
+
+function closeIntegrationModal() {
+  document.getElementById('integrationModal').style.display = 'none';
+}
+
+async function editIntegration(id) {
+  try {
+    const res = await fetch(`/api/integrations/configs/${id}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const config = data.config;
+
+    document.getElementById('integration_type').value = config.integration_type;
+    document.getElementById('webhook_url').value = config.webhook_url;
+    document.getElementById('webhook_secret').value = config.webhook_secret || '';
+    document.getElementById('channel_id').value = config.channel_id || '';
+    document.getElementById('channel_name').value = config.channel_name || '';
+    document.getElementById('notify_on_agent_status').checked = config.notify_on_agent_status;
+    document.getElementById('notify_on_task_delegation').checked = config.notify_on_task_delegation;
+    document.getElementById('notify_on_cost_alert').checked = config.notify_on_cost_alert;
+    document.getElementById('notify_on_approval_request').checked = config.notify_on_approval_request;
+    document.getElementById('notify_on_error_event').checked = config.notify_on_error_event;
+    document.getElementById('notify_on_system_alert').checked = config.notify_on_system_alert;
+    document.getElementById('is_active').checked = config.is_active;
+    document.getElementById('integrationForm').dataset.id = id;
+
+    document.getElementById('integrationModalTitle').textContent = '統合設定を編集';
+    document.getElementById('integrationModal').style.display = 'flex';
+  } catch (e) {
+    console.error('Failed to fetch integration:', e);
+    showToast('統合設定の取得に失敗しました', 'error');
+  }
+}
+
+async function deleteIntegration(id) {
+  try {
+    const res = await fetch(`/api/integrations/configs/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    showToast('統合設定を削除しました', 'success');
+    fetchIntegrations();
+  } catch (e) {
+    console.error('Failed to delete integration:', e);
+    showToast('統合設定の削除に失敗しました', 'error');
+  }
+}
+
+async function verifyIntegration(id) {
+  try {
+    const resultDiv = document.getElementById('verificationResult');
+    resultDiv.textContent = '検証中...';
+    resultDiv.style.display = 'block';
+
+    const res = await fetch(`/api/integrations/verify/${id || ''}`, { method: 'POST' });
+    const data = await res.json();
+
+    if (res.ok) {
+      resultDiv.style.background = 'rgba(63, 185, 80, 0.1)';
+      resultDiv.style.color = 'var(--green)';
+      resultDiv.textContent = '✓ Webhook の接続が確認できました';
+    } else {
+      resultDiv.style.background = 'rgba(248, 81, 73, 0.1)';
+      resultDiv.style.color = 'var(--red)';
+      resultDiv.textContent = '✗ ' + (data.error || 'Webhook の接続に失敗しました');
+    }
+  } catch (e) {
+    console.error('Failed to verify:', e);
+    const resultDiv = document.getElementById('verificationResult');
+    resultDiv.style.background = 'rgba(248, 81, 73, 0.1)';
+    resultDiv.style.color = 'var(--red)';
+    resultDiv.textContent = '✗ 検証に失敗しました: ' + e.message;
+    resultDiv.style.display = 'block';
+  }
+}
+
+function showWebhookGuide(event) {
+  event.preventDefault();
+  document.getElementById('webhookGuideModal').style.display = 'flex';
+}
+
+function closeWebhookGuideModal() {
+  document.getElementById('webhookGuideModal').style.display = 'none';
+}
+
+// Form submission handler
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('integrationForm');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const id = form.dataset.id;
+        const method = id ? 'PUT' : 'POST';
+        const endpoint = id ? `/api/integrations/configs/${id}` : '/api/integrations/configs';
+
+        const payload = {
+          integration_type: document.getElementById('integration_type').value,
+          webhook_url: document.getElementById('webhook_url').value,
+          webhook_secret: document.getElementById('webhook_secret').value,
+          channel_id: document.getElementById('channel_id').value,
+          channel_name: document.getElementById('channel_name').value,
+          notify_on_agent_status: document.getElementById('notify_on_agent_status').checked,
+          notify_on_task_delegation: document.getElementById('notify_on_task_delegation').checked,
+          notify_on_cost_alert: document.getElementById('notify_on_cost_alert').checked,
+          notify_on_approval_request: document.getElementById('notify_on_approval_request').checked,
+          notify_on_error_event: document.getElementById('notify_on_error_event').checked,
+          notify_on_system_alert: document.getElementById('notify_on_system_alert').checked,
+          is_active: document.getElementById('is_active').checked
+        };
+
+        const res = await fetch(endpoint, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        showToast(id ? '統合設定を更新しました' : '統合設定を追加しました', 'success');
+        closeIntegrationModal();
+        form.reset();
+        delete form.dataset.id;
+        fetchIntegrations();
+      } catch (e) {
+        console.error('Failed to save integration:', e);
+        showToast('保存に失敗しました', 'error');
+      }
+    });
+
+    const verifyBtn = document.getElementById('verifyBtn');
+    if (verifyBtn) {
+      verifyBtn.addEventListener('click', () => {
+        const id = form.dataset.id;
+        verifyIntegration(id);
+      });
+    }
+  }
+
+  // Notification panel click outside to close
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('notificationPanel');
+    const bellBtn = document.getElementById('notificationBellBtn');
+    if (!panel.contains(e.target) && e.target !== bellBtn && !bellBtn.contains(e.target)) {
+      if (panel.style.display === 'block') panel.style.display = 'none';
+    }
+  });
+
+  // Filter listeners
+  const filterUnread = document.getElementById('notifFilterUnread');
+  const filterType = document.getElementById('notifFilterType');
+  if (filterUnread) filterUnread.addEventListener('change', fetchNotifications);
+  if (filterType) filterType.addEventListener('change', fetchNotifications);
+
+  // Bell button listener
+  const bellBtn = document.getElementById('notificationBellBtn');
+  if (bellBtn) bellBtn.addEventListener('click', toggleNotificationPanel);
+
+  // Tab integrations listener
+  const tabsContainer = document.getElementById('tabsContainer');
+  if (tabsContainer) {
+    tabsContainer.addEventListener('click', (e) => {
+      if (e.target.classList.contains('tab-btn') && e.target.dataset.tab === 'integrations') {
+        fetchIntegrations();
+      }
+    });
+  }
+
+  // Start polling as fallback
+  startNotificationPolling(30000);
 });
 
 // ══════════════════════════════════════════════
