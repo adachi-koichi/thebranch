@@ -3,19 +3,30 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import hashlib
 import secrets
+import json
+import base64
+import io
 from typing import Optional, Tuple
 
 import aiosqlite
+import pyotp
+import qrcode
 
 DB_PATH = Path.home() / ".claude" / "dashboard_auth.sqlite"
 
 
 async def init_db():
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        migrations_path = Path(__file__).parent / "migrations" / "001_create_auth_tables.sql"
-        sql = migrations_path.read_text(encoding="utf-8")
-        await db.executescript(sql)
-        await db.commit()
+        migrations_dir = Path(__file__).parent / "migrations"
+        migration_files = sorted(migrations_dir.glob("*.sql"))
+
+        for migration_file in migration_files:
+            sql = migration_file.read_text(encoding="utf-8")
+            try:
+                await db.executescript(sql)
+                await db.commit()
+            except sqlite3.OperationalError:
+                pass
 
 
 def hash_password(password: str) -> str:
@@ -42,8 +53,13 @@ async def create_user(username: str, email: str, password: str, org_id: str = "d
                 (username, email, hashed, org_id),
             )
             await db.commit()
-            user_id = cursor.lastrowid
-            return True, "User created successfully", str(user_id)
+            cursor = await db.execute(
+                "SELECT id FROM users WHERE username = ? AND org_id = ?",
+                (username, org_id),
+            )
+            result = await cursor.fetchone()
+            user_id = result[0] if result else None
+            return True, "User created successfully", user_id
     except sqlite3.IntegrityError as e:
         if "username" in str(e):
             return False, "Username already exists", None
@@ -252,3 +268,277 @@ async def force_logout_session(session_id: str) -> Tuple[bool, str]:
             return True, "Session terminated"
     except Exception as e:
         return False, str(e)
+
+
+async def create_api_token(user_id: str, name: str, scope: str, expires_in_days: Optional[int] = None, org_id: str = "default") -> Tuple[bool, str, Optional[str]]:
+    """
+    パーソナルアクセストークンを生成します。
+
+    Args:
+        user_id: ユーザーID
+        name: トークンの名前（例: GitHub Integration）
+        scope: カンマ区切りのスコープ（read,write,admin）
+        expires_in_days: 有効期限（日数）。Noneの場合は無期限
+        org_id: 組織ID
+
+    Returns:
+        (成功フラグ, メッセージ, トークン)
+    """
+    try:
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        expires_at = None
+        if expires_in_days:
+            expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+
+        async with aiosqlite.connect(str(DB_PATH)) as db:
+            cursor = await db.execute(
+                """INSERT INTO api_tokens
+                   (user_id, token_hash, name, scope, org_id, expires_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (user_id, token_hash, name, scope, org_id, expires_at),
+            )
+            await db.commit()
+            token_id = cursor.lastrowid
+            return True, f"API token '{name}' created successfully", token
+    except Exception as e:
+        return False, str(e), None
+
+
+async def revoke_api_token(user_id: str, token_id: str, org_id: str = "default") -> Tuple[bool, str]:
+    """
+    パーソナルアクセストークンを無効化します。
+
+    Args:
+        user_id: ユーザーID
+        token_id: トークンID
+        org_id: 組織ID
+
+    Returns:
+        (成功フラグ, メッセージ)
+    """
+    try:
+        async with aiosqlite.connect(str(DB_PATH)) as db:
+            cursor = await db.execute(
+                """UPDATE api_tokens
+                   SET revoked_at = ?
+                   WHERE id = ? AND user_id = ? AND org_id = ? AND revoked_at IS NULL""",
+                (datetime.utcnow(), token_id, user_id, org_id),
+            )
+            await db.commit()
+
+            if cursor.rowcount == 0:
+                return False, "Token not found or already revoked"
+            return True, "API token revoked successfully"
+    except Exception as e:
+        return False, str(e)
+
+
+async def verify_api_token_scope(token: str, required_scope: str, org_id: str = "default") -> Tuple[Optional[str], Optional[str], bool]:
+    """
+    APIトークンを検証し、スコープをチェックします。
+
+    Args:
+        token: APIトークン（平文）
+        required_scope: 必要なスコープ（read, write, admin）
+        org_id: 組織ID
+
+    Returns:
+        (user_id, token_id, スコープチェック結果)
+    """
+    try:
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+        async with aiosqlite.connect(str(DB_PATH)) as db:
+            cursor = await db.execute(
+                """SELECT id, user_id, scope FROM api_tokens
+                   WHERE token_hash = ? AND org_id = ? AND revoked_at IS NULL
+                   AND (expires_at IS NULL OR expires_at > ?)""",
+                (token_hash, org_id, datetime.utcnow()),
+            )
+            result = await cursor.fetchone()
+
+            if not result:
+                return None, None, False
+
+            token_id, user_id, token_scope = result
+            scopes = set(s.strip() for s in token_scope.split(","))
+
+            if "admin" in scopes:
+                has_scope = True
+            else:
+                has_scope = required_scope in scopes
+
+            await db.execute(
+                "UPDATE api_tokens SET last_used_at = ? WHERE id = ?",
+                (datetime.utcnow(), token_id),
+            )
+            await db.commit()
+
+            return user_id, token_id, has_scope
+    except Exception:
+        return None, None, False
+
+
+async def list_api_tokens(user_id: str, org_id: str = "default") -> list:
+    """
+    ユーザーのすべてのAPIトークンを一覧表示します。
+
+    Args:
+        user_id: ユーザーID
+        org_id: 組織ID
+
+    Returns:
+        トークン情報のリスト
+    """
+    try:
+        async with aiosqlite.connect(str(DB_PATH)) as db:
+            cursor = await db.execute(
+                """SELECT id, name, scope, created_at, last_used_at, expires_at, revoked_at
+                   FROM api_tokens
+                   WHERE user_id = ? AND org_id = ?
+                   ORDER BY created_at DESC""",
+                (user_id, org_id),
+            )
+            rows = await cursor.fetchall()
+
+            tokens = []
+            for row in rows:
+                tokens.append({
+                    "id": row[0],
+                    "name": row[1],
+                    "scope": row[2],
+                    "created_at": row[3],
+                    "last_used_at": row[4],
+                    "expires_at": row[5],
+                    "revoked": row[6] is not None,
+                })
+            return tokens
+    except Exception:
+        return []
+
+
+async def enable_2fa(user_id: str) -> Tuple[str, str, list]:
+    """
+    TOTP 2FAを有効化し、秘密鍵、QRコード、バックアップコードを生成します。
+
+    Args:
+        user_id: ユーザーID
+
+    Returns:
+        (secret, qr_code_base64, backup_codes)
+    """
+    try:
+        secret = pyotp.random_base32()
+        totp = pyotp.TOTP(secret)
+        provisioning_uri = totp.provisioning_uri(name=user_id, issuer_name="THEBRANCH")
+
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(provisioning_uri)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        qr_code_base64 = base64.b64encode(buf.getvalue()).decode()
+        qr_code_data_uri = f"data:image/png;base64,{qr_code_base64}"
+
+        backup_codes = [secrets.token_hex(4) for _ in range(10)]
+        backup_codes_json = json.dumps(backup_codes)
+
+        async with aiosqlite.connect(str(DB_PATH)) as db:
+            cursor = await db.execute(
+                """INSERT INTO totp_secrets (user_id, secret, backup_codes, is_enabled)
+                   VALUES (?, ?, ?, 0)
+                   ON CONFLICT(user_id) DO UPDATE SET
+                   secret = excluded.secret,
+                   backup_codes = excluded.backup_codes,
+                   is_enabled = 0""",
+                (user_id, secret, backup_codes_json),
+            )
+            await db.commit()
+
+        return secret, qr_code_data_uri, backup_codes
+    except Exception as e:
+        raise Exception(f"Failed to enable 2FA: {str(e)}")
+
+
+async def verify_2fa_token(user_id: str, totp_code: str) -> Tuple[bool, str]:
+    """
+    TOTP トークンを検証し、2FAを有効化します。
+
+    Args:
+        user_id: ユーザーID
+        totp_code: TOTP コード（6桁）
+
+    Returns:
+        (成功フラグ, メッセージ)
+    """
+    try:
+        async with aiosqlite.connect(str(DB_PATH)) as db:
+            cursor = await db.execute(
+                "SELECT secret FROM totp_secrets WHERE user_id = ? AND is_enabled = 0",
+                (user_id,),
+            )
+            result = await cursor.fetchone()
+
+            if not result:
+                return False, "2FA not initialized"
+
+            secret = result[0]
+            totp = pyotp.TOTP(secret)
+
+            if not totp.verify(totp_code, valid_window=1):
+                return False, "Invalid TOTP code"
+
+            now = datetime.utcnow()
+            cursor = await db.execute(
+                """UPDATE totp_secrets
+                   SET is_enabled = 1, enabled_at = ?
+                   WHERE user_id = ?""",
+                (now, user_id),
+            )
+            await db.commit()
+
+            if cursor.rowcount == 0:
+                return False, "Failed to enable 2FA"
+
+            return True, "2FA enabled successfully"
+    except Exception as e:
+        return False, f"Failed to verify TOTP: {str(e)}"
+
+
+async def disable_2fa(user_id: str, password: str) -> Tuple[bool, str]:
+    """
+    TOTP 2FAを無効化します（パスワード確認が必要）。
+
+    Args:
+        user_id: ユーザーID
+        password: ユーザーのパスワード（確認用）
+
+    Returns:
+        (成功フラグ, メッセージ)
+    """
+    try:
+        async with aiosqlite.connect(str(DB_PATH)) as db:
+            cursor = await db.execute(
+                "SELECT password_hash FROM users WHERE id = ?",
+                (user_id,),
+            )
+            result = await cursor.fetchone()
+
+            if not result or not verify_password(password, result[0]):
+                return False, "Invalid password"
+
+            cursor = await db.execute(
+                "DELETE FROM totp_secrets WHERE user_id = ?",
+                (user_id,),
+            )
+            await db.commit()
+
+            if cursor.rowcount == 0:
+                return False, "2FA not found for user"
+
+            return True, "2FA disabled successfully"
+    except Exception as e:
+        return False, f"Failed to disable 2FA: {str(e)}"

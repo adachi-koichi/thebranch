@@ -22,9 +22,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth
-from . import models
-from . import autogen_routes
+from dashboard import auth, models, autogen_routes
 from workflow.repositories.template import TemplateRepository
 from workflow.services.template import TemplateService
 from workflow.validation.template import TemplateValidator
@@ -4402,7 +4400,7 @@ async def startup_event():
 
 @app.post("/api/auth/signup", response_model=models.UserResponse)
 async def signup(user: models.UserCreate):
-    success, message = await auth.create_user(user.username, user.email, user.password)
+    success, message, user_id = await auth.create_user(user.username, user.email, user.password)
     if not success:
         raise HTTPException(status_code=400, detail=message)
 
@@ -4418,7 +4416,7 @@ async def signup(user: models.UserCreate):
 
 @app.post("/api/auth/login", response_model=models.SessionResponse)
 async def login(credentials: models.SessionCreate):
-    user_id, token = await auth.authenticate_user(credentials.username, credentials.password)
+    user_id, token, org_id = await auth.authenticate_user(credentials.username, credentials.password)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -4479,6 +4477,79 @@ async def add_role(role_req: models.UserRoleCreate, authorization: Optional[str]
         raise HTTPException(status_code=401, detail="Invalid token")
 
     success, message = await auth.add_user_role(user_id, role_req.role)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    return {"status": "ok", "message": message}
+
+
+# ──────────────────────────────────────────────
+# API Token Management (#2525)
+# ──────────────────────────────────────────────
+
+@app.post("/api/auth/tokens", response_model=models.APITokenCreateResponse)
+async def create_api_token(token_req: models.APITokenCreate, authorization: Optional[str] = Header(None)):
+    """Create a new personal access token."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    user_id = await auth.verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    success, message, api_token = await auth.create_api_token(
+        user_id, token_req.name, token_req.scope, token_req.expires_in_days
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    async with aiosqlite.connect(str(auth.DB_PATH)) as db:
+        cursor = await db.execute(
+            "SELECT id, created_at, expires_at FROM api_tokens WHERE token_hash = ?",
+            (hashlib.sha256(api_token.encode()).hexdigest(),),
+        )
+        result = await cursor.fetchone()
+        if result:
+            return models.APITokenCreateResponse(
+                id=result[0],
+                name=token_req.name,
+                token=api_token,
+                scope=token_req.scope,
+                created_at=result[1],
+                expires_at=result[2],
+            )
+
+    raise HTTPException(status_code=500, detail="Failed to create token")
+
+
+@app.get("/api/auth/tokens", response_model=models.APITokenListResponse)
+async def list_api_tokens(authorization: Optional[str] = Header(None)):
+    """List all personal access tokens for the current user."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    user_id = await auth.verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    tokens = await auth.list_api_tokens(user_id)
+    return models.APITokenListResponse(tokens=[models.APITokenResponse(**t) for t in tokens])
+
+
+@app.delete("/api/auth/tokens/{token_id}")
+async def revoke_api_token(token_id: str, authorization: Optional[str] = Header(None)):
+    """Revoke a personal access token."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    user_id = await auth.verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    success, message = await auth.revoke_api_token(user_id, token_id)
     if not success:
         raise HTTPException(status_code=400, detail=message)
 
@@ -9247,5 +9318,101 @@ async def force_logout_user_session(session_id: str, auth_header: Optional[str] 
         raise
     except Exception as e:
         logger.error(f"Failed to force logout: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 2FA Models
+class Enable2FARequest(BaseModel):
+    user_id: str
+
+
+class Verify2FARequest(BaseModel):
+    totp_code: str
+
+
+class Disable2FARequest(BaseModel):
+    password: str
+
+
+@app.post("/api/2fa/enable")
+async def enable_2fa(req: Enable2FARequest, auth_header: Optional[str] = Header(None)):
+    """TOTP 2FAを有効化（初期設定）"""
+    try:
+        if not auth_header:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        user_id, org_id = await auth.verify_token(auth_header)
+        if not user_id:
+            raise HTTPException(status_code=403, detail="Invalid token")
+
+        await auth.update_last_activity(auth_header)
+
+        if user_id != req.user_id:
+            raise HTTPException(status_code=403, detail="Cannot enable 2FA for other users")
+
+        secret, qr_code, backup_codes = await auth.enable_2fa(user_id)
+
+        return {
+            "secret": secret,
+            "qr_code": qr_code,
+            "backup_codes": backup_codes,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to enable 2FA: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/2fa/verify")
+async def verify_2fa(req: Verify2FARequest, auth_header: Optional[str] = Header(None)):
+    """TOTP トークンを検証して2FAを有効化"""
+    try:
+        if not auth_header:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        user_id, org_id = await auth.verify_token(auth_header)
+        if not user_id:
+            raise HTTPException(status_code=403, detail="Invalid token")
+
+        await auth.update_last_activity(auth_header)
+
+        success, msg = await auth.verify_2fa_token(user_id, req.totp_code)
+        if not success:
+            raise HTTPException(status_code=400, detail=msg)
+
+        return {"verified": True, "message": msg}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to verify 2FA: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/2fa/disable")
+async def disable_2fa(req: Disable2FARequest, auth_header: Optional[str] = Header(None)):
+    """TOTP 2FAを無効化（パスワード確認が必要）"""
+    try:
+        if not auth_header:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        user_id, org_id = await auth.verify_token(auth_header)
+        if not user_id:
+            raise HTTPException(status_code=403, detail="Invalid token")
+
+        await auth.update_last_activity(auth_header)
+
+        success, msg = await auth.disable_2fa(user_id, req.password)
+        if not success:
+            raise HTTPException(status_code=400, detail=msg)
+
+        return {"message": msg}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to disable 2FA: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
