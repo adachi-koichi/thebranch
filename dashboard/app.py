@@ -5924,6 +5924,912 @@ async def get_expenses_by_category(
 
 
 # ──────────────────────────────────────────────
+# Team Dynamics & Collaboration Optimization
+# ──────────────────────────────────────────────
+
+@app.get("/api/teams/{team_id}/communication-timeline")
+async def get_communication_timeline(
+    team_id: int, date_from: str = None, date_to: str = None, event_type: str = None, agent_id: int = None, limit: int = 100
+):
+    """チーム内の通信タイムラインを時系列で取得（delegation_events）"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # チーム内のエージェントを取得
+            cursor = await db.execute(
+                "SELECT agent_id FROM team_x_agents WHERE team_id = ?", (team_id,)
+            )
+            team_agent_ids = [row[0] for row in await cursor.fetchall()]
+
+            if not team_agent_ids:
+                return {"items": [], "total": 0}
+
+            placeholders = ",".join("?" * len(team_agent_ids))
+            query = f"SELECT * FROM delegation_events WHERE actor_id IN ({placeholders})"
+            params = team_agent_ids
+
+            if date_from:
+                query += " AND event_timestamp >= ?"
+                params.append(date_from)
+            if date_to:
+                query += " AND event_timestamp <= ?"
+                params.append(date_to)
+            if event_type:
+                query += " AND event_type = ?"
+                params.append(event_type)
+
+            query += " ORDER BY event_timestamp DESC LIMIT ?"
+            params.append(limit)
+
+            cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+
+        items = [dict(row) for row in rows]
+        return {"items": items, "total": len(items)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/teams/{team_id}/communication-graph")
+async def get_communication_graph(team_id: int):
+    """チーム内の通信ネットワークデータを取得（nodes/edges）"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # チーム内のエージェントを取得
+            cursor = await db.execute(
+                """SELECT txa.agent_id, a.session_id, txa.role
+                   FROM team_x_agents txa
+                   JOIN agents a ON txa.agent_id = a.id
+                   WHERE txa.team_id = ?""", (team_id,)
+            )
+            agents = await cursor.fetchall()
+            agent_ids = [a["agent_id"] for a in agents]
+
+            if not agent_ids:
+                return {"nodes": [], "edges": []}
+
+            nodes = [{"id": a["agent_id"], "name": a["session_id"], "role": a.get("role", "engineer"), "activity_count": 0} for a in agents]
+
+            placeholders = ",".join("?" * len(agent_ids))
+            cursor = await db.execute(
+                f"""SELECT actor_id, COUNT(*) as activity_count FROM delegation_events
+                   WHERE actor_id IN ({placeholders}) GROUP BY actor_id""",
+                agent_ids
+            )
+            activities = await cursor.fetchall()
+
+            for activity in activities:
+                for node in nodes:
+                    if node["id"] == int(activity["actor_id"]):
+                        node["activity_count"] = activity["activity_count"]
+
+            return {"nodes": nodes, "edges": []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/teams/{team_id}/performance-summary")
+async def get_performance_summary(team_id: int):
+    """チーム全体のパフォーマンスサマリーを取得"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            cursor = await db.execute(
+                """SELECT AVG(completion_rate) as avg_completion, AVG(throughput_tasks_7d) as avg_throughput,
+                   AVG(quality_score) as avg_quality FROM team_performance_metrics WHERE team_id = ?""",
+                (team_id,)
+            )
+            metrics = await cursor.fetchone()
+
+            cursor = await db.execute(
+                "SELECT COUNT(*) as member_count FROM team_x_agents WHERE team_id = ?", (team_id,)
+            )
+            members = await cursor.fetchone()
+
+            # チームの department_id を取得
+            cursor = await db.execute(
+                "SELECT id FROM teams WHERE id = ?", (team_id,)
+            )
+            team = await cursor.fetchone()
+            if not team:
+                return {
+                    "completion_rate": 0,
+                    "throughput_7d": 0,
+                    "collaboration_score": 0,
+                    "active_members": 0,
+                    "completed_tasks": 0
+                }
+
+            cursor = await db.execute(
+                "SELECT COUNT(*) as completed_tasks FROM team_dynamics_snapshot WHERE team_id = ?", (team_id,)
+            )
+            snapshot = await cursor.fetchone()
+
+        return {
+            "completion_rate": metrics["avg_completion"] or 0,
+            "throughput_7d": metrics["avg_throughput"] or 0,
+            "collaboration_score": metrics["avg_quality"] or 0,
+            "active_members": members["member_count"] or 0,
+            "completed_tasks": snapshot["completed_tasks"] or 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/teams/{team_id}/member-performance")
+async def get_member_performance(team_id: int, sort_by: str = "workload"):
+    """チームメンバーの個別パフォーマンスを取得"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            query = """SELECT a.id, a.session_id, txa.role,
+                       COALESCE(tpm.completion_rate, 0) as completion_rate,
+                       COALESCE(tpm.throughput_tasks_7d, 0) as throughput_tasks_7d,
+                       COALESCE(tpm.quality_score, 0) as quality_score,
+                       a.workload_level, a.collaboration_score
+                       FROM team_x_agents txa
+                       JOIN agents a ON txa.agent_id = a.id
+                       LEFT JOIN team_performance_metrics tpm ON a.id = tpm.agent_id AND tpm.team_id = ?
+                       WHERE txa.team_id = ?
+                       ORDER BY """
+
+            if sort_by == "workload":
+                query += "a.workload_level ASC"
+            elif sort_by == "completion":
+                query += "tpm.completion_rate DESC"
+            elif sort_by == "collaboration":
+                query += "a.collaboration_score DESC"
+            else:
+                query += "a.id ASC"
+
+            cursor = await db.execute(query, (team_id, team_id))
+            rows = await cursor.fetchall()
+
+        members = [dict(row) for row in rows]
+        return {"members": members}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/teams/{team_id}/collaboration-heatmap")
+async def get_collaboration_heatmap(team_id: int):
+    """チーム内のコミュニケーションマトリックスを取得"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            cursor = await db.execute(
+                """SELECT txa.agent_id, a.session_id FROM team_x_agents txa
+                   JOIN agents a ON txa.agent_id = a.id
+                   WHERE txa.team_id = ? ORDER BY a.id""", (team_id,)
+            )
+            agents = await cursor.fetchall()
+            agent_ids = [a["agent_id"] for a in agents]
+            agent_names = {a["agent_id"]: a["session_id"] for a in agents}
+
+            if not agent_ids:
+                return {"agents": [], "heatmap": {}}
+
+            heatmap_data = {}
+            for actor_id in agent_ids:
+                heatmap_data[str(actor_id)] = {str(target_id): 0 for target_id in agent_ids}
+
+            # delegation_events からアクティビティを集計
+            placeholders = ",".join("?" * len(agent_ids))
+            cursor = await db.execute(
+                f"""SELECT actor_id, COUNT(*) as message_count
+                   FROM delegation_events WHERE actor_id IN ({placeholders})
+                   GROUP BY actor_id""",
+                agent_ids
+            )
+            interactions = await cursor.fetchall()
+
+            for interaction in interactions:
+                actor = str(interaction["actor_id"])
+                if actor in heatmap_data:
+                    heatmap_data[actor][actor] = interaction["message_count"]
+
+        return {
+            "agents": [{"id": a["agent_id"], "name": agent_names[a["agent_id"]]} for a in agents],
+            "heatmap": heatmap_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def calculate_skill_match(task_required_skills: str, agent_skill_tags: str) -> float:
+    """スキルマッチ度を計算（0-30ポイント）"""
+    if not task_required_skills or not agent_skill_tags:
+        return 5.0  # デフォルトスコア
+
+    import json
+    try:
+        task_skills = set(json.loads(task_required_skills) or [])
+        agent_skills = set(json.loads(agent_skill_tags) or [])
+
+        if not task_skills:
+            return 5.0
+
+        # 一致度 = 一致スキル数 / 要件スキル数
+        match_count = len(task_skills & agent_skills)
+        match_ratio = match_count / len(task_skills) if task_skills else 0
+
+        # スコア: 0-30ポイント
+        return min(30, match_ratio * 30)
+    except:
+        return 5.0
+
+
+async def calculate_task_allocation_score(task: dict, agent: dict, team_performance: dict) -> dict:
+    """
+    タスク割り当てスコアを計算
+
+    Formula:
+    total_score =
+      skill_match * 1.0 +              (0-30)
+      workload_score +                 (0-30)
+      collaboration * 1.0 +            (0-20)
+      reliability_score +              (0-15)
+      domain_bonus                     (0-5)
+
+    Total: 0-100
+    """
+    required_skills = task.get("required_skills")
+    skill_tags = agent.get("skill_tags")
+
+    skill_match = calculate_skill_match(required_skills, skill_tags)
+
+    workload_level = agent.get("workload_level", 0) or 0
+    workload_score = (1 - min(workload_level / 100, 1.0)) * 30
+
+    collaboration_score = (agent.get("collaboration_score", 50) or 50) / 100 * 20
+
+    # エージェント完了率を基に信頼性スコアを計算（0-15ポイント）
+    completion_rate = agent.get("completion_rate", 0) or 0
+    reliability_score = completion_rate * 15 if completion_rate else 8.0
+
+    # タスク複雑度がエージェント専門性に合致しているかで加点
+    domain_bonus = 5.0
+    task_category = task.get("category", "general")
+    agent_skills = agent.get("skill_tags", "[]")
+    if task_category and task_category.lower() in (agent_skills or "").lower():
+        domain_bonus = 5.0
+
+    total_score = skill_match + workload_score + collaboration_score + reliability_score + domain_bonus
+
+    return {
+        "total": round(total_score, 2),
+        "factors": {
+            "skill_match": round(skill_match, 2),
+            "workload_score": round(workload_score, 2),
+            "collaboration": round(collaboration_score, 2),
+            "reliability": round(reliability_score, 2),
+            "domain_bonus": round(domain_bonus, 2)
+        }
+    }
+
+
+@app.post("/api/tasks/{task_id}/auto-allocate")
+async def auto_allocate_task(task_id: int, team_id: int):
+    """タスクを最適なエージェントに自動割り当てする"""
+    await ensure_db_initialized()
+    try:
+        import json
+        from datetime import datetime, timezone
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            cursor = await db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+            task_row = await cursor.fetchone()
+            if not task_row:
+                raise HTTPException(status_code=404, detail="Task not found")
+            task = dict(task_row)
+
+            cursor = await db.execute(
+                """SELECT a.id, a.session_id, a.workload_level, a.collaboration_score,
+                          a.completion_rate, a.skill_tags
+                   FROM team_x_agents txa
+                   JOIN agents a ON txa.agent_id = a.id
+                   WHERE txa.team_id = ?""", (team_id,)
+            )
+            agent_rows = await cursor.fetchall()
+
+            if not agent_rows:
+                raise HTTPException(status_code=400, detail="No agents in team")
+
+            # 各エージェントのスコアを計算
+            scores = []
+            candidate_scores = {}
+            for agent_row in agent_rows:
+                agent = dict(agent_row)
+                score_result = await calculate_task_allocation_score(task, agent, {})
+                total_score = score_result["total"]
+
+                scores.append({
+                    "agent_id": agent["id"],
+                    "agent_name": agent["session_id"],
+                    "score": total_score,
+                    "factors": score_result["factors"]
+                })
+                candidate_scores[str(agent["id"])] = total_score
+
+            best_agent = max(scores, key=lambda x: x["score"])
+
+            # 割り当て履歴を記録
+            candidate_scores_json = json.dumps(candidate_scores)
+            try:
+                cursor = await db.execute(
+                    """INSERT INTO task_allocation_history
+                       (task_id, allocated_agent_id, algorithm_version, ranking_score, candidate_scores, allocation_timestamp)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (task_id, best_agent["agent_id"], "v2_skill_matching",
+                     best_agent["score"], candidate_scores_json,
+                     datetime.now(timezone.utc).isoformat())
+                )
+                await db.commit()
+            except Exception as e:
+                # allocation historyへの記録失敗は無視（メインロジック継続）
+                pass
+
+        return {
+            "selected_agent_id": best_agent["agent_id"],
+            "selected_agent_name": best_agent["agent_name"],
+            "ranking": sorted(scores, key=lambda x: x["score"], reverse=True),
+            "algorithm_version": "v2_skill_matching",
+            "top_reason": f"Best match with skill compatibility {best_agent['factors']['skill_match']}/30 and low workload"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/teams/{team_id}/allocation-recommendations")
+async def get_allocation_recommendations(team_id: int):
+    """タスク割り当て推奨一覧を取得（v2_skill_matchingアルゴリズム使用）"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # チーム内のペンディングタスクを取得
+            cursor = await db.execute(
+                "SELECT t.* FROM tasks t JOIN teams tm ON t.department_id = tm.department_id WHERE tm.id = ? AND t.status = 'pending' LIMIT 10",
+                (team_id,)
+            )
+            pending_tasks_rows = await cursor.fetchall()
+
+            # チーム内のエージェントを取得
+            cursor = await db.execute(
+                """SELECT a.id, a.session_id, a.workload_level, a.collaboration_score,
+                          a.completion_rate, a.skill_tags
+                   FROM team_x_agents txa
+                   JOIN agents a ON txa.agent_id = a.id
+                   WHERE txa.team_id = ?""",
+                (team_id,)
+            )
+            agents_rows = await cursor.fetchall()
+            agents = [dict(agent) for agent in agents_rows]
+
+            recommendations = []
+            for task_row in pending_tasks_rows:
+                task = dict(task_row)
+
+                # 各エージェントのスコアを計算
+                scores = []
+                for agent in agents:
+                    score_result = await calculate_task_allocation_score(task, agent, {})
+                    scores.append({
+                        "agent_id": agent["id"],
+                        "agent_name": agent["session_id"],
+                        "score": score_result["total"],
+                        "factors": score_result["factors"]
+                    })
+
+                best_agent = max(scores, key=lambda x: x["score"])
+                confidence = min(95, max(50, best_agent["score"]))  # スコアを信頼度として使用
+
+                recommendations.append({
+                    "task_id": task["id"],
+                    "task_title": task.get("title"),
+                    "suggested_agent_id": best_agent["agent_id"],
+                    "suggested_agent_name": best_agent["agent_name"],
+                    "confidence": round(confidence, 2),
+                    "allocation_score": round(best_agent["score"], 2),
+                    "factors": {
+                        "skill_match": best_agent["factors"]["skill_match"],
+                        "workload_score": best_agent["factors"]["workload_score"],
+                        "collaboration": best_agent["factors"]["collaboration"],
+                        "reliability": best_agent["factors"]["reliability"],
+                        "domain_bonus": best_agent["factors"]["domain_bonus"]
+                    }
+                })
+
+            return {"recommendations": recommendations}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/teams/{team_id}/dynamics-report/generate")
+async def generate_dynamics_report(team_id: int, period: str = "week", include_charts: bool = True):
+    """チーム動的レポートを生成（week/month/day対応）"""
+    await ensure_db_initialized()
+    try:
+        import datetime as _dt
+        import json
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # チーム情報を取得
+            cursor = await db.execute(
+                "SELECT id, department_id FROM teams WHERE id = ?", (team_id,)
+            )
+            team = await cursor.fetchone()
+            if not team:
+                raise HTTPException(status_code=404, detail="Team not found")
+
+            # 期間を決定
+            today = _dt.date.today()
+            if period == "day":
+                date_from = today
+            elif period == "week":
+                date_from = today - _dt.timedelta(days=7)
+            elif period == "month":
+                date_from = today - _dt.timedelta(days=30)
+            else:
+                date_from = today - _dt.timedelta(days=7)
+
+            # 完了タスク数（期間内）
+            cursor = await db.execute(
+                """SELECT COUNT(*) as count FROM tasks
+                   WHERE department_id = ? AND status = 'completed'
+                   AND DATE(updated_at) >= ?""",
+                (team["department_id"], str(date_from))
+            )
+            completed = await cursor.fetchone()
+            completed_count = completed["count"] or 0
+
+            # メンバーパフォーマンス集計
+            cursor = await db.execute(
+                """SELECT txa.agent_id, a.session_id, a.workload_level,
+                          COALESCE(tpm.completion_rate, 0.8) as completion_rate,
+                          COALESCE(tpm.throughput_tasks_7d, 0) as throughput_7d,
+                          COALESCE(tpm.quality_score, 50) as quality_score
+                   FROM team_x_agents txa
+                   JOIN agents a ON txa.agent_id = a.id
+                   LEFT JOIN team_performance_metrics tpm ON a.id = tpm.agent_id
+                   WHERE txa.team_id = ?
+                   ORDER BY a.id""",
+                (team_id,)
+            )
+            members = await cursor.fetchall()
+            member_data = [dict(m) for m in members]
+
+            # チーム統計
+            avg_completion = sum(m["completion_rate"] for m in member_data) / len(member_data) if member_data else 0.8
+            avg_quality = sum(m["quality_score"] for m in member_data) / len(member_data) if member_data else 50
+            total_workload = sum(m["workload_level"] for m in member_data) if member_data else 0
+            avg_workload = total_workload / len(member_data) if member_data else 0
+            workload_balance = 100 - (max([m["workload_level"] for m in member_data]) if member_data else 0)
+
+            # コラボレーション指標
+            cursor = await db.execute(
+                """SELECT COUNT(*) as event_count FROM team_collaboration_events
+                   WHERE team_id = ? AND DATE(event_timestamp) >= ?""",
+                (team_id, str(date_from))
+            )
+            collab_events = await cursor.fetchone()
+            collab_count = collab_events["event_count"] or 0
+
+            # レポートデータ生成
+            report_data = {
+                "team_id": team_id,
+                "period": period,
+                "period_start": str(date_from),
+                "period_end": str(today),
+                "summary": {
+                    "completed_tasks": completed_count,
+                    "average_completion_rate": round(avg_completion, 2),
+                    "average_quality_score": round(avg_quality, 2),
+                    "average_workload": round(avg_workload, 1),
+                    "workload_balance": round(workload_balance, 1),
+                    "collaboration_events": collab_count,
+                    "active_members": len(member_data)
+                },
+                "member_breakdown": member_data,
+                "generated_at": _dt.datetime.now(_dt.timezone.utc).isoformat()
+            }
+
+            # レポートを JSON で保存
+            cursor = await db.execute(
+                """INSERT INTO team_dynamics_snapshot
+                   (team_id, snapshot_date, member_count, completed_tasks_today,
+                    avg_completion_rate, collaboration_score, metadata, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (team_id, str(today), len(member_data), completed_count,
+                 avg_completion, avg_quality, json.dumps(report_data), _dt.datetime.now(_dt.timezone.utc).isoformat())
+            )
+            await db.commit()
+            report_id = cursor.lastrowid
+
+        return {
+            "report_id": report_id,
+            "status": "generated",
+            "data": report_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/teams/{team_id}/dynamics-report")
+async def get_dynamics_report(team_id: int, report_id: int = None, period: str = None):
+    """チーム動的レポートを取得（report_id指定 or 最新レポート）"""
+    await ensure_db_initialized()
+    try:
+        import json
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            if report_id:
+                cursor = await db.execute(
+                    "SELECT * FROM team_dynamics_snapshot WHERE id = ? AND team_id = ?",
+                    (report_id, team_id)
+                )
+            else:
+                cursor = await db.execute(
+                    "SELECT * FROM team_dynamics_snapshot WHERE team_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (team_id,)
+                )
+
+            report = await cursor.fetchone()
+            if not report:
+                return {
+                    "report_id": None,
+                    "summary": None,
+                    "member_breakdown": [],
+                    "trends": {}
+                }
+
+            report_dict = dict(report)
+
+            # メタデータを JSON から解析
+            metadata = {}
+            if report_dict.get("metadata"):
+                try:
+                    metadata = json.loads(report_dict["metadata"])
+                except:
+                    metadata = {}
+
+            # レポート形式で返却
+            return {
+                "report_id": report_dict.get("id"),
+                "period": metadata.get("period", "unknown"),
+                "summary": metadata.get("summary", {
+                    "completed_tasks": report_dict.get("completed_tasks_today", 0),
+                    "average_completion_rate": report_dict.get("avg_completion_rate", 0),
+                    "average_quality_score": report_dict.get("collaboration_score", 0),
+                    "collaboration_events": 0,
+                    "active_members": report_dict.get("member_count", 0)
+                }),
+                "member_breakdown": metadata.get("member_breakdown", []),
+                "generated_at": report_dict.get("created_at"),
+                "trends": {}
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# Agent Decision Transparency - Explainable AI
+# ──────────────────────────────────────────────
+
+@app.post("/api/agent-decision/log", response_model=models.AgentDecisionLogResponse)
+async def log_agent_decision(decision: models.AgentDecisionLogCreate):
+    """エージェント意思決定をログに記録"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """INSERT INTO agent_decision_logs
+                   (agent_id, department_id, decision_type, decision_summary, reasoning,
+                    context, confidence_score, input_data, output_data, impact_assessment, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'logged')""",
+                (decision.agent_id, decision.department_id, decision.decision_type,
+                 decision.decision_summary, decision.reasoning, decision.context,
+                 decision.confidence_score, decision.input_data, decision.output_data,
+                 decision.impact_assessment),
+            )
+            log_id = cursor.lastrowid
+
+            for factor in decision.factors:
+                await db.execute(
+                    """INSERT INTO agent_decision_factors
+                       (decision_log_id, factor_type, factor_name, factor_value, weight, description, order_sequence)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (log_id, factor.factor_type, factor.factor_name, factor.factor_value,
+                     factor.weight, factor.description, factor.order_sequence),
+                )
+            await db.commit()
+
+            cursor = await db.execute(
+                """SELECT * FROM agent_decision_logs WHERE id = ?""", (log_id,)
+            )
+            row = await cursor.fetchone()
+
+        decision_dict = dict(row)
+        decision_dict["factors"] = []
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT * FROM agent_decision_factors WHERE decision_log_id = ? ORDER BY order_sequence""",
+                (log_id,)
+            )
+            factors = await cursor.fetchall()
+            decision_dict["factors"] = [dict(f) for f in factors]
+
+        return decision_dict
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/agent-decision/logs")
+async def get_decision_logs(agent_id: int, limit: int = 50):
+    """エージェント意思決定ログを取得"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT * FROM agent_decision_logs WHERE agent_id = ?
+                   ORDER BY created_at DESC LIMIT ?""",
+                (agent_id, limit),
+            )
+            rows = await cursor.fetchall()
+
+        results = []
+        for row in rows:
+            decision_dict = dict(row)
+            async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
+                    """SELECT * FROM agent_decision_factors WHERE decision_log_id = ? ORDER BY order_sequence""",
+                    (row["id"],)
+                )
+                factors = await cursor.fetchall()
+                decision_dict["factors"] = [dict(f) for f in factors]
+            results.append(decision_dict)
+
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agent-decision/logs/{log_id}")
+async def get_decision_log(log_id: int):
+    """特定の意思決定ログを取得"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT * FROM agent_decision_logs WHERE id = ?""", (log_id,)
+            )
+            row = await cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Decision log not found")
+
+            decision_dict = dict(row)
+
+            cursor = await db.execute(
+                """SELECT * FROM agent_decision_factors WHERE decision_log_id = ? ORDER BY order_sequence""",
+                (log_id,)
+            )
+            factors = await cursor.fetchall()
+            decision_dict["factors"] = [dict(f) for f in factors]
+
+        return decision_dict
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agent-decision/{log_id}/explain")
+async def generate_decision_explanation(log_id: int, report: models.DecisionExplanationReportCreate):
+    """意思決定の説明を生成"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            cursor = await db.execute(
+                """SELECT * FROM agent_decision_logs WHERE id = ?""", (log_id,)
+            )
+            decision_log = await cursor.fetchone()
+            if not decision_log:
+                raise HTTPException(status_code=404, detail="Decision log not found")
+
+            cursor = await db.execute(
+                """INSERT INTO decision_explanation_report
+                   (decision_log_id, explanation_summary, explanation_html, generated_by, generation_method)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (log_id, report.explanation_summary, report.explanation_html,
+                 report.generated_by, report.generation_method),
+            )
+            report_id = cursor.lastrowid
+            await db.commit()
+
+            cursor = await db.execute(
+                """SELECT * FROM decision_explanation_report WHERE id = ?""", (report_id,)
+            )
+            row = await cursor.fetchone()
+
+        return dict(row)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/agent-decision/{log_id}/explanation")
+async def get_decision_explanation(log_id: int):
+    """意思決定の説明を取得"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT * FROM decision_explanation_report WHERE decision_log_id = ? ORDER BY created_at DESC LIMIT 1""",
+                (log_id,)
+            )
+            row = await cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Explanation not found")
+
+        return dict(row)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agent-decision/audit")
+async def log_action_audit(audit: models.AgentActionAuditCreate):
+    """エージェント行動を監査ログに記録"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """INSERT INTO agent_action_audit
+                   (agent_id, decision_log_id, action_type, action_detail, result_status,
+                    result_detail, affected_entity_type, affected_entity_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (audit.agent_id, audit.decision_log_id, audit.action_type,
+                 audit.action_detail, audit.result_status, audit.result_detail,
+                 audit.affected_entity_type, audit.affected_entity_id),
+            )
+            audit_id = cursor.lastrowid
+            await db.commit()
+
+            cursor = await db.execute(
+                """SELECT * FROM agent_action_audit WHERE id = ?""", (audit_id,)
+            )
+            row = await cursor.fetchone()
+
+        return dict(row)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/agent-decision/audit/{agent_id}")
+async def get_action_audit(agent_id: int, limit: int = 100):
+    """エージェントの行動監査ログを取得"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT * FROM agent_action_audit WHERE agent_id = ?
+                   ORDER BY created_at DESC LIMIT ?""",
+                (agent_id, limit),
+            )
+            rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agent-decision/report/{agent_id}")
+async def get_transparency_report(agent_id: int):
+    """エージェントの透明性レポートを取得"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            cursor = await db.execute(
+                """SELECT a.id, a.role FROM agents a WHERE a.id = ?""", (agent_id,)
+            )
+            agent = await cursor.fetchone()
+            if not agent:
+                raise HTTPException(status_code=404, detail="Agent not found")
+
+            cursor = await db.execute(
+                """SELECT COUNT(*) as total FROM agent_decision_logs WHERE agent_id = ?""",
+                (agent_id,)
+            )
+            total_decisions = await cursor.fetchone()
+
+            cursor = await db.execute(
+                """SELECT decision_type, COUNT(*) as count FROM agent_decision_logs
+                   WHERE agent_id = ? GROUP BY decision_type""",
+                (agent_id,)
+            )
+            decision_breakdown_rows = await cursor.fetchall()
+            decision_breakdown = {row["decision_type"]: row["count"] for row in decision_breakdown_rows}
+
+            cursor = await db.execute(
+                """SELECT AVG(confidence_score) as avg_confidence FROM agent_decision_logs WHERE agent_id = ?""",
+                (agent_id,)
+            )
+            confidence_row = await cursor.fetchone()
+            confidence_avg = confidence_row["avg_confidence"] or 0.0
+
+            cursor = await db.execute(
+                """SELECT * FROM agent_decision_logs WHERE agent_id = ?
+                   ORDER BY created_at DESC LIMIT 10""",
+                (agent_id,)
+            )
+            recent_logs = await cursor.fetchall()
+            recent_decisions = []
+            for log in recent_logs:
+                log_dict = dict(log)
+                cursor = await db.execute(
+                    """SELECT * FROM agent_decision_factors WHERE decision_log_id = ?""",
+                    (log["id"],)
+                )
+                factors = await cursor.fetchall()
+                log_dict["factors"] = [dict(f) for f in factors]
+                recent_decisions.append(log_dict)
+
+            cursor = await db.execute(
+                """SELECT * FROM agent_action_audit WHERE agent_id = ?
+                   ORDER BY created_at DESC LIMIT 20""",
+                (agent_id,)
+            )
+            action_audit = await cursor.fetchall()
+
+        return {
+            "agent_id": agent_id,
+            "agent_role": agent["role"],
+            "total_decisions": total_decisions["total"] if total_decisions else 0,
+            "decision_breakdown": decision_breakdown,
+            "confidence_avg": float(confidence_avg),
+            "recent_decisions": recent_decisions,
+            "action_audit_trail": [dict(row) for row in action_audit],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
 # Entry point
 # ──────────────────────────────────────────────
 
