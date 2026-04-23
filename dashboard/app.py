@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -16,7 +17,7 @@ from typing import AsyncGenerator, Optional
 import aiosqlite
 import yaml
 import httpx
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -150,6 +151,44 @@ async def sla_metrics_scheduler():
             logger.error(f"SLA metrics scheduler error: {str(e)}")
         finally:
             await asyncio.sleep(30)  # 30秒ごとに実行
+
+
+async def verify_api_key(x_api_key: str = Header(None)) -> dict:
+    """APIキー検証とレート制限チェック"""
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="APIキーが必要です")
+
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+
+            key_hash = hashlib.sha256(x_api_key.encode()).hexdigest()
+            cursor = await db.execute(
+                "SELECT id, org_id, name, rate_limit_per_minute, is_active, expires_at FROM api_keys WHERE key_hash = ?",
+                (key_hash,)
+            )
+            api_key = await cursor.fetchone()
+
+            if not api_key:
+                raise HTTPException(status_code=401, detail="無効なAPIキーです")
+
+            if not api_key["is_active"]:
+                raise HTTPException(status_code=403, detail="APIキーが無効です")
+
+            if api_key["expires_at"] and datetime.fromisoformat(api_key["expires_at"]) < datetime.now():
+                raise HTTPException(status_code=403, detail="APIキーの有効期限が切れています")
+
+            return {
+                "api_key_id": api_key["id"],
+                "org_id": api_key["org_id"],
+                "name": api_key["name"],
+                "rate_limit": api_key["rate_limit_per_minute"]
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"APIキー検証エラー: {str(e)}")
+        raise HTTPException(status_code=500, detail="APIキー検証エラー")
 
 
 @app.on_event("startup")
@@ -7290,6 +7329,157 @@ async def verify_token(authorization: Optional[str] = Header(None)):
         org_id=org_id or "default",
         message="Token is valid"
     )
+
+
+# ──────────────────────────────────────────────
+# API v1 エンドポイント（外部連携用）
+# ──────────────────────────────────────────────
+
+@app.get("/api/v1/departments", response_model=list)
+async def get_public_departments(auth: dict = Depends(verify_api_key)):
+    """公開API: 部署一覧取得"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute(
+                """SELECT id, name, slug, description, status, created_at
+                   FROM departments"""
+            )
+            departments = await cursor.fetchall()
+            return [dict(d) for d in departments]
+    except Exception as e:
+        logger.error(f"Error fetching departments: {str(e)}")
+        raise HTTPException(status_code=500, detail="部署取得エラー")
+
+
+@app.get("/api/v1/agents", response_model=list)
+async def get_public_agents(auth: dict = Depends(verify_api_key)):
+    """公開API: AIエージェント一覧取得"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute(
+                """SELECT id, role, status, department_id, completion_rate, created_at
+                   FROM agents"""
+            )
+            agents = await cursor.fetchall()
+            return [dict(a) for a in agents]
+    except Exception as e:
+        logger.error(f"Error fetching agents: {str(e)}")
+        raise HTTPException(status_code=500, detail="エージェント取得エラー")
+
+
+@app.get("/api/v1/workflows", response_model=list)
+async def get_public_workflows(auth: dict = Depends(verify_api_key)):
+    """公開API: ワークフロー一覧取得"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute(
+                """SELECT id, name, description, status, created_at
+                   FROM workflow_templates"""
+            )
+            workflows = await cursor.fetchall()
+            return [dict(w) for w in workflows]
+    except Exception as e:
+        logger.error(f"Error fetching workflows: {str(e)}")
+        raise HTTPException(status_code=500, detail="ワークフロー取得エラー")
+
+
+@app.post("/api/v1/api-keys", response_model=models.ApiKeyWithSecret)
+async def create_api_key(
+    key_create: models.ApiKeyCreate,
+    authorization: Optional[str] = Header(None)
+):
+    """APIキー作成（管理者向け）"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="認証が必要です")
+
+    token = authorization.replace("Bearer ", "")
+    user_id, org_id = await auth.verify_token(token)
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="無効なトークンです")
+
+    try:
+        api_key_id = str(uuid.uuid4())
+        raw_key = f"sk_{uuid.uuid4().hex[:32]}"
+        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            await db.execute(
+                """INSERT INTO api_keys
+                   (id, org_id, name, key_hash, created_by, rate_limit_per_minute, description)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (api_key_id, org_id, key_create.name, key_hash, user_id,
+                 key_create.rate_limit_per_minute, key_create.description)
+            )
+            await db.commit()
+
+        return models.ApiKeyWithSecret(
+            id=api_key_id,
+            name=key_create.name,
+            description=key_create.description,
+            created_at=datetime.now(),
+            is_active=True,
+            rate_limit_per_minute=key_create.rate_limit_per_minute,
+            key=raw_key
+        )
+    except Exception as e:
+        logger.error(f"Error creating API key: {str(e)}")
+        raise HTTPException(status_code=500, detail="APIキー作成エラー")
+
+
+@app.get("/api/v1/api-keys", response_model=list)
+async def list_api_keys(authorization: Optional[str] = Header(None)):
+    """APIキー一覧取得"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="認証が必要です")
+
+    token = authorization.replace("Bearer ", "")
+    user_id, org_id = await auth.verify_token(token)
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="無効なトークンです")
+
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute(
+                """SELECT id, name, description, created_at, last_used_at, is_active, rate_limit_per_minute
+                   FROM api_keys WHERE org_id = ? AND created_by = ?""",
+                (org_id, user_id)
+            )
+            keys = await cursor.fetchall()
+            return [dict(k) for k in keys]
+    except Exception as e:
+        logger.error(f"Error listing API keys: {str(e)}")
+        raise HTTPException(status_code=500, detail="APIキー一覧取得エラー")
+
+
+@app.delete("/api/v1/api-keys/{key_id}")
+async def revoke_api_key(key_id: str, authorization: Optional[str] = Header(None)):
+    """APIキー無効化"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="認証が必要です")
+
+    token = authorization.replace("Bearer ", "")
+    user_id, org_id = await auth.verify_token(token)
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="無効なトークンです")
+
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            await db.execute(
+                "UPDATE api_keys SET is_active = 0 WHERE id = ? AND org_id = ?",
+                (key_id, org_id)
+            )
+            await db.commit()
+            return {"success": True, "message": "APIキーを無効化しました"}
+    except Exception as e:
+        logger.error(f"Error revoking API key: {str(e)}")
+        raise HTTPException(status_code=500, detail="APIキー無効化エラー")
 
 
 # ──────────────────────────────────────────────

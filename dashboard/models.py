@@ -696,3 +696,110 @@ class AuthTokenValidationResponse(BaseModel):
     user_id: Optional[str] = None
     org_id: Optional[str] = None
     message: str
+
+
+# Resource Allocation Models
+class ResourceAllocationRequest(BaseModel):
+    department_id: int
+    resource_type: str
+    required_amount: int
+    reason: Optional[str] = None
+
+
+class ResourceAllocationApprovalRequest(BaseModel):
+    approved_amount: int
+    approval_reason: Optional[str] = None
+    approved_by: Optional[str] = None
+
+
+class DepartmentResourceResponse(BaseModel):
+    id: int
+    department_id: int
+    resource_type: str
+    total_allocated: int
+    current_used: int
+    reserved: int
+    unit: str
+    created_at: str
+    updated_at: str
+
+
+class ResourceAllocationResponse(BaseModel):
+    id: int
+    department_id: int
+    resource_type: str
+    amount: int
+    priority: int
+    status: str
+    allocated_at: Optional[str]
+    expires_at: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+class ResourceRequestResponse(BaseModel):
+    id: int
+    department_id: int
+    resource_type: str
+    required_amount: int
+    reason: Optional[str]
+    status: str
+    approved_amount: Optional[int]
+    approval_reason: Optional[str]
+    approved_by: Optional[str]
+    requested_at: str
+    approved_at: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+class ApiKeyCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    rate_limit_per_minute: int = 100
+
+
+class ApiKeyResponse(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    is_active: bool
+    rate_limit_per_minute: int
+
+    class Config:
+        from_attributes = True
+
+
+class ApiKeyWithSecret(ApiKeyResponse):
+    key: str
+
+
+class ApiKeyUsageResponse(BaseModel):
+    id: str
+    endpoint: str
+    method: str
+    status_code: int
+    response_time_ms: int
+    timestamp: datetime
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ApiKeyPermissionCreate(BaseModel):
+    resource_type: str
+    action: str
+
+
+class ApiKeyPermissionResponse(BaseModel):
+    id: str
+    resource_type: str
+    action: str
+
+    class Config:
+        from_attributes = True
