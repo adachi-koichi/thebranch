@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>テンプレート詳細 - THEBRANCH</title>
+  <style>
+    :root {
+      --primary: #3B82F6;
+      --success: #10B981;
+      --error: #EF4444;
+      --warning: #F59E0B;
+      --border: #E5E7EB;
+      --bg: #F9FAFB;
+      --card: #FFFFFF;
+      --text: #1F2937;
+      --text-muted: #6B7280;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --card: #1F2937;
+        --text: #F3F4F6;
+        --text-muted: #D1D5DB;
+        --border: #374151;
+      }
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .detail-header {
+      margin-bottom: 24px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--primary);
+      width: 50%;
+      transition: width 200ms ease-out;
+    }
+
+    .detail-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .detail-subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .detail-content {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .overview-item {
+      padding: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .overview-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 4px;
+    }
+
+    .overview-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .section-title:hover {
+      color: var(--primary);
+    }
+
+    .toggle-icon {
+      display: inline-block;
+      transition: transform 200ms ease-out;
+      font-size: 12px;
+    }
+
+    .toggle-icon.collapsed {
+      transform: rotate(-90deg);
+    }
+
+    .section-content {
+      max-height: 1000px;
+      overflow: hidden;
+      transition: max-height 200ms ease-out, opacity 200ms ease-out;
+      opacity: 1;
+    }
+
+    .section-content.collapsed {
+      max-height: 0;
+      opacity: 0;
+    }
+
+    .role-item {
+      padding: 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    .role-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .role-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .role-count {
+      font-size: 12px;
+      background: var(--primary);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .role-description {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+
+    .role-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .role-detail {
+      padding: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+
+    .role-detail-label {
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .role-detail-value {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .process-item {
+      padding: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    .process-header {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .process-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .process-meta-item {
+      display: flex;
+      gap: 4px;
+    }
+
+    .process-description {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .budget-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .budget-table tr {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .budget-table td {
+      padding: 12px;
+      text-align: left;
+    }
+
+    .budget-table td:first-child {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .budget-table td:last-child {
+      text-align: right;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .budget-table tr:last-child {
+      border-bottom: 2px solid var(--primary);
+      background: var(--bg);
+    }
+
+    .budget-comparison {
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+
+    .budget-comparison.warning {
+      background: #FEE2E2;
+      border: 1px solid #FECACA;
+      color: #7F1D1D;
+    }
+
+    .budget-comparison.success {
+      background: #DCFCE7;
+      border: 1px solid #BBFBBB;
+      color: #166534;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 200ms ease-out;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.85;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error-message {
+      background: #FEE2E2;
+      color: #7F1D1D;
+      border: 1px solid #FECACA;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="detail-header">
+      <div class="progress-bar">
+        <div class="progress-fill"></div>
+      </div>
+      <h1 class="detail-title" id="detailTitle">テンプレート詳細</h1>
+      <p class="detail-subtitle">Progress: 50%</p>
+    </div>
+
+    <!-- Loading / Error / Content -->
+    <div id="contentArea">
+      <div class="loading">
+        <div class="spinner"></div>
+        <p style="margin-top: 12px;">テンプレート情報を読み込み中...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const TEMPLATE_ID = new URLSearchParams(window.location.search).get('template_id') ||
+                       sessionStorage.getItem('selectedTemplateId') || 1;
+
+    async function loadTemplateDetail() {
+      try {
+        const response = await fetch(`/api/departments_templates/${TEMPLATE_ID}`);
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
+
+        const template = await response.json();
+        renderTemplate(template);
+      } catch (error) {
+        console.error('Failed to load template:', error);
+        document.getElementById('contentArea').innerHTML = `
+          <div class="error-message">
+            テンプレート情報の読み込みに失敗しました。後でお試しください。
+          </div>
+        `;
+      }
+    }
+
+    function renderTemplate(template) {
+      const html = `
+        <div class="detail-content">
+          <!-- Overview -->
+          <div class="overview-grid">
+            <div class="overview-item">
+              <div class="overview-label">カテゴリ</div>
+              <div class="overview-value">${escapeHtml(template.category || '—')}</div>
+            </div>
+            <div class="overview-item">
+              <div class="overview-label">対象規模</div>
+              <div class="overview-value">${escapeHtml(template.total_roles ? `${template.total_roles}ロール` : '—')}</div>
+            </div>
+            <div class="overview-item">
+              <div class="overview-label">初期予算目安</div>
+              <div class="overview-value">¥150万～¥500万/月</div>
+            </div>
+            <div class="overview-item">
+              <div class="overview-label">セットアップ期間</div>
+              <div class="overview-value">1-2週間</div>
+            </div>
+          </div>
+
+          <!-- Role Composition -->
+          <div class="section">
+            <div class="section-title" onclick="toggleSection(event)">
+              <span class="toggle-icon">▶</span>
+              <span>ロール構成</span>
+            </div>
+            <div class="section-content">
+              ${renderRoles(template.roles || [])}
+            </div>
+          </div>
+
+          <!-- Processes -->
+          <div class="section">
+            <div class="section-title" onclick="toggleSection(event)">
+              <span class="toggle-icon">▶</span>
+              <span>プロセス・ワークフロー</span>
+            </div>
+            <div class="section-content">
+              ${renderProcesses(template.processes || [])}
+            </div>
+          </div>
+
+          <!-- Budget Estimate -->
+          <div class="section">
+            <div class="section-title">初期予算見積</div>
+            <div class="section-content">
+              ${renderBudget(template)}
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+          <button class="btn btn-secondary" onclick="goBack()">← 前へ</button>
+          <div style="display: flex; gap: 12px;">
+            <button class="btn btn-secondary" onclick="skipSetup()">スキップ</button>
+            <button class="btn btn-primary" onclick="goToCustomize()">カスタマイズして進む →</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('detailTitle').textContent = template.name || 'テンプレート詳細';
+      document.getElementById('contentArea').innerHTML = html;
+
+      // Collapse all sections by default except first
+      const sections = document.querySelectorAll('.section-content');
+      sections.forEach((section, idx) => {
+        if (idx > 0) {
+          section.classList.add('collapsed');
+          section.parentElement.querySelector('.toggle-icon').classList.add('collapsed');
+        }
+      });
+    }
+
+    function renderRoles(roles) {
+      if (!roles || roles.length === 0) return '<p class="text-muted">ロール情報がありません</p>';
+
+      return roles.map(role => `
+        <div class="role-item">
+          <div class="role-header">
+            <div class="role-name">${escapeHtml(role.role_label || role.role_key)}</div>
+            <div class="role-count">${role.min_members || 0}${role.max_members !== role.min_members ? '〜' + role.max_members : ''}名</div>
+          </div>
+          <div class="role-description">
+            ${escapeHtml(role.description || 'ロール説明がありません')}
+          </div>
+          <div class="role-details">
+            <div class="role-detail">
+              <div class="role-detail-label">スキル要件</div>
+              <div class="role-detail-value">${escapeHtml(role.skill_requirements || '—')}</div>
+            </div>
+            <div class="role-detail">
+              <div class="role-detail-label">給与相場</div>
+              <div class="role-detail-value">¥${Math.floor((role.salary_benchmark_min || 700000) / 10000)}～${Math.floor((role.salary_benchmark_max || 1000000) / 10000)}万/年</div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderProcesses(processes) {
+      if (!processes || processes.length === 0) return '<p class="text-muted">プロセス情報がありません</p>';
+
+      return processes.map(proc => `
+        <div class="process-item">
+          <div class="process-header">${escapeHtml(proc.process_label || proc.process_key)}</div>
+          <div class="process-meta">
+            <div class="process-meta-item">📅 ${escapeHtml(proc.frequency || 'ongoing')}</div>
+            <div class="process-meta-item">⏱️ ${escapeHtml(proc.estimated_hours || '—')}時間</div>
+          </div>
+          <div class="process-description">
+            ${escapeHtml(proc.description || 'プロセス説明がありません')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderBudget(template) {
+      const budgetMin = 1500000;
+      const budgetMax = 5000000;
+      const benchmarkPerPerson = 790000;
+      const minMembers = Math.min(...(template.roles || []).map(r => r.min_members || 3));
+      const maxMembers = Math.max(...(template.roles || []).map(r => r.max_members || 20));
+
+      const minBudgetPerPerson = budgetMin / maxMembers;
+      const maxBudgetPerPerson = budgetMax / minMembers;
+
+      const minVariance = ((minBudgetPerPerson - benchmarkPerPerson) / benchmarkPerPerson) * 100;
+      const maxVariance = ((maxBudgetPerPerson - benchmarkPerPerson) / benchmarkPerPerson) * 100;
+
+      return `
+        <table class="budget-table">
+          <tr>
+            <td>初期予算目安</td>
+            <td>¥${Math.floor(budgetMin / 10000)}万～¥${Math.floor(budgetMax / 10000)}万/月</td>
+          </tr>
+          <tr>
+            <td>メンバー規模</td>
+            <td>${minMembers}～${maxMembers}名</td>
+          </tr>
+          <tr>
+            <td>1人当たり月給目安</td>
+            <td>¥${Math.floor(minBudgetPerPerson / 10000)}万～¥${Math.floor(maxBudgetPerPerson / 10000)}万</td>
+          </tr>
+        </table>
+
+        <div class="budget-comparison ${maxVariance > -20 ? 'success' : 'warning'}">
+          ${maxVariance > -20 ? '✅' : '⚠️'}
+          <strong>市場相場との比較:</strong><br>
+          1人当たり市場相場は ¥${Math.floor(benchmarkPerPerson / 10000)}万/月です。
+          ${maxVariance > -20
+            ? `提案予算は市場相場と同等以上で、優秀層を採用しやすい水準です。`
+            : `提案予算が市場相場より${Math.abs(Math.floor(minVariance))}～${Math.abs(Math.floor(maxVariance))}%低い場合があります。採用難度が上がる可能性があります。`
+          }
+        </div>
+      `;
+    }
+
+    function toggleSection(event) {
+      const title = event.currentTarget;
+      const content = title.nextElementSibling;
+      const icon = title.querySelector('.toggle-icon');
+
+      content.classList.toggle('collapsed');
+      icon.classList.toggle('collapsed');
+    }
+
+    function goBack() {
+      window.history.back();
+    }
+
+    function goToCustomize() {
+      sessionStorage.setItem('selectedTemplateId', TEMPLATE_ID);
+      window.location.href = `/marketplace-customize.html?template_id=${TEMPLATE_ID}`;
+    }
+
+    function skipSetup() {
+      if (confirm('セットアップをスキップしますか？')) {
+        window.location.href = '/';
+      }
+    }
+
+    function escapeHtml(text) {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    // Load template on page load
+    document.addEventListener('DOMContentLoaded', loadTemplateDetail);
+  </script>
+</body>
+</html>

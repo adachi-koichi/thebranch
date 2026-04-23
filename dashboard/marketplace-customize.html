@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>テンプレートカスタマイズ - THEBRANCH</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0f1419;
+            --card: #1a1f26;
+            --border: #2d3139;
+            --text: #e4e6eb;
+            --text-muted: #9ca3af;
+            --accent: #3b82f6;
+            --primary: #3b82f6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --green: #10b981;
+            --red: #ef4444;
+            --orange: #f59e0b;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* Progress Bar */
+        .progress-section {
+            margin-bottom: 32px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background-color: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-fill {
+            width: 75%;
+            height: 100%;
+            background-color: var(--primary);
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Header */
+        .customize-header {
+            margin-bottom: 32px;
+        }
+
+        .customize-header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .customize-header p {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        /* Form Sections */
+        .form-section {
+            background-color: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            transition: all 0.2s ease;
+        }
+
+        .form-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+        }
+
+        .form-section-title::before {
+            content: '';
+            display: inline-block;
+            width: 3px;
+            height: 16px;
+            background-color: var(--primary);
+            margin-right: 8px;
+            border-radius: 2px;
+        }
+
+        /* Form Group */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .form-label .required {
+            color: var(--error);
+            margin-left: 2px;
+        }
+
+        .form-label .helper {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 400;
+            display: block;
+            margin-top: 4px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 13px;
+            transition: all 0.2s ease;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--primary);
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+
+        input[type="text"]:disabled,
+        input[type="number"]:disabled {
+            background-color: rgba(255, 255, 255, 0.02);
+            color: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        /* Two Column Grid */
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Slider Styles */
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: linear-gradient(to right, var(--primary), var(--primary));
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: 2px solid var(--card);
+            transition: all 0.2s ease;
+            box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.1);
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.2);
+            transform: scale(1.1);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: 2px solid var(--card);
+            transition: all 0.2s ease;
+        }
+
+        input[type="range"]::-moz-range-thumb:hover {
+            transform: scale(1.1);
+        }
+
+        .slider-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary);
+            min-width: 60px;
+            text-align: right;
+        }
+
+        /* Budget Calculation Display */
+        .calculation-box {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 12px;
+        }
+
+        .calculation-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 13px;
+        }
+
+        .calculation-item:not(:last-child) {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .calculation-label {
+            color: var(--text-muted);
+        }
+
+        .calculation-value {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        /* Warning / Success Box */
+        .alert-box {
+            border-radius: 6px;
+            padding: 12px 14px;
+            font-size: 13px;
+            margin-top: 12px;
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .alert-box.warning {
+            background-color: #fef2f2;
+            border: 1px solid #fee2e2;
+            color: #7f1d1d;
+        }
+
+        .alert-box.success {
+            background-color: #f0fdf4;
+            border: 1px solid #dcfce7;
+            color: #166534;
+        }
+
+        .alert-box.info {
+            background-color: #eff6ff;
+            border: 1px solid #dbeafe;
+            color: #0c2d6b;
+        }
+
+        .alert-icon {
+            font-size: 16px;
+        }
+
+        .alert-message {
+            line-height: 1.4;
+        }
+
+        /* Comparison Table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 12px;
+        }
+
+        .comparison-table th {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid var(--border);
+            padding: 10px;
+            text-align: left;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .comparison-table td {
+            border-bottom: 1px solid var(--border);
+            padding: 10px;
+            color: var(--text);
+        }
+
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .comparison-highlight {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        /* Process Customization */
+        .process-item {
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .process-item-info {
+            flex: 1;
+        }
+
+        .process-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        .process-frequency {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .process-item-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        select.process-priority {
+            padding: 6px 8px;
+            font-size: 12px;
+        }
+
+        .btn-delete {
+            padding: 6px 10px;
+            background-color: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 4px;
+            color: #ef4444;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-delete:hover {
+            background-color: rgba(239, 68, 68, 0.2);
+        }
+
+        /* Confirmation Checkbox */
+        .confirmation-section {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 16px;
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .checkbox-custom {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--primary);
+            cursor: pointer;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .confirmation-text {
+            font-size: 13px;
+            color: var(--text);
+        }
+
+        .confirmation-text .emphasis {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        /* Footer */
+        .footer {
+            display: flex;
+            gap: 12px;
+            justify-content: space-between;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        .footer-left {
+            display: flex;
+            gap: 12px;
+        }
+
+        .footer-right {
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+
+        .btn-secondary {
+            background-color: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            background-color: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        .btn-danger:hover {
+            background-color: rgba(239, 68, 68, 0.2);
+        }
+
+        /* Loading State */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        /* Error Message */
+        .error-message {
+            background-color: #fef2f2;
+            border: 1px solid #fee2e2;
+            color: #7f1d1d;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 24px 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+
+            .customize-header h1 {
+                font-size: 20px;
+            }
+
+            .form-section {
+                padding: 16px;
+            }
+
+            .footer {
+                flex-direction: column;
+            }
+
+            .footer-left,
+            .footer-right {
+                width: 100%;
+            }
+
+            .btn {
+                flex: 1;
+            }
+
+            .slider-container {
+                flex-direction: column;
+            }
+        }
+
+        .hide {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Progress Bar -->
+        <div class="progress-section">
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+            <div class="progress-text">
+                <span>ステップ3: セットアップのカスタマイズ</span>
+                <span>75%</span>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="customize-header">
+            <h1 id="templateNameHeader">テンプレートを読み込み中...</h1>
+            <p>以下の情報を入力して、AIエージェント部署のセットアップをカスタマイズします。</p>
+        </div>
+
+        <!-- Basic Info Section -->
+        <div class="form-section">
+            <div class="form-section-title">基本情報</div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">
+                        部署名
+                        <span class="required">*</span>
+                    </label>
+                    <input type="text" id="deptName" placeholder="例: 営業推進部" maxlength="50">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        責任者名
+                        <span class="required">*</span>
+                    </label>
+                    <input type="text" id="managerName" placeholder="例: 田中太郎" maxlength="50">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    組織ID
+                    <span class="helper">自動生成</span>
+                </label>
+                <input type="text" id="orgId" readonly placeholder="org_" value="">
+            </div>
+        </div>
+
+        <!-- Member Config Section -->
+        <div class="form-section">
+            <div class="form-section-title">メンバー構成</div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    メンバー数
+                    <span class="required">*</span>
+                    <span class="helper" id="sliderRange">1名〜10名</span>
+                </label>
+
+                <div class="slider-container">
+                    <input type="range" id="membersSlider" min="1" max="10" value="5" step="1">
+                    <span class="slider-value"><span id="membersValue">5</span>名</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Budget Section -->
+        <div class="form-section">
+            <div class="form-section-title">予算設定</div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    月額予算（万円）
+                    <span class="required">*</span>
+                    <span class="helper">例: 500 = 500万円/月</span>
+                </label>
+                <input type="number" id="budgetInput" placeholder="250" min="1" max="10000" step="1">
+            </div>
+
+            <!-- Calculation Display -->
+            <div class="calculation-box" id="calculationBox">
+                <div class="calculation-item">
+                    <span class="calculation-label">1人当たり月給</span>
+                    <span class="calculation-value" id="perPersonValue">—</span>
+                </div>
+                <div class="calculation-item">
+                    <span class="calculation-label">市場相場（参考）</span>
+                    <span class="calculation-value">¥79万/月</span>
+                </div>
+                <div class="calculation-item">
+                    <span class="calculation-label">相場比較</span>
+                    <span class="calculation-value" id="varianceValue">—</span>
+                </div>
+            </div>
+
+            <!-- Warning / Success Alert -->
+            <div class="alert-box" id="budgetWarning">
+                <div class="alert-icon">⚠️</div>
+                <div class="alert-message" id="warningMessage">市場相場より低い可能性があります</div>
+            </div>
+
+            <div class="alert-box success" id="budgetSuccess">
+                <div class="alert-icon">✓</div>
+                <div class="alert-message">市場相場を満たしています</div>
+            </div>
+
+            <!-- Benchmark Comparison Table -->
+            <table class="comparison-table" id="comparisonTable">
+                <thead>
+                    <tr>
+                        <th>指標</th>
+                        <th>あなたの設定</th>
+                        <th>市場相場</th>
+                        <th>評価</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1人当たり月給</td>
+                        <td><span class="comparison-highlight" id="yourSalary">—</span></td>
+                        <td><span class="comparison-highlight">¥79万</span></td>
+                        <td id="salaryEval">—</td>
+                    </tr>
+                    <tr>
+                        <td>総月額予算</td>
+                        <td><span class="comparison-highlight" id="totalBudget">—</span></td>
+                        <td><span class="comparison-highlight" id="benchmarkBudget">—</span></td>
+                        <td id="budgetEval">—</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Process Customization Section (Optional) -->
+        <div class="form-section">
+            <div class="form-section-title">プロセスカスタマイズ（オプション）</div>
+
+            <div id="processesContainer">
+                <!-- Processes will be rendered here -->
+            </div>
+
+            <div class="alert-box info" id="processInfo">
+                <div class="alert-message">プロセスの優先度を調整したり、不要なプロセスを削除できます。</div>
+            </div>
+        </div>
+
+        <!-- Confirmation Section -->
+        <div class="form-section">
+            <div class="form-section-title">確認</div>
+
+            <div class="confirmation-section">
+                <input type="checkbox" id="confirmCheckbox" class="checkbox-custom">
+                <div class="confirmation-text">
+                    <span class="emphasis">上記の内容で、AIエージェント部署のセットアップを実行します。</span>
+                    <br>
+                    この操作は確認後に完了し、変更はダッシュボードで管理できます。
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-left">
+                <button class="btn btn-secondary" id="btnBack">← 前へ戻る</button>
+            </div>
+            <div class="footer-right">
+                <button class="btn btn-danger" id="btnCancel">キャンセル</button>
+                <button class="btn btn-primary" id="btnExecute" disabled>セットアップを実行 →</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // Constants and State
+        // ============================================================
+        const BENCHMARK_SALARY = 790000; // 79万円/月
+        let TEMPLATE_ID = null;
+        let templateData = null;
+        let selectedProcesses = [];
+
+        // ============================================================
+        // Initialization
+        // ============================================================
+        function init() {
+            // Get template ID from URL or sessionStorage
+            const params = new URLSearchParams(window.location.search);
+            TEMPLATE_ID = params.get('template_id') || sessionStorage.getItem('selectedTemplateId');
+
+            if (!TEMPLATE_ID) {
+                document.querySelector('.container').innerHTML = '<div class="error-message">テンプレートIDが指定されていません。前の画面から再度選択してください。</div>';
+                return;
+            }
+
+            // Load template details
+            loadTemplateDetail();
+
+            // Setup event listeners
+            setupEventListeners();
+        }
+
+        function setupEventListeners() {
+            // Budget and member inputs
+            document.getElementById('budgetInput').addEventListener('input', updateBudgetCalculation);
+            document.getElementById('membersSlider').addEventListener('input', (e) => {
+                document.getElementById('membersValue').textContent = e.target.value;
+                updateBudgetCalculation();
+            });
+
+            // Department name and manager name for org ID generation
+            document.getElementById('deptName').addEventListener('input', generateOrgId);
+            document.getElementById('managerName').addEventListener('input', generateOrgId);
+
+            // Confirmation checkbox
+            document.getElementById('confirmCheckbox').addEventListener('change', (e) => {
+                document.getElementById('btnExecute').disabled = !e.target.checked;
+            });
+
+            // Button events
+            document.getElementById('btnBack').addEventListener('click', goBack);
+            document.getElementById('btnCancel').addEventListener('click', cancel);
+            document.getElementById('btnExecute').addEventListener('click', executeSetup);
+        }
+
+        // ============================================================
+        // API Integration
+        // ============================================================
+        async function loadTemplateDetail() {
+            try {
+                const response = await fetch(`/api/departments_templates/${TEMPLATE_ID}`);
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                templateData = await response.json();
+
+                // Update header with template name
+                document.getElementById('templateNameHeader').textContent = `${escapeHtml(templateData.name)} - セットアップをカスタマイズ`;
+
+                // Set slider range based on template
+                if (templateData.roles && templateData.roles.length > 0) {
+                    const maxMembers = Math.max(...templateData.roles.map(r => r.max_members || 10));
+                    const minMembers = Math.min(...templateData.roles.map(r => r.min_members || 1));
+
+                    const slider = document.getElementById('membersSlider');
+                    slider.min = minMembers;
+                    slider.max = maxMembers;
+                    slider.value = Math.ceil((minMembers + maxMembers) / 2);
+
+                    document.getElementById('sliderRange').textContent = `${minMembers}名〜${maxMembers}名`;
+                    document.getElementById('membersValue').textContent = slider.value;
+                }
+
+                // Render processes
+                if (templateData.processes && templateData.processes.length > 0) {
+                    selectedProcesses = templateData.processes.map(p => ({
+                        ...p,
+                        priority: 'normal'
+                    }));
+                    renderProcesses();
+                }
+
+                // Initial calculation
+                updateBudgetCalculation();
+
+            } catch (error) {
+                console.error('Error loading template:', error);
+                document.querySelector('.container').innerHTML = '<div class="error-message">テンプレート情報の読み込みに失敗しました。<br>もう一度前の画面から選択してください。</div>';
+            }
+        }
+
+        // ============================================================
+        // Rendering
+        // ============================================================
+        function renderProcesses() {
+            const container = document.getElementById('processesContainer');
+            if (!selectedProcesses || selectedProcesses.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); font-size: 12px;">デフォルトプロセスがありません</p>';
+                return;
+            }
+
+            container.innerHTML = selectedProcesses.map((proc, idx) => `
+                <div class="process-item">
+                    <div class="process-item-info">
+                        <div class="process-name">${escapeHtml(proc.process_label || proc.process_key)}</div>
+                        <div class="process-frequency">
+                            ${proc.frequency ? `頻度: ${escapeHtml(proc.frequency)}` : ''}
+                            ${proc.estimated_hours ? ` • 所要時間: ${proc.estimated_hours}時間` : ''}
+                        </div>
+                    </div>
+                    <div class="process-item-controls">
+                        <select class="process-priority" data-index="${idx}" onchange="updateProcessPriority(${idx}, this.value)">
+                            <option value="low">低</option>
+                            <option value="normal" selected>標準</option>
+                            <option value="high">高</option>
+                        </select>
+                        <button class="btn-delete" onclick="removeProcess(${idx})">削除</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ============================================================
+        // Utility Functions
+        // ============================================================
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return String(text).replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function generateOrgId() {
+            const deptName = document.getElementById('deptName').value.trim();
+            const managerName = document.getElementById('managerName').value.trim();
+
+            if (deptName || managerName) {
+                // Simple org ID generation: org_dept_manager_timestamp
+                const timestamp = Date.now().toString(36).substring(2, 5);
+                const deptCode = deptName.substring(0, 3) || 'dept';
+                const managerCode = managerName.substring(0, 3) || 'mgr';
+                const orgId = `org_${deptCode}_${managerCode}_${timestamp}`.toLowerCase();
+                document.getElementById('orgId').value = orgId;
+            } else {
+                document.getElementById('orgId').value = '';
+            }
+        }
+
+        // ============================================================
+        // Budget Calculation
+        // ============================================================
+        function updateBudgetCalculation() {
+            const budgetInput = document.getElementById('budgetInput').value;
+            const membersInput = document.getElementById('membersSlider').value;
+
+            const budget = parseInt(budgetInput) || 0;
+            const members = parseInt(membersInput) || 1;
+
+            if (budget <= 0) {
+                // Reset display
+                document.getElementById('perPersonValue').textContent = '—';
+                document.getElementById('varianceValue').textContent = '—';
+                document.getElementById('yourSalary').textContent = '—';
+                document.getElementById('totalBudget').textContent = '—';
+                document.getElementById('budgetEval').textContent = '—';
+                document.getElementById('budgetWarning').style.display = 'none';
+                document.getElementById('budgetSuccess').style.display = 'none';
+                return;
+            }
+
+            // Calculate per-person budget (万円 → 円)
+            const perPersonBudget = (budget * 10000) / members;
+
+            // Calculate variance
+            const variance = ((perPersonBudget - BENCHMARK_SALARY) / BENCHMARK_SALARY) * 100;
+
+            // Update calculation display
+            document.getElementById('perPersonValue').textContent = `¥${(perPersonBudget / 10000).toFixed(1)}万`;
+            document.getElementById('varianceValue').textContent = `${variance > 0 ? '+' : ''}${variance.toFixed(1)}%`;
+
+            // Update comparison table
+            document.getElementById('yourSalary').textContent = `¥${(perPersonBudget / 10000).toFixed(1)}万`;
+            document.getElementById('totalBudget').textContent = `¥${budget}万`;
+            document.getElementById('benchmarkBudget').textContent = `¥${(members * BENCHMARK_SALARY / 10000).toFixed(0)}万`;
+
+            // Evaluation
+            const salaryEval = perPersonBudget >= BENCHMARK_SALARY ? '✓ 相場以上' : '⚠️ 相場以下';
+            const budgetEval = variance >= -20 ? '✓ 適正' : '⚠️ 要確認';
+
+            document.getElementById('salaryEval').textContent = salaryEval;
+            document.getElementById('budgetEval').textContent = budgetEval;
+
+            // Show warning if variance < -20%
+            const warningBox = document.getElementById('budgetWarning');
+            const successBox = document.getElementById('budgetSuccess');
+
+            if (variance < -20) {
+                warningBox.style.display = 'flex';
+                successBox.style.display = 'none';
+                document.getElementById('warningMessage').textContent =
+                    `⚠️ 市場相場より ${Math.abs(variance).toFixed(1)}% 低い予算です。採用難度が上がる可能性があります。`;
+            } else if (variance >= 0) {
+                warningBox.style.display = 'none';
+                successBox.style.display = 'flex';
+            } else {
+                warningBox.style.display = 'none';
+                successBox.style.display = 'none';
+            }
+        }
+
+        // ============================================================
+        // Process Management
+        // ============================================================
+        function updateProcessPriority(index, priority) {
+            if (selectedProcesses[index]) {
+                selectedProcesses[index].priority = priority;
+            }
+        }
+
+        function removeProcess(index) {
+            selectedProcesses.splice(index, 1);
+            renderProcesses();
+        }
+
+        // ============================================================
+        // Validation
+        // ============================================================
+        function validateForm() {
+            const deptName = document.getElementById('deptName').value.trim();
+            const managerName = document.getElementById('managerName').value.trim();
+            const budget = parseInt(document.getElementById('budgetInput').value) || 0;
+
+            if (!deptName) {
+                alert('部署名を入力してください');
+                return false;
+            }
+            if (!managerName) {
+                alert('責任者名を入力してください');
+                return false;
+            }
+            if (budget <= 0) {
+                alert('月額予算を入力してください');
+                return false;
+            }
+            if (!document.getElementById('confirmCheckbox').checked) {
+                alert('内容を確認して、チェックボックスにチェックしてください');
+                return false;
+            }
+
+            return true;
+        }
+
+        // ============================================================
+        // Button Actions
+        // ============================================================
+        function goBack() {
+            // Navigate back to marketplace-detail.html
+            if (TEMPLATE_ID) {
+                window.location.href = `/dashboard/marketplace-detail.html?template_id=${TEMPLATE_ID}`;
+            } else {
+                window.history.back();
+            }
+        }
+
+        function cancel() {
+            if (confirm('セットアップをキャンセルします。よろしいですか？')) {
+                // Go back to onboarding wizard or dashboard
+                window.location.href = '/dashboard/onboarding-wizard.html';
+            }
+        }
+
+        async function executeSetup() {
+            if (!validateForm()) {
+                return;
+            }
+
+            const btnExecute = document.getElementById('btnExecute');
+            btnExecute.disabled = true;
+            btnExecute.textContent = 'セットアップ中...';
+
+            try {
+                const payload = {
+                    template_id: TEMPLATE_ID,
+                    department_name: document.getElementById('deptName').value.trim(),
+                    manager_name: document.getElementById('managerName').value.trim(),
+                    org_id: document.getElementById('orgId').value,
+                    member_count: parseInt(document.getElementById('membersSlider').value),
+                    monthly_budget: parseInt(document.getElementById('budgetInput').value),
+                    processes: selectedProcesses.map(p => ({
+                        process_key: p.process_key,
+                        priority: p.priority,
+                        enabled: true
+                    }))
+                };
+
+                const response = await fetch('/api/customize_template', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                // Success - navigate to dashboard or completion page
+                sessionStorage.removeItem('selectedTemplateId');
+                window.location.href = `/dashboard/index.html?setup_complete=true&dept_id=${result.department_id || ''}`;
+
+            } catch (error) {
+                console.error('Error executing setup:', error);
+                alert('セットアップ中にエラーが発生しました。\nもう一度お試しください。');
+                btnExecute.disabled = false;
+                btnExecute.textContent = 'セットアップを実行 →';
+            }
+        }
+
+        // ============================================================
+        // Start
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
