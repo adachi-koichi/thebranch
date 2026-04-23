@@ -8125,6 +8125,231 @@ async def get_workflows(workflow_type: str = "all"):
 
 
 # ──────────────────────────────────────────────
+# 部署間コラボレーション API エンドポイント (Task #2414)
+# ──────────────────────────────────────────────
+
+@app.post("/api/cross-department-requests")
+async def create_cross_department_request(
+    req: models.CrossDepartmentRequestCreate,
+    auth: dict = Depends(verify_api_key),
+):
+    """他部署にタスク / リソース / スキルを依頼する"""
+    try:
+        # バリデーション: 同一部署チェック
+        if req.requesting_department_id == req.receiving_department_id:
+            raise HTTPException(
+                status_code=422, detail="同じ部署へのリクエストはできません"
+            )
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            await db.execute("PRAGMA foreign_keys = ON")
+            db.row_factory = aiosqlite.Row
+
+            # requesting_department_id 存在確認
+            cursor = await db.execute(
+                "SELECT id FROM department_instances WHERE id = ?",
+                (req.requesting_department_id,),
+            )
+            if not await cursor.fetchone():
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"部署 #{req.requesting_department_id} が見つかりません",
+                )
+
+            # receiving_department_id 存在確認
+            cursor = await db.execute(
+                "SELECT id FROM department_instances WHERE id = ?",
+                (req.receiving_department_id,),
+            )
+            if not await cursor.fetchone():
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"部署 #{req.receiving_department_id} が見つかりません",
+                )
+
+            # リクエスト作成
+            now = datetime.now().isoformat()
+            cursor = await db.execute(
+                """
+                INSERT INTO inter_department_requests
+                    (requesting_department_id, receiving_department_id,
+                     request_type, priority, description, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    req.requesting_department_id,
+                    req.receiving_department_id,
+                    req.request_type,
+                    req.priority,
+                    req.description,
+                    now,
+                    now,
+                ),
+            )
+            request_id = cursor.lastrowid
+            await db.commit()
+
+            return {
+                "id": request_id,
+                "requesting_department_id": req.requesting_department_id,
+                "receiving_department_id": req.receiving_department_id,
+                "request_type": req.request_type,
+                "priority": req.priority,
+                "description": req.description,
+                "status": "pending",
+                "created_at": now,
+                "updated_at": now,
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating cross-department request: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/task-sharing")
+async def create_task_sharing(
+    req: models.TaskSharingCreate,
+    auth: dict = Depends(verify_api_key),
+):
+    """リクエストに基づいてタスクを部署間で共有する"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            await db.execute("PRAGMA foreign_keys = ON")
+            db.row_factory = aiosqlite.Row
+
+            # リクエスト存在確認
+            cursor = await db.execute(
+                "SELECT id, status FROM inter_department_requests WHERE id = ?",
+                (req.request_id,),
+            )
+            request_row = await cursor.fetchone()
+            if not request_row:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"リクエスト #{req.request_id} が見つかりません",
+                )
+
+            # タスク存在確認 (production schema: table is `tasks`)
+            cursor = await db.execute(
+                "SELECT id FROM tasks WHERE id = ?", (req.task_id,)
+            )
+            if not await cursor.fetchone():
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"タスク #{req.task_id} が見つかりません",
+                )
+
+            # タスク割り当て作成
+            now = datetime.now().isoformat()
+            cursor = await db.execute(
+                """
+                INSERT INTO inter_department_task_allocations
+                    (request_id, task_id, status, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (req.request_id, req.task_id, "pending", now),
+            )
+            allocation_id = cursor.lastrowid
+            await db.commit()
+
+            return {
+                "id": allocation_id,
+                "request_id": req.request_id,
+                "task_id": req.task_id,
+                "sharing_terms": req.sharing_terms,
+                "status": "pending",
+                "created_at": now,
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating task sharing: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/received-requests")
+async def get_received_requests(
+    department_id: int,
+    status: Optional[str] = None,
+    limit: int = 20,
+    auth: dict = Depends(verify_api_key),
+):
+    """指定部署が受け取った他部署からのリクエスト一覧"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            query = """
+                SELECT id, requesting_department_id, receiving_department_id,
+                       request_type, priority, status, description,
+                       created_at, updated_at
+                FROM inter_department_requests
+                WHERE receiving_department_id = ?
+            """
+            params = [department_id]
+
+            if status:
+                query += " AND status = ?"
+                params.append(status)
+
+            query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+
+            cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+    except Exception as e:
+        logger.error(f"Error getting received requests: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/shared-tasks")
+async def get_shared_tasks(
+    department_id: int,
+    status: Optional[str] = None,
+    limit: int = 20,
+    auth: dict = Depends(verify_api_key),
+):
+    """指定部署が受け取った共有タスク一覧"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            query = """
+                SELECT
+                    a.id AS allocation_id,
+                    r.id AS request_id,
+                    a.task_id,
+                    r.requesting_department_id,
+                    r.receiving_department_id,
+                    r.request_type,
+                    a.status,
+                    a.created_at,
+                    t.title AS task_title
+                FROM inter_department_task_allocations a
+                JOIN inter_department_requests r ON a.request_id = r.id
+                JOIN tasks t ON a.task_id = t.id
+                WHERE r.receiving_department_id = ?
+            """
+            params = [department_id]
+
+            if status:
+                query += " AND a.status = ?"
+                params.append(status)
+
+            query += " ORDER BY a.created_at DESC LIMIT ?"
+            params.append(limit)
+
+            cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+    except Exception as e:
+        logger.error(f"Error getting shared tasks: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
 # Entry point
 # ──────────────────────────────────────────────
 
