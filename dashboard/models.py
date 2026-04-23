@@ -935,3 +935,48 @@ class TaskSharingResponse(TaskSharingCreate):
 
     class Config:
         from_attributes = True
+
+
+class AgentEvaluationCreate(BaseModel):
+    agent_id: str
+    completion_rate: float  # 0.0-100.0
+    quality_score: float    # 1.0-5.0
+    overall_score: float    # 計算済みスコア
+
+
+class AgentEvaluationUpdate(BaseModel):
+    completion_rate: Optional[float] = None
+    quality_score: Optional[float] = None
+    overall_score: Optional[float] = None
+
+
+class AgentEvaluationResponse(BaseModel):
+    id: int
+    agent_id: str
+    completion_rate: float
+    quality_score: float
+    overall_score: float
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class EvaluationHistoryCreate(BaseModel):
+    agent_id: str
+    completion_rate: float
+    quality_score: float
+    overall_score: float
+
+
+class EvaluationHistoryResponse(BaseModel):
+    id: int
+    agent_id: str
+    completion_rate: float
+    quality_score: float
+    overall_score: float
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
