@@ -8779,3 +8779,303 @@ async def verify_integration_webhook(config_id: int):
         logger.error(f"Failed to verify webhook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ============================================================================
+# Team Invitation & Collaboration APIs
+# ============================================================================
+
+@app.post("/api/teams/{team_id}/invite", status_code=201)
+async def create_team_invite(team_id: int, req: models.InvitationCreate, auth_header: Optional[str] = Header(None)):
+    """チームの招待リンクを生成"""
+    await ensure_db_initialized()
+    try:
+        user = get_current_user(auth_header) if auth_header else None
+        if not user:
+            raise HTTPException(status_code=401, detail="認証が必要です")
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # チーム確認
+            cursor = await db.execute("SELECT id FROM teams WHERE id = ?", (team_id,))
+            if not await cursor.fetchone():
+                raise HTTPException(status_code=404, detail="チームが見つかりません")
+
+            # ユーザーの権限確認（owner/admin のみ）
+            cursor = await db.execute(
+                "SELECT role FROM team_members WHERE team_id = ? AND user_id = ?",
+                (team_id, user["id"])
+            )
+            member = await cursor.fetchone()
+            if not member or member["role"] not in ("owner", "admin"):
+                raise HTTPException(status_code=403, detail="権限がありません")
+
+            # トークン生成
+            token = f"invite_{uuid.uuid4().hex[:16]}"
+            expires_at = (datetime.now().replace(microsecond=0) +
+                         __import__('datetime').timedelta(days=req.expires_in_days)).isoformat()
+
+            # 招待レコード作成
+            await db.execute(
+                """INSERT INTO invitations (team_id, token, created_by, expires_at, max_uses, status)
+                   VALUES (?, ?, ?, ?, ?, 'active')""",
+                (team_id, token, user["id"], expires_at, req.max_uses)
+            )
+            await db.commit()
+
+            # 作成した招待を返す
+            cursor = await db.execute("SELECT * FROM invitations WHERE token = ?", (token,))
+            inv = await cursor.fetchone()
+            return dict(inv) if inv else {"token": token}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create invite: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/invites/{token}/accept", status_code=201)
+async def accept_invitation(token: str, req: models.InviteAcceptRequest, auth_header: Optional[str] = Header(None)):
+    """招待リンクを受け入れてチームメンバーになる"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # 招待トークン確認
+            cursor = await db.execute(
+                "SELECT * FROM invitations WHERE token = ? AND status = 'active'",
+                (token,)
+            )
+            invitation = await cursor.fetchone()
+            if not invitation:
+                raise HTTPException(status_code=404, detail="招待が見つかりません")
+
+            # 有効期限チェック
+            expires_at = datetime.fromisoformat(invitation["expires_at"])
+            if datetime.now() > expires_at:
+                await db.execute("UPDATE invitations SET status = 'expired' WHERE id = ?", (invitation["id"],))
+                await db.commit()
+                raise HTTPException(status_code=400, detail="招待の有効期限が切れています")
+
+            # 使用回数チェック
+            if invitation["used_count"] >= invitation["max_uses"]:
+                raise HTTPException(status_code=409, detail="招待の使用可能回数に達しました")
+
+            # 現在のユーザーを取得（または new user として user_id を生成）
+            user_id = None
+            if auth_header:
+                user = get_current_user(auth_header)
+                user_id = user["id"]
+            else:
+                # 認証なしの場合、username または email から user_id を生成
+                user_id = req.username or str(uuid.uuid4())
+
+            # 既にメンバーか確認
+            cursor = await db.execute(
+                "SELECT id FROM team_members WHERE team_id = ? AND user_id = ?",
+                (invitation["team_id"], user_id)
+            )
+            if await cursor.fetchone():
+                raise HTTPException(status_code=409, detail="既にメンバーです")
+
+            # チームメンバーを追加
+            member_id = str(uuid.uuid4())
+            now = datetime.now().isoformat()
+            await db.execute(
+                """INSERT INTO team_members (id, team_id, user_id, role, invited_by, accepted_at, status)
+                   VALUES (?, ?, ?, 'member', ?, ?, 'active')""",
+                (member_id, invitation["team_id"], user_id, invitation["created_by"], now)
+            )
+
+            # 招待の used_count をインクリメント
+            await db.execute(
+                "UPDATE invitations SET used_count = used_count + 1 WHERE id = ?",
+                (invitation["id"],)
+            )
+            await db.commit()
+
+            # チーム情報を返す
+            cursor = await db.execute("SELECT * FROM teams WHERE id = ?", (invitation["team_id"],))
+            team = await cursor.fetchone()
+
+            return {"team": dict(team) if team else {}, "member_id": member_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to accept invitation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/teams/{team_id}/members")
+async def list_team_members(team_id: int, role: Optional[str] = None, status: str = "active", auth_header: Optional[str] = Header(None)):
+    """チームメンバー一覧を取得"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # チーム確認
+            cursor = await db.execute("SELECT id FROM teams WHERE id = ?", (team_id,))
+            if not await cursor.fetchone():
+                raise HTTPException(status_code=404, detail="チームが見つかりません")
+
+            # メンバー一覧取得
+            query = "SELECT * FROM team_members WHERE team_id = ? AND status = ?"
+            params = [team_id, status]
+
+            if role:
+                query += " AND role = ?"
+                params.append(role)
+
+            query += " ORDER BY joined_at DESC"
+
+            cursor = await db.execute(query, params)
+            members = await cursor.fetchall()
+
+            # 各メンバーのユーザー情報を付加
+            members_with_user = []
+            for member in members:
+                member_dict = dict(member)
+                cursor = await db.execute("SELECT * FROM users WHERE id = ?", (member["user_id"],))
+                user = await cursor.fetchone()
+                if user:
+                    member_dict["user"] = dict(user)
+                members_with_user.append(member_dict)
+
+            return {"data": members_with_user, "total": len(members_with_user)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list members: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class RoleChangeRequest(BaseModel):
+    role: str
+
+
+@app.patch("/api/teams/{team_id}/members/{user_id}/role")
+async def change_member_role(team_id: int, user_id: str, req: RoleChangeRequest, auth_header: Optional[str] = Header(None)):
+    """チームメンバーの権限を変更（owner のみ）"""
+    await ensure_db_initialized()
+    try:
+        user = get_current_user(auth_header) if auth_header else None
+        if not user:
+            raise HTTPException(status_code=401, detail="認証が必要です")
+
+        new_role = req.role
+        if not new_role or new_role not in ("owner", "admin", "member"):
+            raise HTTPException(status_code=400, detail="無効なロールです")
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # リクエスター（owner）の確認
+            cursor = await db.execute(
+                "SELECT role FROM team_members WHERE team_id = ? AND user_id = ?",
+                (team_id, user["id"])
+            )
+            requester = await cursor.fetchone()
+            if not requester or requester["role"] != "owner":
+                raise HTTPException(status_code=403, detail="owner のみ権限変更できます")
+
+            # 変更対象のメンバーを確認
+            cursor = await db.execute(
+                "SELECT * FROM team_members WHERE team_id = ? AND user_id = ?",
+                (team_id, user_id)
+            )
+            member = await cursor.fetchone()
+            if not member:
+                raise HTTPException(status_code=404, detail="メンバーが見つかりません")
+
+            # 最後のowner削除防止
+            if member["role"] == "owner" and new_role != "owner":
+                cursor = await db.execute(
+                    "SELECT COUNT(*) as cnt FROM team_members WHERE team_id = ? AND role = 'owner'",
+                    (team_id,)
+                )
+                result = await cursor.fetchone()
+                if result["cnt"] <= 1:
+                    raise HTTPException(status_code=409, detail="最後のowner を削除することはできません")
+
+            # 権限更新
+            await db.execute(
+                "UPDATE team_members SET role = ?, updated_at = ? WHERE team_id = ? AND user_id = ?",
+                (new_role, datetime.now().isoformat(), team_id, user_id)
+            )
+            await db.commit()
+
+            # 更新後のメンバーを返す
+            cursor = await db.execute(
+                "SELECT * FROM team_members WHERE team_id = ? AND user_id = ?",
+                (team_id, user_id)
+            )
+            updated = await cursor.fetchone()
+            return dict(updated) if updated else {}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to change role: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/teams/{team_id}/members/{user_id}", status_code=204)
+async def remove_team_member(team_id: int, user_id: str, auth_header: Optional[str] = Header(None)):
+    """チームメンバーを削除（owner/admin のみ）"""
+    await ensure_db_initialized()
+    try:
+        user = get_current_user(auth_header) if auth_header else None
+        if not user:
+            raise HTTPException(status_code=401, detail="認証が必要です")
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # リクエスター（owner/admin）の確認
+            cursor = await db.execute(
+                "SELECT role FROM team_members WHERE team_id = ? AND user_id = ?",
+                (team_id, user["id"])
+            )
+            requester = await cursor.fetchone()
+            if not requester or requester["role"] not in ("owner", "admin"):
+                raise HTTPException(status_code=403, detail="owner/admin のみメンバー削除できます")
+
+            # 削除対象のメンバーを確認
+            cursor = await db.execute(
+                "SELECT role FROM team_members WHERE team_id = ? AND user_id = ?",
+                (team_id, user_id)
+            )
+            member = await cursor.fetchone()
+            if not member:
+                raise HTTPException(status_code=404, detail="メンバーが見つかりません")
+
+            # 最後のowner削除防止
+            if member["role"] == "owner":
+                cursor = await db.execute(
+                    "SELECT COUNT(*) as cnt FROM team_members WHERE team_id = ? AND role = 'owner'",
+                    (team_id,)
+                )
+                result = await cursor.fetchone()
+                if result["cnt"] <= 1:
+                    raise HTTPException(status_code=409, detail="最後のowner を削除することはできません")
+
+            # メンバーを削除（ステータスを'removed'に）
+            await db.execute(
+                "UPDATE team_members SET status = 'removed', updated_at = ? WHERE team_id = ? AND user_id = ?",
+                (datetime.now().isoformat(), team_id, user_id)
+            )
+            await db.commit()
+
+            return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to remove member: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

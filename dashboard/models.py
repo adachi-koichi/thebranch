@@ -187,6 +187,76 @@ class TeamResponse(BaseModel):
     updated_at: str
 
 
+class InvitationCreate(BaseModel):
+    max_uses: int = 1
+    expires_in_days: int = 7
+
+
+class InvitationResponse(BaseModel):
+    id: str
+    team_id: int
+    token: str
+    created_by: str
+    created_at: datetime
+    expires_at: datetime
+    max_uses: int
+    used_count: int
+    status: str
+    accepted_by_users: List[str] = []
+
+    class Config:
+        from_attributes = True
+
+
+class TeamMemberCreate(BaseModel):
+    user_id: str
+    role: str = "member"
+
+
+class TeamMemberResponse(BaseModel):
+    id: str
+    team_id: int
+    user_id: str
+    role: str
+    invited_by: Optional[str] = None
+    accepted_at: Optional[datetime] = None
+    joined_at: datetime
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
+class TeamMemberDetailResponse(TeamMemberResponse):
+    user: Optional[UserResponse] = None
+
+
+class InviteTokenRequest(BaseModel):
+    token: str
+
+
+class InviteAcceptRequest(BaseModel):
+    token: str
+    username: Optional[str] = None
+    email: Optional[str] = None
+
+
+class TeamWithMembersResponse(BaseModel):
+    id: int
+    department_id: int
+    name: str
+    slug: str
+    description: Optional[str]
+    status: str
+    members: List[TeamMemberDetailResponse] = []
+    member_count: int = 0
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
 class RelationCreate(BaseModel):
     dept_b_id: int
     relation_type: str

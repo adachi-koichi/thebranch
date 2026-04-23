@@ -2339,11 +2339,14 @@
 
   <!-- Team Dynamics & Collaboration -->
   <div class="tab-panel" id="tab-team-dynamics" style="display:none;">
-    <div style="margin-bottom:20px;">
+    <div style="margin-bottom:20px; display: flex; gap: 12px; align-items: center;">
       <label style="margin-right:12px;">チーム選択:</label>
       <select id="teamDynamicsSelect" style="padding:6px 12px;border:1px solid var(--border);border-radius:4px;">
         <option value="">チームを選択...</option>
       </select>
+      <button onclick="if(document.getElementById('teamDynamicsSelect').value) openTeamMembersModal(parseInt(document.getElementById('teamDynamicsSelect').value))" style="background-color: var(--accent); color: white; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        👥 メンバー管理
+      </button>
     </div>
 
     <!-- Section 1: Communication Timeline -->
@@ -2903,6 +2906,68 @@
         <li><strong>ウェブフック URL をコピー</strong></li>
         <li>Secret キーは Discord 公開ウェブフックの場合は不要（空にできます）</li>
       </ol>
+    </div>
+  </div>
+</div>
+
+<!-- Team Members Modal -->
+<div class="modal-overlay" id="teamMembersModal">
+  <div class="modal" style="max-width: 600px;">
+    <h2>チームメンバー</h2>
+
+    <div style="margin-bottom: 20px;">
+      <button onclick="generateInviteLink()" style="background-color: var(--accent); color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        + メンバーを招待
+      </button>
+    </div>
+
+    <div id="membersListContainer" style="max-height: 400px; overflow-y: auto;">
+      <!-- Members will be populated here -->
+    </div>
+
+    <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
+      <button onclick="closeModal('teamMembersModal')" style="background-color: var(--secondary); color: var(--text); padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+        閉じる
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Invite Modal -->
+<div class="modal-overlay" id="inviteModal">
+  <div class="modal" style="max-width: 500px;">
+    <h2>メンバー招待</h2>
+
+    <div class="form-group">
+      <label>有効期限（日数）</label>
+      <input type="number" id="inviteExpiresInDays" value="7" min="1" max="365">
+    </div>
+
+    <div class="form-group">
+      <label>最大使用回数</label>
+      <input type="number" id="inviteMaxUses" value="1" min="1" max="100">
+    </div>
+
+    <div style="margin: 20px 0; padding: 12px; background-color: var(--hover-bg); border-radius: 4px; display: none;" id="inviteLinkBox">
+      <label style="font-size: 13px; color: var(--text-secondary);">招待リンク</label>
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <input type="text" id="inviteLinkInput" readonly style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px;">
+        <button onclick="copyInviteLink()" style="background-color: var(--accent); color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+          コピー
+        </button>
+      </div>
+      <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+        このリンクを他のユーザーに共有してください。
+      </p>
+    </div>
+
+    <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; display: flex; gap: 8px; justify-content: flex-end;">
+      <button onclick="closeModal('inviteModal')" style="background-color: var(--secondary); color: var(--text); padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+        キャンセル
+      </button>
+      <button onclick="submitInviteLink()" id="submitInviteLinkBtn" style="background-color: var(--accent); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+        招待リンク生成
+      </button>
     </div>
   </div>
 </div>
@@ -4047,16 +4112,24 @@ document.getElementById('addTaskBtn').addEventListener('click', () => {
   document.getElementById('newTitle').focus();
 });
 
-document.getElementById('cancelTaskBtn').addEventListener('click', closeModal);
+document.getElementById('cancelTaskBtn').addEventListener('click', () => closeModal('taskModal'));
 document.getElementById('taskModal').addEventListener('click', e => {
-  if (e.target === e.currentTarget) closeModal();
+  if (e.target === e.currentTarget) closeModal('taskModal');
 });
 
-function closeModal() {
-  document.getElementById('taskModal').classList.remove('open');
-  ['newTitle','newDesc','newDir'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('newCategory').value = '';
-  document.getElementById('newPriority').value = '2';
+function closeModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (modal) modal.classList.remove('open');
+  if (modalId === 'taskModal') {
+    ['newTitle','newDesc','newDir'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const catSelect = document.getElementById('newCategory');
+    if (catSelect) catSelect.value = '';
+    const prioSelect = document.getElementById('newPriority');
+    if (prioSelect) prioSelect.value = '2';
+  }
 }
 
 document.getElementById('submitTaskBtn').addEventListener('click', async () => {
@@ -4084,6 +4157,179 @@ document.getElementById('submitTaskBtn').addEventListener('click', async () => {
   } catch (e) {
     showToast('追加失敗: ' + e.message, 'error');
   }
+});
+
+// ══════════════════════════════════════════════
+// Team Members & Invitations
+// ══════════════════════════════════════════════
+
+let currentTeamIdForInvite = null;
+
+async function openTeamMembersModal(teamId) {
+  currentTeamIdForInvite = teamId;
+  const modal = document.getElementById('teamMembersModal');
+  modal.classList.add('open');
+
+  const container = document.getElementById('membersListContainer');
+  container.innerHTML = '<div style="padding: 12px; color: var(--text-secondary);">読み込み中...</div>';
+
+  try {
+    const res = await fetch(`/api/teams/${teamId}/members`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const members = data.data || data;
+
+    if (!members || members.length === 0) {
+      container.innerHTML = '<div style="padding: 12px; color: var(--text-secondary);">メンバーがいません</div>';
+      return;
+    }
+
+    container.innerHTML = members.map(member => `
+      <div style="padding: 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <div style="font-weight: 500; color: var(--text);">${escHtml(member.user?.username || 'Unknown')}</div>
+          <div style="font-size: 12px; color: var(--text-secondary);">${escHtml(member.user?.email || '')}</div>
+          <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+            ロール: <span style="background-color: var(--accent); color: white; padding: 2px 6px; border-radius: 2px; font-size: 11px;">${escHtml(member.role)}</span>
+            ${member.joined_at ? `<span style="margin-left: 8px;">参加: ${new Date(member.joined_at).toLocaleDateString('ja-JP')}</span>` : ''}
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          ${member.role !== 'owner' ? `
+            <select onchange="changeRole(${teamId}, '${member.user_id}', this.value)" style="padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px;">
+              <option value="member" ${member.role === 'member' ? 'selected' : ''}>Member</option>
+              <option value="admin" ${member.role === 'admin' ? 'selected' : ''}>Admin</option>
+              <option value="owner" ${member.role === 'owner' ? 'selected' : ''}>Owner</option>
+            </select>
+            <button onclick="removeTeamMember(${teamId}, '${member.user_id}')" style="background-color: var(--red); color: white; padding: 4px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+              削除
+            </button>
+          ` : `
+            <span style="color: var(--text-secondary); font-size: 12px;">オーナー</span>
+          `}
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    container.innerHTML = `<div style="padding: 12px; color: var(--red);">エラー: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function generateInviteLink() {
+  const modal = document.getElementById('inviteModal');
+  modal.classList.add('open');
+  document.getElementById('inviteExpiresInDays').value = '7';
+  document.getElementById('inviteMaxUses').value = '1';
+  document.getElementById('inviteLinkBox').style.display = 'none';
+  document.getElementById('inviteLinkInput').value = '';
+  document.getElementById('submitInviteLinkBtn').textContent = '招待リンク生成';
+}
+
+async function submitInviteLink() {
+  if (!currentTeamIdForInvite) {
+    showToast('チームが選択されていません', 'error');
+    return;
+  }
+
+  const expiresInDays = parseInt(document.getElementById('inviteExpiresInDays').value, 10);
+  const maxUses = parseInt(document.getElementById('inviteMaxUses').value, 10);
+
+  if (isNaN(expiresInDays) || expiresInDays < 1) {
+    showToast('有効期限は1日以上である必要があります', 'error');
+    return;
+  }
+  if (isNaN(maxUses) || maxUses < 1) {
+    showToast('最大使用回数は1回以上である必要があります', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('submitInviteLinkBtn');
+  btn.disabled = true;
+  btn.textContent = '生成中...';
+
+  try {
+    const res = await fetch(`/api/teams/${currentTeamIdForInvite}/invite`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        expires_in_days: expiresInDays,
+        max_uses: maxUses
+      })
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errorText}`);
+    }
+
+    const invitation = await res.json();
+    const inviteUrl = `${window.location.origin}/invite/${invitation.token}`;
+    document.getElementById('inviteLinkInput').value = inviteUrl;
+    document.getElementById('inviteLinkBox').style.display = 'block';
+    btn.textContent = '招待リンク生成';
+    btn.disabled = false;
+    showToast('招待リンクを生成しました');
+  } catch (e) {
+    showToast('生成失敗: ' + e.message, 'error');
+    btn.textContent = '招待リンク生成';
+    btn.disabled = false;
+  }
+}
+
+function copyInviteLink() {
+  const input = document.getElementById('inviteLinkInput');
+  input.select();
+  document.execCommand('copy');
+  showToast('招待リンクをコピーしました');
+}
+
+async function changeRole(teamId, userId, newRole) {
+  try {
+    const res = await fetch(`/api/teams/${teamId}/members/${userId}/role`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({role: newRole})
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errorText}`);
+    }
+
+    showToast('ロールを更新しました');
+    openTeamMembersModal(teamId);
+  } catch (e) {
+    showToast('更新失敗: ' + e.message, 'error');
+    openTeamMembersModal(teamId);
+  }
+}
+
+async function removeTeamMember(teamId, userId) {
+  if (!confirm('このメンバーを削除してもよろしいですか?')) return;
+
+  try {
+    const res = await fetch(`/api/teams/${teamId}/members/${userId}`, {
+      method: 'DELETE'
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errorText}`);
+    }
+
+    showToast('メンバーを削除しました');
+    openTeamMembersModal(teamId);
+  } catch (e) {
+    showToast('削除失敗: ' + e.message, 'error');
+  }
+}
+
+document.getElementById('teamMembersModal')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal('teamMembersModal');
+});
+
+document.getElementById('inviteModal')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal('inviteModal');
 });
 
 // ══════════════════════════════════════════════
