@@ -84,8 +84,8 @@ async def authenticate_user(username: str, password: str, org_id: str = "default
         user_id = user[0]
         user_org_id = user[2]
         token = secrets.token_urlsafe(32)
-        expires_at = datetime.utcnow() + timedelta(days=7)
-        now = datetime.utcnow()
+        expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat()
+        now = datetime.utcnow().isoformat()
 
         await db.execute(
             "INSERT INTO sessions (user_id, token, expires_at, org_id, last_activity_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -100,7 +100,7 @@ async def verify_token(token: str) -> Tuple[Optional[str], Optional[str]]:
     async with aiosqlite.connect(str(DB_PATH)) as db:
         cursor = await db.execute(
             "SELECT user_id, org_id FROM sessions WHERE token = ? AND expires_at > ? AND is_forced_logout = 0",
-            (token, datetime.utcnow()),
+            (token, datetime.utcnow().isoformat()),
         )
         result = await cursor.fetchone()
         if result:
@@ -111,7 +111,7 @@ async def verify_token(token: str) -> Tuple[Optional[str], Optional[str]]:
 async def update_last_activity(token: str) -> bool:
     try:
         async with aiosqlite.connect(str(DB_PATH)) as db:
-            now = datetime.utcnow()
+            now = datetime.utcnow().isoformat()
             cursor = await db.execute(
                 "UPDATE sessions SET last_activity_at = ? WHERE token = ? AND is_forced_logout = 0",
                 (now, token),
@@ -180,7 +180,7 @@ async def logout_user(token: str) -> Tuple[bool, str]:
 async def session_timeout(timeout_minutes: int = 30) -> Tuple[int, list]:
     try:
         async with aiosqlite.connect(str(DB_PATH)) as db:
-            cutoff_time = datetime.utcnow() - timedelta(minutes=timeout_minutes)
+            cutoff_time = (datetime.utcnow() - timedelta(minutes=timeout_minutes)).isoformat()
             cursor = await db.execute(
                 "SELECT id FROM sessions WHERE last_activity_at IS NOT NULL AND last_activity_at < ? AND is_forced_logout = 0",
                 (cutoff_time,),
@@ -234,7 +234,7 @@ async def list_active_sessions(user_id: str) -> list:
                 """SELECT id, ip_address, user_agent, created_at, last_activity_at, expires_at
                    FROM sessions WHERE user_id = ? AND is_forced_logout = 0 AND expires_at > ?
                    ORDER BY created_at DESC""",
-                (user_id, datetime.utcnow()),
+                (user_id, datetime.utcnow().isoformat()),
             )
             rows = await cursor.fetchall()
 
@@ -289,7 +289,7 @@ async def create_api_token(user_id: str, name: str, scope: str, expires_in_days:
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         expires_at = None
         if expires_in_days:
-            expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+            expires_at = (datetime.utcnow() + timedelta(days=expires_in_days)).isoformat()
 
         async with aiosqlite.connect(str(DB_PATH)) as db:
             cursor = await db.execute(
@@ -323,7 +323,7 @@ async def revoke_api_token(user_id: str, token_id: str, org_id: str = "default")
                 """UPDATE api_tokens
                    SET revoked_at = ?
                    WHERE id = ? AND user_id = ? AND org_id = ? AND revoked_at IS NULL""",
-                (datetime.utcnow(), token_id, user_id, org_id),
+                (datetime.utcnow().isoformat(), token_id, user_id, org_id),
             )
             await db.commit()
 
@@ -354,7 +354,7 @@ async def verify_api_token_scope(token: str, required_scope: str, org_id: str = 
                 """SELECT id, user_id, scope FROM api_tokens
                    WHERE token_hash = ? AND org_id = ? AND revoked_at IS NULL
                    AND (expires_at IS NULL OR expires_at > ?)""",
-                (token_hash, org_id, datetime.utcnow()),
+                (token_hash, org_id, datetime.utcnow().isoformat()),
             )
             result = await cursor.fetchone()
 
@@ -371,7 +371,7 @@ async def verify_api_token_scope(token: str, required_scope: str, org_id: str = 
 
             await db.execute(
                 "UPDATE api_tokens SET last_used_at = ? WHERE id = ?",
-                (datetime.utcnow(), token_id),
+                (datetime.utcnow().isoformat(), token_id),
             )
             await db.commit()
 

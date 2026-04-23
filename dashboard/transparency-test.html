@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>エージェント意思決定透明性レポート - テスト</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --card: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --orange: #e3b341;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        input, select {
+            padding: 8px 12px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        #transparencyContainer {
+            margin-top: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 エージェント意思決定透明性レポート</h1>
+            <p>AIエージェントの意思決定プロセスを可視化し、透明性を実現するダッシュボード</p>
+        </div>
+
+        <div class="controls">
+            <div>
+                <label>エージェント ID:</label><br/>
+                <input type="number" id="agentIdInput" value="1" min="1" style="width:100px;">
+            </div>
+            <div>
+                <label>エージェント ロール:</label><br/>
+                <input type="text" id="agentRoleInput" value="engineer" placeholder="例: engineer, manager" style="width:150px;">
+            </div>
+            <button onclick="loadReport()">レポートを読み込む</button>
+            <button onclick="testCreateDecision()" style="background:var(--green);">テスト: 意思決定を記録</button>
+        </div>
+
+        <div id="transparencyContainer"></div>
+    </div>
+
+    <script>
+        const transparencyModule = {
+            async loadTransparencyReport(agentId) {
+                const response = await fetch(`/api/agent-decision/report/${agentId}`);
+                if (!response.ok) return null;
+                return response.json();
+            },
+
+            async loadDecisionLogs(agentId, limit = 20) {
+                const response = await fetch(`/api/agent-decision/logs?agent_id=${agentId}&limit=${limit}`);
+                if (!response.ok) return [];
+                return response.json();
+            },
+
+            async getDecisionExplanation(logId) {
+                const response = await fetch(`/api/agent-decision/${logId}/explanation`);
+                if (!response.ok) return null;
+                return response.json();
+            },
+
+            renderTransparencyCard(agentId, agentRole = 'unknown') {
+                const container = document.getElementById('transparencyContainer');
+                if (!container) return;
+
+                container.innerHTML = `
+                    <div style="padding:20px;background:var(--card);border-radius:8px;border:1px solid var(--border);">
+                        <h3 style="margin:0 0 16px 0;font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;">
+                            <span style="color:var(--accent);">📊</span>
+                            エージェント意思決定透明性レポート
+                        </h3>
+
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px;">
+                            <div style="padding:12px;background:var(--bg);border-radius:6px;border:1px solid var(--border);">
+                                <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">エージェント ID</div>
+                                <div style="font-size:14px;font-weight:600;">${agentId}</div>
+                            </div>
+                            <div style="padding:12px;background:var(--bg);border-radius:6px;border:1px solid var(--border);">
+                                <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">ロール</div>
+                                <div style="font-size:14px;font-weight:600;">${agentRole}</div>
+                            </div>
+                            <div style="padding:12px;background:var(--bg);border-radius:6px;border:1px solid var(--border);">
+                                <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">読み込み中...</div>
+                                <div id="transparencyStats" style="font-size:14px;font-weight:600;">-</div>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom:20px;">
+                            <h4 style="margin:0 0 12px 0;font-size:14px;font-weight:600;">意思決定の内訳</h4>
+                            <div id="decisionBreakdown" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
+                                <div style="text-align:center;padding:12px;background:var(--bg);border-radius:6px;color:var(--text-muted);font-size:12px;">
+                                    読み込み中...
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 style="margin:0 0 12px 0;font-size:14px;font-weight:600;">最近の意思決定</h4>
+                            <div id="recentDecisions" style="max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;">
+                                <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">
+                                    読み込み中...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                this.loadTransparencyReport(agentId).then(report => {
+                    if (!report) {
+                        container.innerHTML += '<div style="padding:20px;background:var(--card);border-radius:8px;border:1px solid var(--red);margin-top:10px;color:var(--red);">❌ レポートの読み込みに失敗しました</div>';
+                        return;
+                    }
+
+                    document.getElementById('transparencyStats').innerHTML = `
+                        意思決定数: <strong>${report.total_decisions}</strong><br/>
+                        平均信頼度: <strong>${(report.confidence_avg * 100).toFixed(1)}%</strong>
+                    `;
+
+                    const breakdown = document.getElementById('decisionBreakdown');
+                    if (Object.keys(report.decision_breakdown).length === 0) {
+                        breakdown.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:12px;">意思決定がありません</div>';
+                    } else {
+                        breakdown.innerHTML = Object.entries(report.decision_breakdown).map(([type, count]) => `
+                            <div style="padding:12px;background:var(--bg);border-radius:6px;border-left:4px solid var(--accent);text-align:center;">
+                                <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">
+                                    ${type.replace(/_/g, ' ')}
+                                </div>
+                                <div style="font-size:18px;font-weight:700;color:var(--accent);">${count}</div>
+                            </div>
+                        `).join('');
+                    }
+
+                    const decisions = document.getElementById('recentDecisions');
+                    if (report.recent_decisions.length === 0) {
+                        decisions.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">記録された意思決定がありません</div>';
+                        return;
+                    }
+
+                    decisions.innerHTML = report.recent_decisions.map(decision => `
+                        <div style="padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all 0.2s;"
+                             onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 2px rgba(79,161,246,0.1)'"
+                             onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'"
+                             onclick="transparencyModule.expandDecision(${decision.id}, '${decision.decision_summary.replace(/'/g, "\\'")}', '${decision.reasoning.replace(/'/g, "\\'")}', ${decision.confidence_score})">
+                            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+                                <div style="font-weight:600;font-size:13px;flex:1;">
+                                    ${decision.decision_summary.substring(0, 60)}...
+                                </div>
+                                <div style="font-size:11px;padding:4px 8px;background:var(--accent);color:var(--bg);border-radius:3px;white-space:nowrap;">
+                                    ${(decision.confidence_score * 100).toFixed(0)}% 信頼度
+                                </div>
+                            </div>
+                            <div style="font-size:12px;color:var(--text-muted);line-height:1.5;">
+                                ${decision.reasoning.substring(0, 100)}...
+                            </div>
+                            <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">
+                                ${decision.created_at.split(' ')[0]}
+                                <span style="margin-left:8px;padding:2px 6px;background:var(--border);border-radius:3px;">
+                                    ${decision.decision_type.replace(/_/g, ' ')}
+                                </span>
+                            </div>
+                        </div>
+                    `).join('');
+                }).catch(e => {
+                    console.error('Error loading report:', e);
+                    document.getElementById('recentDecisions').innerHTML = '<div style="color:var(--red);">❌ 読み込みエラー</div>';
+                });
+            },
+
+            expandDecision(logId, summary, reasoning, confidence) {
+                this.getDecisionExplanation(logId).then(explanation => {
+                    const detailsMsg = `
+決定内容:
+${summary}
+
+根拠:
+${reasoning}
+
+信頼度: ${(confidence * 100).toFixed(1)}%
+
+詳細な説明:
+${explanation?.explanation_summary || '詳細説明がありません'}
+                    `;
+                    alert(detailsMsg);
+                }).catch(() => {
+                    alert(`
+決定内容: ${summary}
+根拠: ${reasoning}
+信頼度: ${(confidence * 100).toFixed(1)}%
+                    `);
+                });
+            }
+        };
+
+        function loadReport() {
+            const agentId = document.getElementById('agentIdInput').value;
+            const agentRole = document.getElementById('agentRoleInput').value;
+            transparencyModule.renderTransparencyCard(parseInt(agentId), agentRole);
+        }
+
+        async function testCreateDecision() {
+            const agentId = document.getElementById('agentIdInput').value;
+            const response = await fetch('/api/agent-decision/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    agent_id: parseInt(agentId),
+                    department_id: 1,
+                    decision_type: 'task_selection',
+                    decision_summary: `テスト意思決定 (${new Date().toLocaleTimeString()})`,
+                    reasoning: 'これはテスト用の意思決定です。複数の要因を考慮して実装されています。',
+                    context: '{"test": true}',
+                    confidence_score: 0.85,
+                    factors: [
+                        { factor_type: 'cost', factor_name: 'コスト', factor_value: '$1000', weight: 0.8, order_sequence: 1 },
+                        { factor_type: 'deadline', factor_name: '納期', factor_value: '2026-04-30', weight: 0.9, order_sequence: 2 }
+                    ]
+                })
+            });
+
+            if (response.ok) {
+                alert('✅ テスト意思決定を記録しました。レポートを再度読み込んでください。');
+                loadReport();
+            } else {
+                alert('❌ 意思決定の記録に失敗しました。');
+            }
+        }
+
+        // 初期読み込み
+        window.addEventListener('load', () => {
+            loadReport();
+        });
+    </script>
+</body>
+</html>

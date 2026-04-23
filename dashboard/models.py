@@ -50,6 +50,42 @@ class UserDetailResponse(UserResponse):
     roles: List[UserRoleResponse] = []
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# API Token Management Models (#2525)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class APITokenCreate(BaseModel):
+    name: str
+    scope: str
+    expires_in_days: Optional[int] = None
+
+
+class APITokenResponse(BaseModel):
+    id: str
+    name: str
+    scope: str
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    revoked: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class APITokenCreateResponse(BaseModel):
+    id: str
+    name: str
+    token: str
+    scope: str
+    created_at: datetime
+    expires_at: Optional[datetime] = None
+
+
+class APITokenListResponse(BaseModel):
+    tokens: List[APITokenResponse]
+
+
 class UserOnboardingProgressCreate(BaseModel):
     user_id: str
     current_step: int = 0

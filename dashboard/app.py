@@ -4494,7 +4494,7 @@ async def create_api_token(token_req: models.APITokenCreate, authorization: Opti
         raise HTTPException(status_code=401, detail="Missing token")
 
     token = authorization[7:]
-    user_id = await auth.verify_token(token)
+    user_id, org_id = await auth.verify_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -4530,7 +4530,7 @@ async def list_api_tokens(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="Missing token")
 
     token = authorization[7:]
-    user_id = await auth.verify_token(token)
+    user_id, org_id = await auth.verify_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -4545,7 +4545,7 @@ async def revoke_api_token(token_id: str, authorization: Optional[str] = Header(
         raise HTTPException(status_code=401, detail="Missing token")
 
     token = authorization[7:]
-    user_id = await auth.verify_token(token)
+    user_id, org_id = await auth.verify_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 

@@ -738,6 +738,7 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="/styles/onboarding.css">
 </head>
 <body>
   <a href="#main" class="skip-to-main">メインコンテンツへスキップ</a>
@@ -765,6 +766,235 @@
 
   <!-- Main Content -->
   <main id="main">
+    <!-- Onboarding Wizard (#2532) -->
+    <div id="onboarding-wizard" class="wizard-container" style="display: none;">
+      <div class="wizard-header">
+        <h1 class="wizard-title">THEBRANCH へようこそ</h1>
+        <p class="wizard-subtitle">AIエージェント部署を立ち上げるための3ステップ</p>
+      </div>
+
+      <div class="progress-container">
+        <div class="progress-label">ステップ 1 / 4</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: 25%;"></div>
+        </div>
+      </div>
+
+      <div class="wizard-content">
+        <div class="error-message" role="alert"></div>
+        <div class="success-message" role="status"></div>
+
+        <!-- Step 1: Welcome -->
+        <section id="step-1" class="wizard-panel active" aria-labelledby="step-1-title">
+          <div class="panel-icon">🚀</div>
+          <h2 id="step-1-title" class="panel-heading">THEBRANCH へようこそ</h2>
+          <p class="panel-description">
+            AIエージェント部署を立ち上げる準備はできていますか？<br>
+            このウィザードを完了することで、あなたのビジョンを実現するために必要な準備が整います。
+          </p>
+
+          <div class="wizard-vision-box">
+            <div class="wizard-vision-text">THEBRANCH が実現すること</div>
+            <div class="wizard-vision-subtitle">
+              採用でも外注でもなく、AIエージェント部署で翌朝から動く組織を構築
+            </div>
+          </div>
+
+          <ul class="vision-benefit-list">
+            <li>30分でセットアップ完了</li>
+            <li>採用コスト 0 円で専門家チーム構築</li>
+            <li>24時間稼働する自動業務処理</li>
+            <li>透明性を保ったAI意思決定</li>
+            <li>スケーラブルな組織運営</li>
+          </ul>
+        </section>
+
+        <!-- Step 2: Organization Type Selection -->
+        <section id="step-2" class="wizard-panel" aria-labelledby="step-2-title">
+          <div class="panel-icon">🏢</div>
+          <h2 id="step-2-title" class="panel-heading">あなたの組織タイプを選択</h2>
+          <p class="panel-description">
+            最適なAIエージェント配置を提案するため、組織の規模を教えてください。
+          </p>
+
+          <div class="form-group">
+            <label class="form-label">組織タイプ</label>
+            <div class="form-options">
+              <div class="form-option">
+                <input
+                  type="radio"
+                  id="org-startup"
+                  name="organization_type"
+                  value="startup"
+                  aria-labelledby="org-startup-label"
+                >
+                <label for="org-startup" class="form-option-label">
+                  <div class="form-option-icon">🚀</div>
+                  <div class="form-option-content">
+                    <h3>スタートアップ</h3>
+                    <p>従業員 1-20 名</p>
+                  </div>
+                </label>
+              </div>
+
+              <div class="form-option">
+                <input
+                  type="radio"
+                  id="org-sme"
+                  name="organization_type"
+                  value="sme"
+                  aria-labelledby="org-sme-label"
+                >
+                <label for="org-sme" class="form-option-label">
+                  <div class="form-option-icon">🏪</div>
+                  <div class="form-option-content">
+                    <h3>中小企業</h3>
+                    <p>従業員 21-200 名</p>
+                  </div>
+                </label>
+              </div>
+
+              <div class="form-option">
+                <input
+                  type="radio"
+                  id="org-individual"
+                  name="organization_type"
+                  value="individual"
+                  aria-labelledby="org-individual-label"
+                >
+                <label for="org-individual" class="form-option-label">
+                  <div class="form-option-icon">👤</div>
+                  <div class="form-option-content">
+                    <h3>個人事業主</h3>
+                    <p>1名で事業運営</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Step 3: Department Selection -->
+        <section id="step-3" class="wizard-panel" aria-labelledby="step-3-title">
+          <div class="panel-icon">📊</div>
+          <h2 id="step-3-title" class="panel-heading">最初の部署を選択</h2>
+          <p class="panel-description">
+            どの部署からAIエージェント化を始めますか？最初の配置を決めることで、推奨エージェント構成が提案されます。
+          </p>
+
+          <div class="form-group">
+            <label class="form-label">部署</label>
+            <div class="form-options">
+              <div class="form-option">
+                <input
+                  type="radio"
+                  id="dept-accounting"
+                  name="department_choice"
+                  value="accounting"
+                  aria-labelledby="dept-accounting-label"
+                >
+                <label for="dept-accounting" class="form-option-label">
+                  <div class="form-option-icon">💰</div>
+                  <div class="form-option-content">
+                    <h3>経理</h3>
+                    <p>請求管理・入出金処理</p>
+                  </div>
+                </label>
+              </div>
+
+              <div class="form-option">
+                <input
+                  type="radio"
+                  id="dept-legal"
+                  name="department_choice"
+                  value="legal"
+                  aria-labelledby="dept-legal-label"
+                >
+                <label for="dept-legal" class="form-option-label">
+                  <div class="form-option-icon">⚖️</div>
+                  <div class="form-option-content">
+                    <h3>法務</h3>
+                    <p>契約管理・コンプライアンス</p>
+                  </div>
+                </label>
+              </div>
+
+              <div class="form-option">
+                <input
+                  type="radio"
+                  id="dept-hr"
+                  name="department_choice"
+                  value="hr"
+                  aria-labelledby="dept-hr-label"
+                >
+                <label for="dept-hr" class="form-option-label">
+                  <div class="form-option-icon">👥</div>
+                  <div class="form-option-content">
+                    <h3>人事</h3>
+                    <p>採用管理・給与計算</p>
+                  </div>
+                </label>
+              </div>
+
+              <div class="form-option">
+                <input
+                  type="radio"
+                  id="dept-engineering"
+                  name="department_choice"
+                  value="engineering"
+                  aria-labelledby="dept-engineering-label"
+                >
+                <label for="dept-engineering" class="form-option-label">
+                  <div class="form-option-icon">💻</div>
+                  <div class="form-option-content">
+                    <h3>開発</h3>
+                    <p>コード生成・テスト自動化</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Step 4: Confirmation & Launch -->
+        <section id="step-4" class="wizard-panel" aria-labelledby="step-4-title">
+          <div class="completion-icon">✨</div>
+          <h2 id="step-4-title" class="panel-heading">準備完了</h2>
+          <p class="panel-description">
+            すべての準備が整いました。次のステップで、あなたのAIエージェント部署が起動します。
+          </p>
+
+          <div class="form-group">
+            <div class="wizard-vision-box">
+              <div class="wizard-vision-text">これから起動するもの</div>
+              <ul class="vision-benefit-list">
+                <li>選択した部署のAIエージェントチーム</li>
+                <li>自動タスク管理・実行システム</li>
+                <li>リアルタイム監視ダッシュボード</li>
+                <li>透明性レポートとメトリクス</li>
+              </ul>
+            </div>
+          </div>
+
+          <p class="panel-description" style="margin-top: 24px;">
+            「オンボーディングを完了」ボタンをクリックすると、AIエージェント部署が稼働を開始します。
+          </p>
+        </section>
+      </div>
+
+      <div class="button-group">
+        <button type="button" id="btn-skip" class="btn-skip">
+          後で実行
+        </button>
+        <button type="button" id="btn-back" class="btn-secondary">
+          戻る
+        </button>
+        <button type="button" id="btn-next" class="btn-primary">
+          次へ
+        </button>
+      </div>
+    </div>
+
     <!-- Hero Section -->
     <section class="hero" aria-labelledby="hero-title">
       <div class="container">
@@ -1074,5 +1304,6 @@
       });
     });
   </script>
+  <script src="/js/onboarding.js"></script>
 </body>
 </html>

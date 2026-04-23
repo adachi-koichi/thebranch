@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    org_id TEXT DEFAULT 'default',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -15,6 +16,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_id TEXT NOT NULL,
     token TEXT NOT NULL UNIQUE,
     expires_at TIMESTAMP NOT NULL,
+    org_id TEXT DEFAULT 'default',
+    last_activity_at TIMESTAMP,
+    is_forced_logout INTEGER DEFAULT 0,
+    ip_address TEXT,
+    user_agent TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
