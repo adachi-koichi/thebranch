@@ -493,3 +493,206 @@ class ExecuteResponse(BaseModel):
     agent_status: str
     dashboard_url: str
     completed_at: str
+
+
+# Agent Decision Transparency Models
+class AgentDecisionFactorCreate(BaseModel):
+    factor_type: str
+    factor_name: str
+    factor_value: Optional[str] = None
+    weight: float = 1.0
+    description: Optional[str] = None
+    order_sequence: int = 0
+
+
+class AgentDecisionFactorResponse(AgentDecisionFactorCreate):
+    id: int
+    decision_log_id: int
+    created_at: str
+
+
+class AgentDecisionLogCreate(BaseModel):
+    agent_id: int
+    department_id: Optional[int] = None
+    decision_type: str
+    decision_summary: str
+    reasoning: str
+    context: Optional[str] = None
+    confidence_score: float = 0.8
+    input_data: Optional[str] = None
+    output_data: Optional[str] = None
+    impact_assessment: Optional[str] = None
+    factors: List[AgentDecisionFactorCreate] = []
+
+
+class AgentDecisionLogResponse(BaseModel):
+    id: int
+    agent_id: int
+    department_id: Optional[int]
+    decision_type: str
+    decision_summary: str
+    reasoning: str
+    context: Optional[str]
+    confidence_score: float
+    input_data: Optional[str]
+    output_data: Optional[str]
+    status: str
+    impact_assessment: Optional[str]
+    factors: List[AgentDecisionFactorResponse] = []
+    created_at: str
+    updated_at: str
+
+
+class AgentActionAuditCreate(BaseModel):
+    agent_id: int
+    decision_log_id: Optional[int] = None
+    action_type: str
+    action_detail: str
+    result_status: str = "pending"
+    result_detail: Optional[str] = None
+    affected_entity_type: Optional[str] = None
+    affected_entity_id: Optional[str] = None
+
+
+class AgentActionAuditResponse(AgentActionAuditCreate):
+    id: int
+    created_at: str
+
+
+class DecisionExplanationReportCreate(BaseModel):
+    decision_log_id: int
+    explanation_summary: str
+    explanation_html: Optional[str] = None
+    generated_by: str = "system"
+    generation_method: str = "rule_based"
+
+
+class DecisionExplanationReportResponse(DecisionExplanationReportCreate):
+    id: int
+    created_at: str
+
+
+class TransparencyReportResponse(BaseModel):
+    agent_id: int
+    agent_role: Optional[str]
+    total_decisions: int
+    decision_breakdown: dict
+    confidence_avg: float
+    recent_decisions: List[AgentDecisionLogResponse] = []
+    action_audit_trail: List[AgentActionAuditResponse] = []
+
+
+class SLAPolicyCreate(BaseModel):
+    name: str
+    response_time_limit_ms: int
+    uptime_percentage: float
+    error_rate_limit: float
+    enabled: bool = True
+
+
+class SLAPolicyUpdate(BaseModel):
+    name: Optional[str] = None
+    response_time_limit_ms: Optional[int] = None
+    uptime_percentage: Optional[float] = None
+    error_rate_limit: Optional[float] = None
+    enabled: Optional[bool] = None
+
+
+class SLAPolicyResponse(SLAPolicyCreate):
+    id: int
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class SLAMetricCreate(BaseModel):
+    policy_id: int
+    response_time_ms: Optional[int] = None
+    uptime_percentage: Optional[float] = None
+    error_rate: Optional[float] = None
+
+
+class SLAMetricResponse(SLAMetricCreate):
+    id: int
+    measured_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class SLAViolationCreate(BaseModel):
+    policy_id: int
+    metric_id: int
+    violation_type: str
+    severity: str
+    details: Optional[str] = None
+    alert_sent: bool = False
+
+
+class SLAViolationResponse(SLAViolationCreate):
+    id: int
+    resolved_at: Optional[str] = None
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class SLAMetricsDetailResponse(BaseModel):
+    policy_id: int
+    policy_name: str
+    metrics: List[SLAMetricResponse] = []
+    violations: List[SLAViolationResponse] = []
+    latest_metric: Optional[SLAMetricResponse] = None
+    violation_count: int = 0
+    compliance_rate: float = 0.0
+
+    class Config:
+        from_attributes = True
+
+
+# Multi-tenant Authentication Models
+class SignupRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    org_id: Optional[str] = "default"
+
+
+class SignupResponse(BaseModel):
+    success: bool
+    user_id: str
+    message: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+    org_id: Optional[str] = "default"
+
+
+class LoginResponse(BaseModel):
+    success: bool
+    token: str
+    user_id: str
+    org_id: str
+    expires_at: datetime
+    message: str
+
+
+class LogoutRequest(BaseModel):
+    pass
+
+
+class LogoutResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class AuthTokenValidationResponse(BaseModel):
+    success: bool
+    user_id: Optional[str] = None
+    org_id: Optional[str] = None
+    message: str

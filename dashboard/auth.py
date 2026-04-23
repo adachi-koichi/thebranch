@@ -33,58 +33,62 @@ def verify_password(password: str, hash_: str) -> bool:
         return False
 
 
-async def create_user(username: str, email: str, password: str) -> Tuple[bool, str]:
+async def create_user(username: str, email: str, password: str, org_id: str = "default") -> Tuple[bool, str, Optional[str]]:
     try:
         async with aiosqlite.connect(str(DB_PATH)) as db:
             hashed = hash_password(password)
-            await db.execute(
-                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
-                (username, email, hashed),
+            cursor = await db.execute(
+                "INSERT INTO users (username, email, password_hash, org_id) VALUES (?, ?, ?, ?)",
+                (username, email, hashed, org_id),
             )
             await db.commit()
-            return True, "User created successfully"
+            user_id = cursor.lastrowid
+            return True, "User created successfully", str(user_id)
     except sqlite3.IntegrityError as e:
         if "username" in str(e):
-            return False, "Username already exists"
+            return False, "Username already exists", None
         elif "email" in str(e):
-            return False, "Email already exists"
-        return False, str(e)
+            return False, "Email already exists", None
+        return False, str(e), None
     except Exception as e:
-        return False, str(e)
+        return False, str(e), None
 
 
-async def authenticate_user(username: str, password: str) -> Tuple[Optional[str], Optional[str]]:
+async def authenticate_user(username: str, password: str, org_id: str = "default") -> Tuple[Optional[str], Optional[str], Optional[str]]:
     async with aiosqlite.connect(str(DB_PATH)) as db:
         cursor = await db.execute(
-            "SELECT id, password_hash FROM users WHERE username = ?",
-            (username,),
+            "SELECT id, password_hash, org_id FROM users WHERE username = ? AND org_id = ?",
+            (username, org_id),
         )
         user = await cursor.fetchone()
 
         if not user or not verify_password(password, user[1]):
-            return None, None
+            return None, None, None
 
         user_id = user[0]
+        user_org_id = user[2]
         token = secrets.token_urlsafe(32)
         expires_at = datetime.utcnow() + timedelta(days=7)
 
         await db.execute(
-            "INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)",
-            (user_id, token, expires_at),
+            "INSERT INTO sessions (user_id, token, expires_at, org_id) VALUES (?, ?, ?, ?)",
+            (user_id, token, expires_at, user_org_id),
         )
         await db.commit()
 
-        return user_id, token
+        return user_id, token, user_org_id
 
 
-async def verify_token(token: str) -> Optional[str]:
+async def verify_token(token: str) -> Tuple[Optional[str], Optional[str]]:
     async with aiosqlite.connect(str(DB_PATH)) as db:
         cursor = await db.execute(
-            "SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?",
+            "SELECT user_id, org_id FROM sessions WHERE token = ? AND expires_at > ?",
             (token, datetime.utcnow()),
         )
         result = await cursor.fetchone()
-        return result[0] if result else None
+        if result:
+            return result[0], result[1]
+        return None, None
 
 
 async def get_user_roles(user_id: str) -> list:
@@ -123,5 +127,20 @@ async def remove_user_role(user_id: str, role: str) -> Tuple[bool, str]:
             if cursor.rowcount == 0:
                 return False, "Role not found for user"
             return True, "Role removed successfully"
+    except Exception as e:
+        return False, str(e)
+
+
+async def logout_user(token: str) -> Tuple[bool, str]:
+    try:
+        async with aiosqlite.connect(str(DB_PATH)) as db:
+            cursor = await db.execute(
+                "DELETE FROM sessions WHERE token = ?",
+                (token,),
+            )
+            await db.commit()
+            if cursor.rowcount == 0:
+                return False, "Session not found"
+            return True, "Logged out successfully"
     except Exception as e:
         return False, str(e)

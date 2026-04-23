@@ -1574,6 +1574,8 @@
   <button class="tab-btn" data-tab="activity">アクティビティ</button>
   <button class="tab-btn" data-tab="rankings">ランキング</button>
   <button class="tab-btn" data-tab="org-tree">組織ツリー</button>
+  <button class="tab-btn" data-tab="team-dynamics">👥 チームダイナミクス</button>
+  <button class="tab-btn" data-tab="learning-history">📚 学習履歴</button>
 </nav>
 
 <!-- Main -->
@@ -2327,6 +2329,54 @@
     <div id="orgTreeStatus" style="margin-top:8px;font-size:12px;color:var(--text-muted);"></div>
   </div>
 
+  <!-- Team Dynamics & Collaboration -->
+  <div class="tab-panel" id="tab-team-dynamics" style="display:none;">
+    <div style="margin-bottom:20px;">
+      <label style="margin-right:12px;">チーム選択:</label>
+      <select id="teamDynamicsSelect" style="padding:6px 12px;border:1px solid var(--border);border-radius:4px;">
+        <option value="">チームを選択...</option>
+      </select>
+    </div>
+
+    <!-- Section 1: Communication Timeline -->
+    <div style="margin-bottom:24px;">
+      <h3 style="margin:0 0 12px 0;font-size:16px;font-weight:600;">👥 通信タイムライン</h3>
+      <div id="communicationTimeline" style="border:1px solid var(--border);border-radius:8px;padding:12px;max-height:400px;overflow-y:auto;">
+        <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">読み込み中...</div>
+      </div>
+    </div>
+
+    <!-- Section 2: Performance Leaderboard -->
+    <div style="margin-bottom:24px;">
+      <h3 style="margin:0 0 12px 0;font-size:16px;font-weight:600;">📊 パフォーマンスボード</h3>
+      <div style="overflow-x:auto;">
+        <table id="performanceTable" style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);background:var(--bg);">
+              <th style="padding:12px;text-align:left;font-weight:600;">メンバー</th>
+              <th style="padding:12px;text-align:center;font-weight:600;">完了率</th>
+              <th style="padding:12px;text-align:center;font-weight:600;">スループット(7d)</th>
+              <th style="padding:12px;text-align:center;font-weight:600;">品質スコア</th>
+              <th style="padding:12px;text-align:center;font-weight:600;">負荷レベル</th>
+              <th style="padding:12px;text-align:center;font-weight:600;">協働スコア</th>
+            </tr>
+          </thead>
+          <tbody id="performanceTableBody">
+            <tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted);">読み込み中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Section 3: Collaboration Heatmap -->
+    <div>
+      <h3 style="margin:0 0 12px 0;font-size:16px;font-weight:600;">🔥 コラボレーションヒートマップ</h3>
+      <div id="collaborationHeatmap" style="border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;">
+        <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">読み込み中...</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Department Creation Modal (#2362) -->
   <div class="modal-overlay" id="departmentModal">
     <div class="modal" style="max-width: 600px;">
@@ -2464,6 +2514,34 @@
           <button type="submit" class="btn">ミッション設定</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Learning History Tab Panel -->
+  <div class="tab-panel" id="tab-learning-history" style="display:none;">
+    <div style="padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h2 style="margin:0;">📚 学習履歴・パターン分析</h2>
+        <button onclick="refreshLearningPatterns()" style="padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;">更新</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px;">
+        <div style="padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text-muted);">成功率</div>
+          <div style="font-size:24px;font-weight:600;margin-top:8px;" id="learningSuccessRate">—</div>
+        </div>
+        <div style="padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text-muted);">パターン数</div>
+          <div style="font-size:24px;font-weight:600;margin-top:8px;" id="learningPatternCount">—</div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;">
+        <h3 style="margin:0 0 12px 0;font-size:14px;">最近の学習パターン</h3>
+        <div id="learningPatternsList" style="max-height:600px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+          <div style="padding:20px;text-align:center;color:var(--text-muted);">読み込み中...</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -8183,3 +8261,326 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
+
+<!-- Transparency Report Container -->
+<div id="transparencyContainer" style="display:none;margin-top:20px;"></div>
+
+<script>
+// ──────────────────────────────────────────────
+// Agent Decision Transparency Dashboard
+// ──────────────────────────────────────────────
+
+const transparencyModule = {
+  async loadTransparencyReport(agentId) {
+    const response = await fetch(`/api/agent-decision/report/${agentId}`);
+    if (!response.ok) return null;
+    return response.json();
+  },
+
+  async loadDecisionLogs(agentId, limit = 20) {
+    const response = await fetch(`/api/agent-decision/logs?agent_id=${agentId}&limit=${limit}`);
+    if (!response.ok) return [];
+    return response.json();
+  },
+
+  async getDecisionExplanation(logId) {
+    const response = await fetch(`/api/agent-decision/${logId}/explanation`);
+    if (!response.ok) return null;
+    return response.json();
+  },
+
+  renderTransparencyCard(agentId, agentRole = 'unknown') {
+    const container = document.getElementById('transparencyContainer');
+    if (!container) return;
+
+    container.style.display = 'block';
+    container.innerHTML = `
+      <div style="padding:20px;background:var(--card);border-radius:8px;border:1px solid var(--border);">
+        <h3 style="margin:0 0 16px 0;font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;">
+          <span style="color:var(--accent);">📊</span>
+          エージェント意思決定透明性レポート
+        </h3>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px;">
+          <div style="padding:12px;background:var(--bg);border-radius:6px;border:1px solid var(--border);">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">エージェント ID</div>
+            <div style="font-size:14px;font-weight:600;">${agentId}</div>
+          </div>
+          <div style="padding:12px;background:var(--bg);border-radius:6px;border:1px solid var(--border);">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">ロール</div>
+            <div style="font-size:14px;font-weight:600;">${agentRole}</div>
+          </div>
+          <div style="padding:12px;background:var(--bg);border-radius:6px;border:1px solid var(--border);">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">読み込み中...</div>
+            <div id="transparencyStats" style="font-size:14px;font-weight:600;">-</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <h4 style="margin:0 0 12px 0;font-size:14px;font-weight:600;">意思決定の内訳</h4>
+          <div id="decisionBreakdown" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
+            <div style="text-align:center;padding:12px;background:var(--bg);border-radius:6px;color:var(--text-muted);font-size:12px;">
+              読み込み中...
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h4 style="margin:0 0 12px 0;font-size:14px;font-weight:600;">最近の意思決定</h4>
+          <div id="recentDecisions" style="max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;">
+            <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">
+              読み込み中...
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.loadTransparencyReport(agentId).then(report => {
+      if (!report) return;
+
+      document.getElementById('transparencyStats').innerHTML = `
+        意思決定数: <strong>${report.total_decisions}</strong><br/>
+        平均信頼度: <strong>${(report.confidence_avg * 100).toFixed(1)}%</strong>
+      `;
+
+      const breakdown = document.getElementById('decisionBreakdown');
+      breakdown.innerHTML = Object.entries(report.decision_breakdown).map(([type, count]) => `
+        <div style="padding:12px;background:var(--bg);border-radius:6px;border-left:4px solid var(--accent);text-align:center;">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">
+            ${type.replace(/_/g, ' ')}
+          </div>
+          <div style="font-size:18px;font-weight:700;color:var(--accent);">${count}</div>
+        </div>
+      `).join('');
+
+      const decisions = document.getElementById('recentDecisions');
+      if (report.recent_decisions.length === 0) {
+        decisions.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">記録された意思決定がありません</div>';
+        return;
+      }
+
+      decisions.innerHTML = report.recent_decisions.map(decision => `
+        <div style="padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all 0.2s;"
+             onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 2px rgba(79,161,246,0.1)'"
+             onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'"
+             onclick="transparencyModule.expandDecision(${decision.id}, '${decision.decision_summary}', '${decision.reasoning}', ${decision.confidence_score})">
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+            <div style="font-weight:600;font-size:13px;flex:1;">
+              ${decision.decision_summary.substring(0, 60)}...
+            </div>
+            <div style="font-size:11px;padding:4px 8px;background:var(--accent);color:var(--bg);border-radius:3px;white-space:nowrap;">
+              ${(decision.confidence_score * 100).toFixed(0)}% 信頼度
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);line-height:1.5;">
+            ${decision.reasoning.substring(0, 100)}...
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">
+            ${decision.created_at.split('T')[0]}
+            <span style="margin-left:8px;padding:2px 6px;background:var(--border);border-radius:3px;">
+              ${decision.decision_type.replace(/_/g, ' ')}
+            </span>
+          </div>
+        </div>
+      `).join('');
+    });
+  },
+
+  expandDecision(logId, summary, reasoning, confidence) {
+    this.getDecisionExplanation(logId).then(explanation => {
+      const detailsMsg = `
+決定内容:
+${summary}
+
+根拠:
+${reasoning}
+
+信頼度: ${(confidence * 100).toFixed(1)}%
+
+詳細な説明:
+${explanation?.explanation_summary || '詳細説明がありません'}
+      `;
+      alert(detailsMsg);
+    }).catch(() => {
+      alert(`
+決定内容: ${summary}
+根拠: ${reasoning}
+信頼度: ${(confidence * 100).toFixed(1)}%
+      `);
+    });
+  }
+};
+
+// ──────────────────────────────────────────────
+// Team Dynamics & Collaboration Module
+// ──────────────────────────────────────────────
+
+const teamDynamicsModule = {
+  currentTeamId: null,
+
+  async init() {
+    const select = document.getElementById('teamDynamicsSelect');
+    const teams = await fetch('/api/teams').then(r => r.json()).catch(() => []);
+    select.innerHTML = '<option value="">チームを選択...</option>' +
+      teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    select.addEventListener('change', (e) => {
+      if (e.target.value) {
+        this.currentTeamId = parseInt(e.target.value);
+        this.loadAllData();
+      }
+    });
+  },
+
+  async loadAllData() {
+    if (!this.currentTeamId) return;
+    await Promise.all([
+      this.loadCommunicationTimeline(),
+      this.loadPerformanceLeaderboard(),
+      this.loadCollaborationHeatmap()
+    ]);
+  },
+
+  async loadCommunicationTimeline() {
+    try {
+      const response = await fetch(`/api/teams/${this.currentTeamId}/communication-timeline?limit=20`);
+      const data = await response.json();
+      const timeline = document.getElementById('communicationTimeline');
+
+      if (!data.items || data.items.length === 0) {
+        timeline.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">通信記録がありません</div>';
+        return;
+      }
+
+      timeline.innerHTML = data.items.map(item => `
+        <div style="padding:12px;border-left:3px solid var(--accent);margin-bottom:8px;background:var(--bg);border-radius:4px;">
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px;">
+            <div style="font-weight:600;font-size:13px;">${item.agent_name || 'Agent ' + item.agent_id}</div>
+            <div style="font-size:11px;color:var(--text-muted);">${new Date(item.created_at).toLocaleString('ja-JP')}</div>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);">${item.event_type || '通信'}</div>
+        </div>
+      `).join('');
+    } catch (e) {
+      console.error('Failed to load communication timeline:', e);
+      document.getElementById('communicationTimeline').innerHTML =
+        '<div style="padding:20px;text-align:center;color:var(--red);">読み込みエラー</div>';
+    }
+  },
+
+  async loadPerformanceLeaderboard() {
+    try {
+      const response = await fetch(`/api/teams/${this.currentTeamId}/member-performance?sort_by=workload`);
+      const data = await response.json();
+      const tbody = document.getElementById('performanceTableBody');
+
+      if (!data.members || data.members.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted);">メンバーがいません</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.members.map((m, i) => `
+        <tr style="border-bottom:1px solid var(--border);${i % 2 === 0 ? 'background:var(--bg);' : ''}">
+          <td style="padding:12px;">${m.name}</td>
+          <td style="padding:12px;text-align:center;">${(m.completion_rate || 0).toFixed(1)}%</td>
+          <td style="padding:12px;text-align:center;">${(m.throughput_tasks_7d || 0).toFixed(1)}</td>
+          <td style="padding:12px;text-align:center;">${(m.quality_score || 0).toFixed(1)}</td>
+          <td style="padding:12px;text-align:center;"><span style="padding:4px 8px;background:${m.workload_level > 70 ? 'rgba(255,165,0,0.2)' : 'rgba(0,200,100,0.2)'};border-radius:4px;">${m.workload_level || 0}%</span></td>
+          <td style="padding:12px;text-align:center;">${(m.collaboration_score || 0).toFixed(1)}</td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      console.error('Failed to load performance leaderboard:', e);
+      document.getElementById('performanceTableBody').innerHTML =
+        '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--red);">読み込みエラー</td></tr>';
+    }
+  },
+
+  async loadCollaborationHeatmap() {
+    try {
+      const response = await fetch(`/api/teams/${this.currentTeamId}/collaboration-heatmap`);
+      const data = await response.json();
+      const heatmapDiv = document.getElementById('collaborationHeatmap');
+
+      if (!data.agents || data.agents.length === 0) {
+        heatmapDiv.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">データがありません</div>';
+        return;
+      }
+
+      const agents = data.agents;
+      const maxValue = Math.max(...Object.values(data.heatmap).flatMap(row => Object.values(row)));
+
+      let html = '<table style="border-collapse:collapse;"><tr><td></td>';
+      agents.forEach(a => {
+        html += `<th style="padding:8px;font-size:11px;font-weight:600;text-align:center;width:60px;border:1px solid var(--border);">${a.name.substring(0, 8)}</th>`;
+      });
+      html += '</tr>';
+
+      agents.forEach(rowAgent => {
+        html += `<tr><th style="padding:8px;font-size:11px;font-weight:600;text-align:right;border:1px solid var(--border);">${rowAgent.name.substring(0, 8)}</th>`;
+        agents.forEach(colAgent => {
+          const value = data.heatmap[rowAgent.id]?.[colAgent.id] || 0;
+          const intensity = maxValue > 0 ? (value / maxValue) : 0;
+          const bgColor = `rgba(79,161,246,${intensity * 0.8})`;
+          html += `<td style="padding:8px;text-align:center;border:1px solid var(--border);background:${bgColor};font-size:11px;font-weight:600;">${value}</td>`;
+        });
+        html += '</tr>';
+      });
+      html += '</table>';
+
+      heatmapDiv.innerHTML = html;
+    } catch (e) {
+      console.error('Failed to load collaboration heatmap:', e);
+      document.getElementById('collaborationHeatmap').innerHTML =
+        '<div style="padding:20px;text-align:center;color:var(--red);">読み込みエラー</div>';
+    }
+  }
+};
+
+async function loadLearningPatterns() {
+  try {
+    const response = await fetch('/api/learning/patterns');
+    const data = await response.json();
+
+    document.getElementById('learningSuccessRate').textContent =
+      data.success_rate ? (data.success_rate * 100).toFixed(1) + '%' : '—';
+    document.getElementById('learningPatternCount').textContent =
+      data.total_count || '0';
+
+    const patternsList = document.getElementById('learningPatternsList');
+    if (!data.patterns || data.patterns.length === 0) {
+      patternsList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">学習パターンがありません</div>';
+      return;
+    }
+
+    patternsList.innerHTML = data.patterns.map(p => `
+      <div style="padding:12px;border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-weight:600;font-size:13px;">${p.workflow_name || 'Unknown'}</span>
+          <span style="font-size:11px;padding:2px 8px;background:${p.result_status === 'success' ? 'rgba(0,200,100,0.2)' : 'rgba(255,100,0,0.2)'};border-radius:4px;color:${p.result_status === 'success' ? 'var(--green)' : 'var(--red)'};">${p.result_status || '—'}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">入力: ${p.input ? p.input.substring(0, 80) + (p.input.length > 80 ? '...' : '') : '—'}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${new Date(p.created_at).toLocaleString('ja-JP')}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('Failed to load learning patterns:', e);
+    document.getElementById('learningPatternsList').innerHTML =
+      '<div style="padding:20px;text-align:center;color:var(--red);">読み込みエラー</div>';
+  }
+}
+
+function refreshLearningPatterns() {
+  loadLearningPatterns();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  teamDynamicsModule.init();
+
+  // Add learning history tab click handler
+  const learningTab = document.querySelector('[data-tab="learning-history"]');
+  if (learningTab) {
+    learningTab.addEventListener('click', loadLearningPatterns);
+  }
+});
+</script>

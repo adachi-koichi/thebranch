@@ -15,6 +15,7 @@ from typing import AsyncGenerator, Optional
 
 import aiosqlite
 import yaml
+import httpx
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
@@ -46,6 +47,129 @@ logger = logging.getLogger(__name__)
 DASHBOARD_DIR = Path(__file__).parent
 THEBRANCH_DB = DASHBOARD_DIR / "data" / "thebranch.sqlite"
 
+# SLA メトリクス計算エンジン
+sla_scheduler_task = None
+
+async def calculate_sla_metrics():
+    """SLAメトリクスを計算して記録"""
+    try:
+        db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
+        async with aiosqlite.connect(str(db_path)) as db:
+            db.row_factory = sqlite3.Row
+
+            cursor = await db.execute("SELECT id, name FROM sla_policies WHERE enabled = 1")
+            policies = await cursor.fetchall()
+
+            for policy in policies:
+                policy_id = policy["id"]
+                policy_name = policy["name"]
+
+                response_time_ms = 0
+                uptime_percentage = 100.0
+                error_rate = 0.0
+
+                # 応答時間を測定（ローカルサーバーへのテストリクエスト）
+                try:
+                    start_time = time.time()
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        response = await client.get("http://localhost:7002/api/sla/policies")
+                        response_time_ms = int((time.time() - start_time) * 1000)
+
+                        # 簡易的なエラー率計算
+                        if response.status_code >= 400:
+                            error_rate = 0.1
+                        else:
+                            error_rate = 0.0
+                except Exception as e:
+                    response_time_ms = 10000  # タイムアウトの場合は大きな値
+                    error_rate = 1.0
+                    uptime_percentage = 0.0
+                    logger.error(f"Failed to measure metrics for policy {policy_name}: {str(e)}")
+
+                # メトリクスを記録
+                cursor = await db.execute(
+                    """INSERT INTO sla_metrics
+                       (policy_id, response_time_ms, uptime_percentage, error_rate)
+                       VALUES (?, ?, ?, ?)""",
+                    (policy_id, response_time_ms, uptime_percentage, error_rate)
+                )
+                await db.commit()
+                metric_id = cursor.lastrowid
+
+                # ポリシーの閾値を取得
+                cursor = await db.execute(
+                    "SELECT response_time_limit_ms, uptime_percentage, error_rate_limit FROM sla_policies WHERE id = ?",
+                    (policy_id,)
+                )
+                policy_limits = await cursor.fetchone()
+
+                # SLA違反を検知
+                violations = []
+
+                if response_time_ms > policy_limits["response_time_limit_ms"]:
+                    violations.append({
+                        "type": "response_time_exceeded",
+                        "severity": "high" if response_time_ms > policy_limits["response_time_limit_ms"] * 1.5 else "medium",
+                        "details": f"応答時間 {response_time_ms}ms が限界値 {policy_limits['response_time_limit_ms']}ms を超過"
+                    })
+
+                if uptime_percentage < policy_limits["uptime_percentage"]:
+                    violations.append({
+                        "type": "uptime_below_limit",
+                        "severity": "high",
+                        "details": f"稼働率 {uptime_percentage}% が限界値 {policy_limits['uptime_percentage']}% 以下"
+                    })
+
+                if error_rate > policy_limits["error_rate_limit"]:
+                    violations.append({
+                        "type": "error_rate_exceeded",
+                        "severity": "medium" if error_rate < policy_limits["error_rate_limit"] * 2 else "high",
+                        "details": f"エラー率 {error_rate * 100}% が限界値 {policy_limits['error_rate_limit'] * 100}% を超過"
+                    })
+
+                # 違反をテーブルに記録
+                for violation in violations:
+                    await db.execute(
+                        """INSERT INTO sla_violations
+                           (policy_id, metric_id, violation_type, severity, details, alert_sent)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (policy_id, metric_id, violation["type"], violation["severity"], violation["details"], False)
+                    )
+                    await db.commit()
+
+    except Exception as e:
+        logger.error(f"Error calculating SLA metrics: {str(e)}")
+
+
+async def sla_metrics_scheduler():
+    """定期的にSLAメトリクスを計算"""
+    while True:
+        try:
+            await calculate_sla_metrics()
+        except Exception as e:
+            logger.error(f"SLA metrics scheduler error: {str(e)}")
+        finally:
+            await asyncio.sleep(30)  # 30秒ごとに実行
+
+
+@app.on_event("startup")
+async def startup_event():
+    """アプリケーション起動時にスケジューラーを開始"""
+    global sla_scheduler_task
+    sla_scheduler_task = asyncio.create_task(sla_metrics_scheduler())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """アプリケーション終了時にスケジューラーを停止"""
+    global sla_scheduler_task
+    if sla_scheduler_task:
+        sla_scheduler_task.cancel()
+        try:
+            await sla_scheduler_task
+        except asyncio.CancelledError:
+            pass
+
 # ──────────────────────────────────────────────
 # Workflow Services
 # ──────────────────────────────────────────────
@@ -59,9 +183,31 @@ cost_service = None
 accounting_repo = None
 accounting_service = None
 
+def run_migrations():
+    """Run all migration SQL files"""
+    migrations_dir = DASHBOARD_DIR / "migrations"
+    migration_files = sorted(migrations_dir.glob("*.sql"))
+
+    conn = sqlite3.connect(str(THEBRANCH_DB))
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+
+    for migration_file in migration_files:
+        try:
+            sql = migration_file.read_text(encoding="utf-8")
+            cursor.executescript(sql)
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"Migration {migration_file.name} failed or already applied: {e}")
+            conn.rollback()
+
+    conn.close()
+
 def init_workflow_services():
     global template_repo, template_service, kuzu_conn, graph_repo_dept, cost_repo, cost_service, accounting_repo, accounting_service
     if template_repo is None:
+        THEBRANCH_DB.parent.mkdir(parents=True, exist_ok=True)
+        run_migrations()
         template_repo = TemplateRepository(str(THEBRANCH_DB))
         template_service = TemplateService(template_repo, TemplateValidator(template_repo))
     if kuzu_conn is None:
@@ -156,6 +302,59 @@ class CreateTaskRequest(BaseModel):
     category: str = ""
     priority: int = 2
     dir: str = ""
+
+
+@app.get("/api/workflow-templates")
+async def get_workflow_templates(status: str = ""):
+    """全ワークフローテンプレート一覧を JSON で返却"""
+    try:
+        repo = get_template_repo()
+        limit = 100
+        offset = 0
+        templates_list = repo.list_templates(status=status if status else None, limit=limit, offset=offset)
+
+        result = []
+        for template in templates_list:
+            phases = repo.get_phases(template.id)
+            steps = []
+            for phase in phases:
+                tasks = repo.get_tasks_for_phase(phase.id)
+                phase_step = {
+                    "phase_id": phase.id,
+                    "phase_key": phase.phase_key,
+                    "phase_label": phase.phase_label,
+                    "specialist_type": phase.specialist_type,
+                    "phase_order": phase.phase_order,
+                    "is_parallel": phase.is_parallel,
+                    "tasks": [
+                        {
+                            "id": task.id,
+                            "task_key": task.task_key,
+                            "task_title": task.task_title,
+                            "task_description": task.task_description,
+                            "estimated_hours": task.estimated_hours,
+                            "priority": task.priority,
+                            "task_order": task.task_order,
+                        }
+                        for task in tasks
+                    ]
+                }
+                steps.append(phase_step)
+
+            result.append({
+                "id": template.id,
+                "name": template.name,
+                "description": template.description,
+                "status": template.status,
+                "created_at": template.created_at.isoformat() if template.created_at else None,
+                "created_by": template.created_by,
+                "steps": steps
+            })
+
+        return {"templates": result}
+    except Exception as e:
+        logger.error(f"Error fetching workflow templates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/tasks")
@@ -6164,13 +6363,15 @@ def calculate_skill_match(task_required_skills: str, agent_skill_tags: str) -> f
         match_count = len(task_skills & agent_skills)
         match_ratio = match_count / len(task_skills) if task_skills else 0
 
-        # スコア: 0-30ポイント
+        # スコア: 0-30ポイント（ただし0の場合はデフォルト値5.0を返す）
+        if match_ratio == 0:
+            return 5.0
         return min(30, match_ratio * 30)
     except:
         return 5.0
 
 
-async def calculate_task_allocation_score(task: dict, agent: dict, team_performance: dict) -> dict:
+def calculate_task_allocation_score(task: dict, agent: dict) -> dict:
     """
     タスク割り当てスコアを計算
 
@@ -6253,7 +6454,7 @@ async def auto_allocate_task(task_id: int, team_id: int):
             candidate_scores = {}
             for agent_row in agent_rows:
                 agent = dict(agent_row)
-                score_result = await calculate_task_allocation_score(task, agent, {})
+                score_result = calculate_task_allocation_score(task, agent)
                 total_score = score_result["total"]
 
                 scores.append({
@@ -6327,7 +6528,7 @@ async def get_allocation_recommendations(team_id: int):
                 # 各エージェントのスコアを計算
                 scores = []
                 for agent in agents:
-                    score_result = await calculate_task_allocation_score(task, agent, {})
+                    score_result = calculate_task_allocation_score(task, agent)
                     scores.append({
                         "agent_id": agent["id"],
                         "agent_name": agent["session_id"],
@@ -6827,6 +7028,268 @@ async def get_transparency_report(agent_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# Learning Patterns API
+# ──────────────────────────────────────────────
+
+@app.get("/api/learning/patterns")
+async def get_learning_patterns():
+    """Get analyzed learning patterns from workflow executions"""
+    try:
+        db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
+        async with aiosqlite.connect(str(db_path)) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute(
+                "SELECT * FROM learning_patterns ORDER BY created_at DESC LIMIT 100"
+            )
+            rows = await cursor.fetchall()
+            patterns = [dict(row) for row in rows]
+
+            success_count = sum(1 for p in patterns if p.get("result_status") == "success")
+            success_rate = success_count / len(patterns) if patterns else 0
+
+            return {
+                "patterns": patterns,
+                "total_count": len(patterns),
+                "success_rate": success_rate,
+                "timestamp": datetime.now().isoformat()
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# SLA Management API
+# ──────────────────────────────────────────────
+
+@app.get("/api/sla/policies")
+async def get_sla_policies():
+    """SLAポリシー一覧を取得"""
+    try:
+        db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
+        async with aiosqlite.connect(str(db_path)) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute("SELECT * FROM sla_policies ORDER BY created_at DESC")
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sla/policies")
+async def create_sla_policy(policy: models.SLAPolicyCreate):
+    """新規SLAポリシーを作成"""
+    try:
+        db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
+        async with aiosqlite.connect(str(db_path)) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute(
+                """INSERT INTO sla_policies
+                   (name, response_time_limit_ms, uptime_percentage, error_rate_limit, enabled)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (policy.name, policy.response_time_limit_ms, policy.uptime_percentage,
+                 policy.error_rate_limit, policy.enabled)
+            )
+            await db.commit()
+            policy_id = cursor.lastrowid
+
+            cursor = await db.execute("SELECT * FROM sla_policies WHERE id = ?", (policy_id,))
+            row = await cursor.fetchone()
+            return dict(row)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="ポリシー名が既に存在します")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/sla/policies/{policy_id}")
+async def update_sla_policy(policy_id: int, policy: models.SLAPolicyUpdate):
+    """SLAポリシーを更新"""
+    try:
+        db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
+        async with aiosqlite.connect(str(db_path)) as db:
+            db.row_factory = sqlite3.Row
+
+            update_fields = []
+            update_values = []
+
+            if policy.name is not None:
+                update_fields.append("name = ?")
+                update_values.append(policy.name)
+            if policy.response_time_limit_ms is not None:
+                update_fields.append("response_time_limit_ms = ?")
+                update_values.append(policy.response_time_limit_ms)
+            if policy.uptime_percentage is not None:
+                update_fields.append("uptime_percentage = ?")
+                update_values.append(policy.uptime_percentage)
+            if policy.error_rate_limit is not None:
+                update_fields.append("error_rate_limit = ?")
+                update_values.append(policy.error_rate_limit)
+            if policy.enabled is not None:
+                update_fields.append("enabled = ?")
+                update_values.append(policy.enabled)
+
+            update_values.append(policy_id)
+
+            if update_fields:
+                query = f"UPDATE sla_policies SET updated_at = CURRENT_TIMESTAMP, {', '.join(update_fields)} WHERE id = ?"
+                await db.execute(query, update_values)
+                await db.commit()
+
+            cursor = await db.execute("SELECT * FROM sla_policies WHERE id = ?", (policy_id,))
+            row = await cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="ポリシーが見つかりません")
+            return dict(row)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/sla/policies/{policy_id}")
+async def delete_sla_policy(policy_id: int):
+    """SLAポリシーを削除"""
+    try:
+        db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
+        async with aiosqlite.connect(str(db_path)) as db:
+            cursor = await db.execute("SELECT id FROM sla_policies WHERE id = ?", (policy_id,))
+            if not await cursor.fetchone():
+                raise HTTPException(status_code=404, detail="ポリシーが見つかりません")
+
+            await db.execute("DELETE FROM sla_policies WHERE id = ?", (policy_id,))
+            await db.commit()
+            return {"message": "ポリシーを削除しました"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/sla/metrics/{policy_id}")
+async def get_sla_metrics(policy_id: int):
+    """SLAメトリクスを取得"""
+    try:
+        db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
+        async with aiosqlite.connect(str(db_path)) as db:
+            db.row_factory = sqlite3.Row
+
+            cursor = await db.execute("SELECT * FROM sla_policies WHERE id = ?", (policy_id,))
+            policy = await cursor.fetchone()
+            if not policy:
+                raise HTTPException(status_code=404, detail="ポリシーが見つかりません")
+
+            cursor = await db.execute(
+                "SELECT * FROM sla_metrics WHERE policy_id = ? ORDER BY measured_at DESC",
+                (policy_id,)
+            )
+            metrics = [dict(row) for row in await cursor.fetchall()]
+
+            cursor = await db.execute(
+                "SELECT * FROM sla_violations WHERE policy_id = ? ORDER BY created_at DESC",
+                (policy_id,)
+            )
+            violations = [dict(row) for row in await cursor.fetchall()]
+
+            latest_metric = metrics[0] if metrics else None
+            violation_count = len(violations)
+
+            metrics_with_violations = sum(1 for v in violations if not v.get("resolved_at"))
+            compliance_rate = ((len(metrics) - metrics_with_violations) / len(metrics) * 100) if metrics else 0
+
+            return {
+                "policy_id": policy_id,
+                "policy_name": policy["name"],
+                "metrics": metrics,
+                "violations": violations,
+                "latest_metric": latest_metric,
+                "violation_count": violation_count,
+                "compliance_rate": compliance_rate
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# Authentication Endpoints (Multi-tenant)
+# ──────────────────────────────────────────────
+
+@app.post("/auth/signup", response_model=models.SignupResponse)
+async def signup(request: models.SignupRequest):
+    success, message, user_id = await auth.create_user(
+        request.username, request.email, request.password, request.org_id
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    return models.SignupResponse(
+        success=True,
+        user_id=user_id or "",
+        message=message
+    )
+
+
+@app.post("/auth/login", response_model=models.LoginResponse)
+async def login(request: models.LoginRequest):
+    user_id, token, org_id = await auth.authenticate_user(
+        request.username, request.password, request.org_id
+    )
+    if not user_id or not token:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    from datetime import timedelta
+    expires_at = datetime.utcnow() + timedelta(days=7)
+
+    return models.LoginResponse(
+        success=True,
+        token=token,
+        user_id=user_id,
+        org_id=org_id or "default",
+        expires_at=expires_at,
+        message="Logged in successfully"
+    )
+
+
+@app.post("/auth/logout", response_model=models.LogoutResponse)
+async def logout(authorization: Optional[str] = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=400, detail="Authorization header required")
+
+    token = authorization.replace("Bearer ", "")
+    success, message = await auth.logout_user(token)
+
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    return models.LogoutResponse(success=True, message=message)
+
+
+@app.get("/auth/verify", response_model=models.AuthTokenValidationResponse)
+async def verify_token(authorization: Optional[str] = Header(None)):
+    if not authorization:
+        return models.AuthTokenValidationResponse(
+            success=False,
+            message="Authorization header required"
+        )
+
+    token = authorization.replace("Bearer ", "")
+    user_id, org_id = await auth.verify_token(token)
+
+    if not user_id:
+        return models.AuthTokenValidationResponse(
+            success=False,
+            message="Invalid or expired token"
+        )
+
+    return models.AuthTokenValidationResponse(
+        success=True,
+        user_id=user_id,
+        org_id=org_id or "default",
+        message="Token is valid"
+    )
 
 
 # ──────────────────────────────────────────────
