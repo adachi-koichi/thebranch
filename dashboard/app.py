@@ -19,10 +19,12 @@ import yaml
 import httpx
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import auth
 from . import models
+from . import autogen_routes
 from workflow.repositories.template import TemplateRepository
 from workflow.services.template import TemplateService
 from workflow.validation.template import TemplateValidator
@@ -43,9 +45,20 @@ TMUX_BIN = shutil.which("tmux") or "/opt/homebrew/bin/tmux"
 
 app = FastAPI()
 
+# Mount static files (CSS, JS)
+DASHBOARD_DIR = Path(__file__).parent
+static_styles = DASHBOARD_DIR / "styles"
+static_js = DASHBOARD_DIR / "js"
+
+if static_styles.exists():
+    app.mount("/styles", StaticFiles(directory=str(static_styles)), name="styles")
+if static_js.exists():
+    app.mount("/js", StaticFiles(directory=str(static_js)), name="js")
+
+app.include_router(autogen_routes.router)
+
 logger = logging.getLogger(__name__)
 
-DASHBOARD_DIR = Path(__file__).parent
 THEBRANCH_DB = DASHBOARD_DIR / "data" / "thebranch.sqlite"
 
 # SLA メトリクス計算エンジン
@@ -4586,8 +4599,6 @@ async def skip_onboarding(user: dict = Depends(get_current_user)):
 # ──────────────────────────────────────────────
 # Departments (#2362) & Agents (#2391)
 # ──────────────────────────────────────────────
-
-THEBRANCH_DB = DASHBOARD_DIR / "data" / "thebranch.sqlite"
 
 def generate_session_name(dept_id: int, dept_slug: str, role: str) -> str:
     """Generate tmux session name following v3 format."""
@@ -9188,5 +9199,53 @@ async def remove_team_member(team_id: int, user_id: str, auth_header: Optional[s
         raise
     except Exception as e:
         logger.error(f"Failed to remove member: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/auth/sessions")
+async def get_active_sessions(auth_header: Optional[str] = Header(None)):
+    """アクティブなセッション一覧を取得"""
+    try:
+        if not auth_header:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        user_id, org_id = await auth.verify_token(auth_header)
+        if not user_id:
+            raise HTTPException(status_code=403, detail="Invalid token")
+
+        await auth.update_last_activity(auth_header)
+        sessions = await auth.list_active_sessions(user_id)
+        return sessions
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/auth/sessions/{session_id}/force-logout")
+async def force_logout_user_session(session_id: str, auth_header: Optional[str] = Header(None)):
+    """セッションを強制ログアウト"""
+    try:
+        if not auth_header:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        user_id, org_id = await auth.verify_token(auth_header)
+        if not user_id:
+            raise HTTPException(status_code=403, detail="Invalid token")
+
+        await auth.update_last_activity(auth_header)
+
+        success, msg = await auth.force_logout_session(session_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=msg)
+
+        return {"message": msg}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to force logout: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
