@@ -1,0 +1,65 @@
+{
+  "name": "THEBRANCH - AIエージェント部署プラットフォーム",
+  "short_name": "THEBRANCH",
+  "description": "AIエージェント部署を作成・運営できるプラットフォーム",
+  "start_url": "/dashboard/index.html",
+  "scope": "/dashboard/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d1117",
+  "theme_color": "#58a6ff",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%2358a6ff' width='192' height='192'/><text x='50%' y='50%' font-size='80' font-weight='bold' fill='%230d1117' text-anchor='middle' dominant-baseline='central'>TB</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%2358a6ff' width='512' height='512'/><text x='50%' y='50%' font-size='280' font-weight='bold' fill='%230d1117' text-anchor='middle' dominant-baseline='central'>TB</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect fill='%230d1117' width='540' height='720'/><text x='50%' y='360' font-size='48' fill='%2358a6ff' text-anchor='middle' dominant-baseline='central'>THEBRANCH Dashboard</text></svg>",
+      "sizes": "540x720",
+      "type": "image/svg+xml",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 720'><rect fill='%230d1117' width='1280' height='720'/><text x='50%' y='360' font-size='72' fill='%2358a6ff' text-anchor='middle' dominant-baseline='central'>THEBRANCH Dashboard</text></svg>",
+      "sizes": "1280x720",
+      "type": "image/svg+xml",
+      "form_factor": "wide"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "ダッシュボード",
+      "short_name": "ダッシュボード",
+      "description": "THEBRANCH ダッシュボードを開く",
+      "url": "/dashboard/index.html",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%2358a6ff' width='96' height='96'/><text x='50%' y='50%' font-size='40' font-weight='bold' fill='%230d1117' text-anchor='middle' dominant-baseline='central'>D</text></svg>",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/dashboard/share",
+    "method": "POST",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}
