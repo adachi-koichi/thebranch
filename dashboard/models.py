@@ -980,3 +980,98 @@ class EvaluationHistoryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Slack/Discord Integration Models
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class IntegrationConfigCreate(BaseModel):
+    integration_type: str  # 'slack' or 'discord'
+    organization_id: str
+    webhook_url: str
+    webhook_secret: str
+    channel_id: Optional[str] = None
+    channel_name: Optional[str] = None
+    is_active: int = 1
+    notify_on_agent_status: int = 1
+    notify_on_task_delegation: int = 1
+    notify_on_cost_alert: int = 1
+    notify_on_approval_request: int = 1
+    notify_on_error_event: int = 1
+    notify_on_system_alert: int = 1
+    metadata: Optional[str] = None
+    created_by: Optional[str] = None
+
+
+class IntegrationConfigUpdate(BaseModel):
+    integration_type: Optional[str] = None
+    organization_id: Optional[str] = None
+    webhook_url: Optional[str] = None
+    webhook_secret: Optional[str] = None
+    channel_id: Optional[str] = None
+    channel_name: Optional[str] = None
+    is_active: Optional[int] = None
+    notify_on_agent_status: Optional[int] = None
+    notify_on_task_delegation: Optional[int] = None
+    notify_on_cost_alert: Optional[int] = None
+    notify_on_approval_request: Optional[int] = None
+    notify_on_error_event: Optional[int] = None
+    notify_on_system_alert: Optional[int] = None
+    metadata: Optional[str] = None
+
+
+class IntegrationConfigResponse(BaseModel):
+    id: int
+    integration_type: str
+    organization_id: str
+    webhook_url: str
+    channel_id: Optional[str] = None
+    channel_name: Optional[str] = None
+    is_active: int
+    notify_on_agent_status: int
+    notify_on_task_delegation: int
+    notify_on_cost_alert: int
+    notify_on_approval_request: int
+    notify_on_error_event: int
+    notify_on_system_alert: int
+    metadata: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: str
+    updated_at: str
+    last_verified_at: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SlackWebhookPayload(BaseModel):
+    type: str
+    challenge: Optional[str] = None
+    event: Optional[dict] = None
+    token: Optional[str] = None
+    team_id: Optional[str] = None
+
+
+class DiscordWebhookPayload(BaseModel):
+    type: int
+    data: Optional[dict] = None
+    member: Optional[dict] = None
+    guild_id: Optional[str] = None
+    channel_id: Optional[str] = None
+
+
+class WebhookEventResponse(BaseModel):
+    id: int
+    event_id: str
+    integration_config_id: Optional[int] = None
+    event_type: str
+    event_source: str
+    processing_status: str
+    error_message: Optional[str] = None
+    notification_id: Optional[int] = None
+    received_at: str
+    processed_at: Optional[str] = None
+
+    class Config:
+        from_attributes = True

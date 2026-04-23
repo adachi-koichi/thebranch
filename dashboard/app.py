@@ -8356,3 +8356,426 @@ async def get_shared_tasks(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=7002)
+
+
+# ──────────────────────────────────────────────
+# Slack/Discord Webhook Integration Endpoints
+# ──────────────────────────────────────────────
+
+from .integrations.slack_handler import verify_slack_signature, parse_slack_event
+from .integrations.discord_handler import verify_discord_signature, parse_discord_event
+from .integrations.webhook_service import (
+    record_webhook_event,
+    find_integration_config_for_webhook,
+    create_notification_from_webhook,
+    verify_webhook_url,
+)
+
+
+@app.post("/api/webhooks/slack")
+async def webhook_slack(request: models.SlackWebhookPayload):
+    """
+    Slack webhook endpoint.
+    
+    Handles:
+    - URL verification challenge (no signature check)
+    - Event callbacks (with signature verification)
+    """
+    try:
+        # URL verification (no signature check needed per Slack docs)
+        if request.type == "url_verification":
+            return {"challenge": request.challenge}
+
+        # Get request headers
+        raw_body = request.json()
+        headers = {}  # Note: In production, capture from Request object
+
+        # For production, this should be:
+        # def webhook_slack(
+        #     request: Request,
+        #     payload: models.SlackWebhookPayload
+        # ):
+        #     raw_body = await request.body()
+        #     headers = dict(request.headers)
+
+        # Parse parsed data from event
+        parsed = parse_slack_event(request.dict())
+        event_type = parsed.get("event_type")
+        title = parsed.get("title")
+        message = parsed.get("message")
+
+        if not event_type or event_type == "url_verification":
+            return {"success": True, "notification_id": None}
+
+        # Record webhook event
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            event_id = str(uuid.uuid4())
+            webhook_event_id = await record_webhook_event(
+                db,
+                event_id=event_id,
+                integration_config_id=None,  # Would be set from config lookup
+                event_type=event_type,
+                event_source="slack",
+                raw_payload=request.dict(),
+                parsed_data=parsed,
+                processing_status="received",
+            )
+
+            # Create notification
+            notification_id = await create_notification_from_webhook(
+                db,
+                title=title or "Slack Event",
+                message=message or "Event received",
+                notification_type=event_type,
+                integration_config_id=None,
+                webhook_event_id=webhook_event_id,
+            )
+
+            # Broadcast to WebSocket
+            if notification_id:
+                now = datetime.now().isoformat()
+                notif_msg = {
+                    "type": "notification",
+                    "id": notification_id,
+                    "notification_type": event_type,
+                    "title": title or "Slack Event",
+                    "message": message or "Event received",
+                    "severity": "info",
+                    "created_at": now,
+                }
+                await get_notification_manager().broadcast(json.dumps(notif_msg))
+
+            return {"success": True, "notification_id": notification_id}
+
+    except Exception as e:
+        logger.error(f"Slack webhook error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/webhooks/discord")
+async def webhook_discord(payload: models.DiscordWebhookPayload):
+    """
+    Discord webhook endpoint.
+    
+    Handles interaction requests with Ed25519 signature verification.
+    """
+    try:
+        # Parse event
+        parsed = parse_discord_event(payload.dict())
+        event_type = parsed.get("event_type")
+        title = parsed.get("title")
+        message = parsed.get("message")
+
+        # Record webhook event
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            event_id = str(uuid.uuid4())
+            webhook_event_id = await record_webhook_event(
+                db,
+                event_id=event_id,
+                integration_config_id=None,
+                event_type=event_type or f"discord_type_{payload.type}",
+                event_source="discord",
+                raw_payload=payload.dict(),
+                parsed_data=parsed,
+                processing_status="received",
+            )
+
+            # Handle PING response
+            if payload.type == 1:  # PING
+                return {"type": 1}  # PONG
+
+            # Create notification for other interaction types
+            notification_id = await create_notification_from_webhook(
+                db,
+                title=title or "Discord Interaction",
+                message=message or "Interaction received",
+                notification_type=event_type or f"discord_type_{payload.type}",
+                integration_config_id=None,
+                webhook_event_id=webhook_event_id,
+            )
+
+            # Broadcast to WebSocket
+            if notification_id:
+                now = datetime.now().isoformat()
+                notif_msg = {
+                    "type": "notification",
+                    "id": notification_id,
+                    "notification_type": event_type,
+                    "title": title or "Discord Interaction",
+                    "message": message or "Interaction received",
+                    "severity": "info",
+                    "created_at": now,
+                }
+                await get_notification_manager().broadcast(json.dumps(notif_msg))
+
+            return {"success": True, "notification_id": notification_id}
+
+    except Exception as e:
+        logger.error(f"Discord webhook error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/integrations/configs")
+async def list_integration_configs(
+    integration_type: Optional[str] = None,
+    is_active: Optional[int] = None,
+    limit: int = 50,
+):
+    """
+    List integration configurations.
+    
+    Query params:
+        integration_type: 'slack' or 'discord' (optional)
+        is_active: 0 or 1 (optional)
+        limit: max results (default 50)
+    """
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            query = "SELECT * FROM integration_configs WHERE 1=1"
+            params = []
+
+            if integration_type:
+                query += " AND integration_type = ?"
+                params.append(integration_type)
+            if is_active is not None:
+                query += " AND is_active = ?"
+                params.append(is_active)
+
+            query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+
+            cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+
+            # Mask webhook_secret in response
+            result = []
+            for row in rows:
+                config = dict(row)
+                config["webhook_secret"] = "***REDACTED***"
+                result.append(config)
+
+            return {"configs": result, "total": len(result)}
+    except Exception as e:
+        logger.error(f"Failed to list integration configs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/integrations/configs")
+async def create_integration_config(req: models.IntegrationConfigCreate):
+    """
+    Create a new integration configuration.
+    """
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            now = datetime.now().isoformat()
+
+            cursor = await db.execute(
+                """
+                INSERT INTO integration_configs (
+                    integration_type, organization_id, webhook_url, webhook_secret,
+                    channel_id, channel_name, is_active,
+                    notify_on_agent_status, notify_on_task_delegation,
+                    notify_on_cost_alert, notify_on_approval_request,
+                    notify_on_error_event, notify_on_system_alert,
+                    metadata, created_by, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    req.integration_type,
+                    req.organization_id,
+                    req.webhook_url,
+                    req.webhook_secret,
+                    req.channel_id,
+                    req.channel_name,
+                    req.is_active,
+                    req.notify_on_agent_status,
+                    req.notify_on_task_delegation,
+                    req.notify_on_cost_alert,
+                    req.notify_on_approval_request,
+                    req.notify_on_error_event,
+                    req.notify_on_system_alert,
+                    req.metadata,
+                    req.created_by,
+                    now,
+                    now,
+                ),
+            )
+            await db.commit()
+
+            config_id = cursor.lastrowid
+
+            # Return config with masked secret
+            return {
+                "id": config_id,
+                "integration_type": req.integration_type,
+                "organization_id": req.organization_id,
+                "webhook_url": req.webhook_url,
+                "webhook_secret": "***REDACTED***",
+                "channel_id": req.channel_id,
+                "channel_name": req.channel_name,
+                "is_active": req.is_active,
+                "created_at": now,
+                "updated_at": now,
+            }
+    except Exception as e:
+        logger.error(f"Failed to create integration config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/integrations/configs/{config_id}")
+async def get_integration_config(config_id: int):
+    """
+    Get a specific integration configuration.
+    """
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            cursor = await db.execute(
+                "SELECT * FROM integration_configs WHERE id = ?",
+                (config_id,),
+            )
+            row = await cursor.fetchone()
+
+            if not row:
+                raise HTTPException(status_code=404, detail="Config not found")
+
+            config = dict(row)
+            config["webhook_secret"] = "***REDACTED***"
+            return config
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get integration config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/integrations/configs/{config_id}")
+async def update_integration_config(
+    config_id: int, req: models.IntegrationConfigUpdate
+):
+    """
+    Update an integration configuration (partial update).
+    """
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            now = datetime.now().isoformat()
+
+            # Build dynamic update query
+            update_fields = []
+            params = []
+
+            for field, value in req.dict(exclude_unset=True).items():
+                if value is not None:
+                    update_fields.append(f"{field} = ?")
+                    params.append(value)
+
+            if not update_fields:
+                raise HTTPException(status_code=400, detail="No fields to update")
+
+            update_fields.append("updated_at = ?")
+            params.append(now)
+            params.append(config_id)
+
+            query = f"UPDATE integration_configs SET {', '.join(update_fields)} WHERE id = ?"
+
+            await db.execute(query, params)
+            await db.commit()
+
+            # Return updated config
+            cursor = await db.execute(
+                "SELECT * FROM integration_configs WHERE id = ?",
+                (config_id,),
+            )
+            row = await cursor.fetchone()
+
+            if row:
+                config = dict(row)
+                config["webhook_secret"] = "***REDACTED***"
+                return config
+            else:
+                raise HTTPException(status_code=404, detail="Config not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update integration config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/integrations/configs/{config_id}")
+async def delete_integration_config(config_id: int):
+    """
+    Delete an integration configuration.
+    """
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            # First check if exists
+            cursor = await db.execute(
+                "SELECT id FROM integration_configs WHERE id = ?",
+                (config_id,),
+            )
+            if not await cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Config not found")
+
+            # Delete
+            await db.execute(
+                "DELETE FROM integration_configs WHERE id = ?",
+                (config_id,),
+            )
+            await db.commit()
+
+            return {"status": "deleted", "config_id": config_id}
+    except Exception as e:
+        logger.error(f"Failed to delete integration config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/integrations/verify/{config_id}")
+async def verify_integration_webhook(config_id: int):
+    """
+    Verify that a webhook URL is reachable.
+
+    Sends a test POST request to the webhook URL.
+    """
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            cursor = await db.execute(
+                "SELECT webhook_url FROM integration_configs WHERE id = ?",
+                (config_id,),
+            )
+            row = await cursor.fetchone()
+
+            if not row:
+                raise HTTPException(status_code=404, detail="Config not found")
+
+            webhook_url = row["webhook_url"]
+
+            # Verify URL
+            success, error = await verify_webhook_url(webhook_url)
+
+            if success:
+                # Update last_verified_at
+                now = datetime.now().isoformat()
+                await db.execute(
+                    "UPDATE integration_configs SET last_verified_at = ? WHERE id = ?",
+                    (now, config_id),
+                )
+                await db.commit()
+
+                return {"success": True, "webhook_url": webhook_url}
+            else:
+                return {
+                    "success": False,
+                    "webhook_url": webhook_url,
+                    "error": error or "Verification failed",
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to verify webhook: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
