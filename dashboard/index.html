@@ -8082,22 +8082,20 @@ async function executeOnboarding() {
 let _deptTreeDragSrc = null;
 
 async function loadDeptTree() {
-  const container = document.getElementById('orgTreeContent');
-  if (!container) return;
-  container.innerHTML = '<div class="empty-state">読み込み中...</div>';
+  const list = document.getElementById('deptRootList');
+  if (!list) return;
+  list.innerHTML = '<li class="empty-state">読み込み中...</li>';
 
   try {
     const res = await fetch('/api/departments/hierarchy');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const list = document.getElementById('deptRootList');
-    if (!list) throw new Error('deptRootList element not found');
     renderDeptTreeNodes(data, list);
     initDeptTreeDragDrop();
     const status = document.getElementById('orgTreeStatus');
     if (status) status.textContent = `${countDeptNodes(data)} 個の部署`;
   } catch(e) {
-    if (container) container.innerHTML = `<div class="empty-state" style="color:var(--red)">エラー: ${e.message}</div>`;
+    if (list) list.innerHTML = `<li class="empty-state" style="color:var(--red)">エラー: ${e.message}</li>`;
   }
 }
 
