@@ -347,52 +347,141 @@ class CreateTaskRequest(BaseModel):
 async def get_workflow_templates(status: str = ""):
     """全ワークフローテンプレート一覧を JSON で返却"""
     try:
-        repo = get_template_repo()
-        limit = 100
-        offset = 0
-        templates_list = repo.list_templates(status=status if status else None, limit=limit, offset=offset)
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            query = "SELECT id, name, description, status, created_at, created_by FROM workflow_templates"
+            params = []
+            if status:
+                query += " WHERE status = ?"
+                params.append(status)
+            query += " ORDER BY created_at DESC LIMIT 100"
 
-        result = []
-        for template in templates_list:
-            phases = repo.get_phases(template.id)
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+
+            result = []
+            for row in rows:
+                template_id = row[0]
+                # Get phases for this template
+                async with db.execute(
+                    "SELECT id, phase_key, phase_label, specialist_type, phase_order, is_parallel FROM wf_template_phases WHERE template_id = ? ORDER BY phase_order",
+                    [template_id]
+                ) as cursor:
+                    phases = await cursor.fetchall()
+
+                steps = []
+                for phase in phases:
+                    phase_id = phase[0]
+                    # Get tasks for this phase
+                    async with db.execute(
+                        "SELECT id, task_key, task_title, task_description, estimated_hours, priority, task_order FROM wf_template_tasks WHERE phase_id = ? ORDER BY task_order",
+                        [phase_id]
+                    ) as cursor:
+                        tasks = await cursor.fetchall()
+
+                    phase_step = {
+                        "phase_id": phase[0],
+                        "phase_key": phase[1],
+                        "phase_label": phase[2],
+                        "specialist_type": phase[3],
+                        "phase_order": phase[4],
+                        "is_parallel": bool(phase[5]),
+                        "tasks": [
+                            {
+                                "id": t[0],
+                                "task_key": t[1],
+                                "task_title": t[2],
+                                "task_description": t[3],
+                                "estimated_hours": t[4],
+                                "priority": t[5],
+                                "task_order": t[6],
+                            }
+                            for t in tasks
+                        ]
+                    }
+                    steps.append(phase_step)
+
+                result.append({
+                    "id": row[0],
+                    "name": row[1],
+                    "description": row[2],
+                    "status": row[3],
+                    "created_at": row[4],
+                    "created_by": row[5],
+                    "steps": steps
+                })
+
+            return {"templates": result}
+    except Exception as e:
+        logger.error(f"Error fetching workflow templates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/workflow-templates/{template_id}")
+async def get_workflow_template_detail(template_id: int):
+    """ワークフローテンプレート詳細を JSON で返却"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            async with db.execute(
+                "SELECT id, name, description, status, created_at, created_by FROM workflow_templates WHERE id = ?",
+                [template_id]
+            ) as cursor:
+                row = await cursor.fetchone()
+
+            if not row:
+                raise HTTPException(status_code=404, detail="Template not found")
+
+            # Get phases for this template
+            async with db.execute(
+                "SELECT id, phase_key, phase_label, specialist_type, phase_order, is_parallel FROM wf_template_phases WHERE template_id = ? ORDER BY phase_order",
+                [template_id]
+            ) as cursor:
+                phases = await cursor.fetchall()
+
             steps = []
             for phase in phases:
-                tasks = repo.get_tasks_for_phase(phase.id)
+                phase_id = phase[0]
+                # Get tasks for this phase
+                async with db.execute(
+                    "SELECT id, task_key, task_title, task_description, estimated_hours, priority, task_order FROM wf_template_tasks WHERE phase_id = ? ORDER BY task_order",
+                    [phase_id]
+                ) as cursor:
+                    tasks = await cursor.fetchall()
+
                 phase_step = {
-                    "phase_id": phase.id,
-                    "phase_key": phase.phase_key,
-                    "phase_label": phase.phase_label,
-                    "specialist_type": phase.specialist_type,
-                    "phase_order": phase.phase_order,
-                    "is_parallel": phase.is_parallel,
+                    "phase_id": phase[0],
+                    "phase_key": phase[1],
+                    "phase_label": phase[2],
+                    "specialist_type": phase[3],
+                    "phase_order": phase[4],
+                    "is_parallel": bool(phase[5]),
                     "tasks": [
                         {
-                            "id": task.id,
-                            "task_key": task.task_key,
-                            "task_title": task.task_title,
-                            "task_description": task.task_description,
-                            "estimated_hours": task.estimated_hours,
-                            "priority": task.priority,
-                            "task_order": task.task_order,
+                            "id": t[0],
+                            "task_key": t[1],
+                            "task_title": t[2],
+                            "task_description": t[3],
+                            "estimated_hours": t[4],
+                            "priority": t[5],
+                            "task_order": t[6],
                         }
-                        for task in tasks
+                        for t in tasks
                     ]
                 }
                 steps.append(phase_step)
 
-            result.append({
-                "id": template.id,
-                "name": template.name,
-                "description": template.description,
-                "status": template.status,
-                "created_at": template.created_at.isoformat() if template.created_at else None,
-                "created_by": template.created_by,
+            return {
+                "id": row[0],
+                "name": row[1],
+                "description": row[2],
+                "status": row[3],
+                "created_at": row[4],
+                "created_by": row[5],
                 "steps": steps
-            })
-
-        return {"templates": result}
+            }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error fetching workflow templates: {e}")
+        logger.error(f"Error fetching template detail: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1947,50 +2036,6 @@ async def get_costs():
 # Cost Tracking
 # ──────────────────────────────────────────────
 
-@app.post("/api/cost-records")
-async def record_api_call(request: models.APICallCreate):
-    """Record API call and return id"""
-    try:
-        init_workflow_services()
-        call_id = cost_service.record_api_call(
-            department_id=request.department_id,
-            agent_id=request.agent_id,
-            api_provider=request.api_provider,
-            model_name=request.model_name,
-            input_tokens=request.input_tokens,
-            output_tokens=request.output_tokens,
-            cache_read_tokens=request.cache_read_tokens,
-            cache_creation_tokens=request.cache_creation_tokens,
-            cost_usd=request.cost_usd,
-            status=request.status,
-            error_message=request.error_message,
-            request_timestamp=request.request_timestamp,
-        )
-        return {"ok": True, "id": call_id}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.get("/api/departments/{dept_id}/costs")
-async def get_department_costs(dept_id: int, year: Optional[int] = None, month: Optional[int] = None):
-    """Get department cost summary"""
-    try:
-        init_workflow_services()
-        if year is None or month is None:
-            now = datetime.now()
-            year = year or now.year
-            month = month or now.month
-
-        summary = cost_service.get_department_cost_summary(dept_id)
-        trend = cost_service.get_monthly_cost_trend(dept_id, months=12)
-
-        return {
-            "ok": True,
-            "summary": summary,
-            "trend": trend,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/departments/{dept_id}/budget")
@@ -2037,6 +2082,93 @@ async def resolve_cost_alert(alert_id: int, request_data: dict):
 
         cost_service.resolve_alert(alert_id, resolved_by, note)
         return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/costs/record")
+async def record_cost(request: models.CostRecordRequest):
+    """Record API call cost"""
+    try:
+        init_workflow_services()
+        call_id = cost_service.record_api_call(
+            department_id=request.department_id,
+            agent_id=request.agent_id,
+            api_provider=request.api_provider,
+            model_name=request.model_name,
+            input_tokens=request.input_tokens,
+            output_tokens=request.output_tokens,
+            cache_read_tokens=request.cache_read_tokens,
+            cache_creation_tokens=request.cache_creation_tokens,
+            cost_usd=request.cost_usd,
+        )
+        return {"ok": True, "id": call_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/departments/{department_id}/costs")
+async def get_department_cost_summary(department_id: int):
+    """Get department cost summary for current month"""
+    try:
+        init_workflow_services()
+        summary = cost_service.get_department_cost_summary(department_id)
+
+        return models.DepartmentCostResponse(
+            year=summary['year'],
+            month=summary['month'],
+            budget=summary['budget'],
+            spent=summary['spent'],
+            remaining=summary['remaining'],
+            utilization_percent=summary['utilization_percent'],
+            api_call_count=summary['api_call_count'],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/costs/summary")
+async def get_costs_summary():
+    """Get cost summary for all departments"""
+    try:
+        init_workflow_services()
+
+        now = datetime.now()
+        year = now.year
+        month = now.month
+
+        costs = cost_repo.execute_all(
+            """SELECT id, name FROM departments WHERE status = 'active'""",
+            ()
+        )
+
+        items = []
+        for dept in costs:
+            dept_id = dept['id']
+            cost_record = cost_repo.get_cost_record(dept_id, year, month)
+
+            if cost_record:
+                items.append(models.CostSummaryItem(
+                    department_id=dept_id,
+                    year=cost_record['year'],
+                    month=cost_record['month'],
+                    total_cost_usd=cost_record['total_cost_usd'],
+                    api_call_count=cost_record['api_call_count'],
+                    failed_call_count=cost_record.get('failed_call_count', 0),
+                    top_model=cost_record.get('top_model'),
+                ))
+            else:
+                items.append(models.CostSummaryItem(
+                    department_id=dept_id,
+                    year=year,
+                    month=month,
+                    total_cost_usd=0.0,
+                    api_call_count=0,
+                    failed_call_count=0,
+                    top_model=None,
+                ))
+
+        return models.CostSummaryResponse(items=items)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -7703,6 +7835,292 @@ async def get_resource_status(request_id: int):
         raise
     except Exception as e:
         logger.error(f"Failed to get resource status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# SLA Management
+# ──────────────────────────────────────────────
+
+class SLAPolicyCreate(BaseModel):
+    name: str
+    response_time_limit_ms: int
+    uptime_percentage: float
+    error_rate_limit: float
+
+class SLAPolicyUpdate(BaseModel):
+    response_time_limit_ms: int = None
+    uptime_percentage: float = None
+    error_rate_limit: float = None
+
+@app.get("/api/sla/policies")
+async def get_sla_policies():
+    """Get all SLA policies"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute(
+                "SELECT id, name, response_time_limit_ms, uptime_percentage, error_rate_limit, enabled, created_at, updated_at FROM sla_policies ORDER BY id DESC"
+            )
+            policies = [dict(row) for row in await cursor.fetchall()]
+            return policies
+    except Exception as e:
+        logger.error(f"Failed to get SLA policies: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/sla/policies")
+async def create_sla_policy(policy: SLAPolicyCreate):
+    """Create new SLA policy"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute(
+                """INSERT INTO sla_policies
+                   (name, response_time_limit_ms, uptime_percentage, error_rate_limit)
+                   VALUES (?, ?, ?, ?)""",
+                (policy.name, policy.response_time_limit_ms, policy.uptime_percentage, policy.error_rate_limit)
+            )
+            await db.commit()
+            policy_id = cursor.lastrowid
+
+            cursor = await db.execute(
+                "SELECT id, name, response_time_limit_ms, uptime_percentage, error_rate_limit, enabled, created_at, updated_at FROM sla_policies WHERE id = ?",
+                (policy_id,)
+            )
+            created = await cursor.fetchone()
+            return dict(created) if created else {"id": policy_id}
+    except Exception as e:
+        logger.error(f"Failed to create SLA policy: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/sla/policies/{policy_id}")
+async def update_sla_policy(policy_id: int, update: SLAPolicyUpdate):
+    """Update SLA policy"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+
+            updates = {}
+            if update.response_time_limit_ms is not None:
+                updates["response_time_limit_ms"] = update.response_time_limit_ms
+            if update.uptime_percentage is not None:
+                updates["uptime_percentage"] = update.uptime_percentage
+            if update.error_rate_limit is not None:
+                updates["error_rate_limit"] = update.error_rate_limit
+
+            if updates:
+                set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+                values = list(updates.values()) + [policy_id]
+                await db.execute(
+                    f"UPDATE sla_policies SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    values
+                )
+                await db.commit()
+
+            cursor = await db.execute(
+                "SELECT id, name, response_time_limit_ms, uptime_percentage, error_rate_limit, enabled, created_at, updated_at FROM sla_policies WHERE id = ?",
+                (policy_id,)
+            )
+            updated = await cursor.fetchone()
+            if not updated:
+                raise HTTPException(status_code=404, detail="Policy not found")
+            return dict(updated)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update SLA policy: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/sla/policies/{policy_id}")
+async def delete_sla_policy(policy_id: int):
+    """Delete SLA policy"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            await db.execute("DELETE FROM sla_policies WHERE id = ?", (policy_id,))
+            await db.commit()
+            return {"success": True, "message": "Policy deleted successfully"}
+    except Exception as e:
+        logger.error(f"Failed to delete SLA policy: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/sla/metrics/{policy_id}")
+async def get_sla_metrics(policy_id: int, limit: int = 10):
+    """Get SLA metrics for a policy"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute(
+                """SELECT id, policy_id, response_time_ms, uptime_percentage, error_rate, measured_at
+                   FROM sla_metrics WHERE policy_id = ? ORDER BY measured_at DESC LIMIT ?""",
+                (policy_id, limit)
+            )
+            metrics = [dict(row) for row in await cursor.fetchall()]
+            return metrics
+    except Exception as e:
+        logger.error(f"Failed to get SLA metrics: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/sla/violations")
+async def get_sla_violations(policy_id: int = None, limit: int = 50):
+    """Get SLA violations"""
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+
+            if policy_id:
+                cursor = await db.execute(
+                    """SELECT id, policy_id, metric_id, violation_type, severity, details, alert_sent, created_at
+                       FROM sla_violations WHERE policy_id = ? ORDER BY created_at DESC LIMIT ?""",
+                    (policy_id, limit)
+                )
+            else:
+                cursor = await db.execute(
+                    """SELECT id, policy_id, metric_id, violation_type, severity, details, alert_sent, created_at
+                       FROM sla_violations ORDER BY created_at DESC LIMIT ?""",
+                    (limit,)
+                )
+            violations = [dict(row) for row in await cursor.fetchall()]
+            return violations
+    except Exception as e:
+        logger.error(f"Failed to get SLA violations: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/agents", status_code=201)
+async def create_agent(req: models.AgentCreate):
+    """エージェントを作成"""
+    await ensure_db_initialized()
+    try:
+        session_id = str(uuid.uuid4())
+
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # department 存在確認
+            cursor = await db.execute(
+                "SELECT id FROM departments WHERE id = ?",
+                (req.department_id,)
+            )
+            if not await cursor.fetchone():
+                raise HTTPException(status_code=404, detail="部署が見つかりません")
+
+            # エージェント作成
+            cursor = await db.execute(
+                """INSERT INTO agents
+                   (department_id, session_id, role, status, started_at, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'), datetime('now','localtime'))""",
+                (req.department_id, session_id, req.role, 'starting')
+            )
+            await db.commit()
+            agent_id = cursor.lastrowid
+
+            # 作成したエージェント情報を取得
+            cursor = await db.execute(
+                """SELECT id, department_id, session_id, role, status, started_at, stopped_at,
+                          error_message, created_at, updated_at
+                   FROM agents WHERE id = ?""",
+                (agent_id,)
+            )
+            agent_row = await cursor.fetchone()
+
+            return dict(agent_row)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create agent: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/agents/{agent_id}/start", status_code=200)
+async def start_agent(agent_id: int):
+    """エージェントを起動"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # agent 存在確認
+            cursor = await db.execute(
+                "SELECT id, session_id FROM agents WHERE id = ?",
+                (agent_id,)
+            )
+            agent_row = await cursor.fetchone()
+            if not agent_row:
+                raise HTTPException(status_code=404, detail="エージェントが見つかりません")
+
+            # status を 'running' に更新
+            await db.execute(
+                """UPDATE agents SET status = ?, updated_at = datetime('now','localtime')
+                   WHERE id = ?""",
+                ('running', agent_id)
+            )
+            await db.commit()
+
+            # 更新後の情報を返す
+            cursor = await db.execute(
+                """SELECT id, department_id, session_id, role, status, started_at, stopped_at,
+                          error_message, created_at, updated_at
+                   FROM agents WHERE id = ?""",
+                (agent_id,)
+            )
+            agent_row = await cursor.fetchone()
+
+            return dict(agent_row)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to start agent: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/workflows")
+async def get_workflows(workflow_type: str = "all"):
+    """ワークフロー一覧取得（テンプレートとインスタンスを統合）"""
+    try:
+        if not TASKS_DB.exists():
+            return {"templates": [], "instances": []}
+
+        async with aiosqlite.connect(str(TASKS_DB)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # ワークフロー テンプレート取得
+            cursor = await db.execute("SELECT * FROM workflow_templates ORDER BY id DESC")
+            templates = [dict(r) for r in await cursor.fetchall()]
+
+            # 各テンプレートの node 取得
+            for tmpl in templates:
+                cursor = await db.execute(
+                    "SELECT * FROM wf_template_nodes WHERE template_id = ? ORDER BY id",
+                    (tmpl["id"],)
+                )
+                tmpl["nodes"] = [dict(r) for r in await cursor.fetchall()]
+
+            # ワークフロー インスタンス取得
+            if workflow_type == "all" or workflow_type == "instances":
+                cursor = await db.execute(
+                    """SELECT wi.*, wt.name AS template_name
+                       FROM workflow_instances wi
+                       LEFT JOIN workflow_templates wt ON wi.template_id = wt.id
+                       ORDER BY wi.id DESC"""
+                )
+                instances = [dict(r) for r in await cursor.fetchall()]
+
+                # 各インスタンスの node 取得
+                for inst in instances:
+                    cursor = await db.execute(
+                        """SELECT n.*, t.title as task_title, t.status as task_status, t.role as task_role
+                           FROM wf_instance_nodes n
+                           LEFT JOIN dev_tasks t ON n.task_id = t.id
+                           WHERE n.instance_id = ?
+                           ORDER BY n.id""",
+                        (inst["id"],)
+                    )
+                    inst["nodes"] = [dict(r) for r in await cursor.fetchall()]
+            else:
+                instances = []
+
+            return {"templates": templates, "instances": instances}
+    except Exception as e:
+        logger.error(f"Failed to get workflows: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

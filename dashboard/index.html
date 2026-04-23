@@ -1577,6 +1577,7 @@
   <button class="tab-btn" data-tab="team-dynamics">👥 チームダイナミクス</button>
   <button class="tab-btn" data-tab="learning-history">📚 学習履歴</button>
   <button class="tab-btn" data-tab="resource-management">⚙️ リソース管理</button>
+  <button class="tab-btn" data-tab="marketplace">🛒 マーケットプレイス</button>
 </nav>
 
 <!-- Main -->
@@ -2606,6 +2607,71 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Marketplace Tab -->
+  <div class="tab-panel" id="tab-marketplace" style="display:none;">
+    <div style="padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h2 style="margin:0;">🛒 ワークフローテンプレートマーケットプレイス</h2>
+        <button onclick="refreshMarketplaceTemplates()" style="padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;">更新</button>
+      </div>
+
+      <!-- Search & Filter Bar -->
+      <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+        <input type="text" id="marketplaceSearchInput" placeholder="テンプレート名で検索..." style="flex:1;min-width:250px;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);">
+        <select id="marketplaceStatusFilter" style="padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);">
+          <option value="">すべてのステータス</option>
+          <option value="active">アクティブ</option>
+          <option value="archived">アーカイブ</option>
+          <option value="draft">ドラフト</option>
+        </select>
+        <button onclick="applyMarketplaceFilters()" style="padding:10px 16px;background:var(--green);color:white;border:none;border-radius:6px;cursor:pointer;">検索</button>
+      </div>
+
+      <!-- Templates Grid -->
+      <div id="marketplaceTemplatesContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(380px,100%),1fr));gap:16px;margin-bottom:20px;">
+        <div style="padding:20px;text-align:center;color:var(--text-muted);grid-column:1/-1;">読み込み中...</div>
+      </div>
+
+      <!-- Template Detail Modal -->
+      <div id="templateDetailModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px;min-width:500px;max-width:700px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <h3 id="templateDetailTitle" style="margin:0;font-size:18px;">テンプレート詳細</h3>
+          <button onclick="closeTemplateDetailModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:24px;padding:0;">&times;</button>
+        </div>
+
+        <!-- Template Info -->
+        <div style="margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:12px;color:var(--text-muted);">ステータス</span>
+            <span id="templateDetailStatus" style="padding:4px 12px;background:var(--border);border-radius:16px;font-size:12px;font-weight:600;">—</span>
+          </div>
+          <div style="color:var(--text-muted);font-size:13px;margin-bottom:8px;" id="templateDetailDescription">—</div>
+          <div style="display:flex;gap:16px;font-size:12px;color:var(--text-muted);">
+            <div>作成者: <span id="templateDetailCreatedBy">—</span></div>
+            <div>作成日: <span id="templateDetailCreatedAt">—</span></div>
+          </div>
+        </div>
+
+        <!-- Template Steps -->
+        <div style="margin-bottom:20px;">
+          <h4 style="margin:0 0 12px 0;font-size:14px;font-weight:600;">ワークフローステップ</h4>
+          <div id="templateDetailSteps" style="max-height:400px;overflow-y:auto;">
+            <div style="text-align:center;color:var(--text-muted);padding:20px;">ステップなし</div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display:flex;gap:8px;margin-top:20px;border-top:1px solid var(--border);padding-top:16px;">
+          <button onclick="launchTemplateWorkflow()" style="flex:1;padding:10px;background:var(--green);color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;">🚀 このテンプレートで開始</button>
+          <button onclick="closeTemplateDetailModal()" style="flex:1;padding:10px;background:var(--border);color:var(--text);border:none;border-radius:6px;cursor:pointer;">閉じる</button>
+        </div>
+      </div>
+
+      <!-- Overlay for Modal -->
+      <div id="templateModalOverlay" onclick="closeTemplateDetailModal()" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:999;"></div>
     </div>
   </div>
 
@@ -8835,6 +8901,141 @@ function refreshResources() {
   loadResourceAllocations();
 }
 
+// ══════════════════════════════════════════════
+// マーケットプレイス関数
+// ══════════════════════════════════════════════
+
+let marketplaceTemplates = [];
+let currentDetailTemplate = null;
+
+async function refreshMarketplaceTemplates() {
+  await fetchMarketplaceTemplates();
+}
+
+async function fetchMarketplaceTemplates() {
+  const container = document.getElementById('marketplaceTemplatesContainer');
+  container.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;color:var(--text-muted);">読み込み中...</div>';
+  try {
+    const res = await fetch('/api/workflow-templates');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    marketplaceTemplates = data.templates || [];
+    renderMarketplaceTemplates(marketplaceTemplates);
+  } catch(e) {
+    container.innerHTML = `<div style="grid-column:1/-1;padding:20px;text-align:center;color:var(--red);">エラー: ${e.message}</div>`;
+    console.error('Failed to fetch templates:', e);
+  }
+}
+
+function renderMarketplaceTemplates(templates) {
+  const container = document.getElementById('marketplaceTemplatesContainer');
+  if (!templates || templates.length === 0) {
+    container.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;color:var(--text-muted);">テンプレートなし</div>';
+    return;
+  }
+
+  const html = templates.map(t => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:16px;background:var(--card);cursor:pointer;transition:all 0.2s;" onclick="showTemplateDetail(${t.id})" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 2px 8px rgba(88,166,255,0.2)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+        <h3 style="margin:0;font-size:15px;font-weight:600;flex:1;">${t.name}</h3>
+        <span style="padding:4px 10px;background:var(--border);border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap;margin-left:8px;">${t.status}</span>
+      </div>
+      <p style="margin:0 0 12px 0;font-size:13px;color:var(--text-muted);line-height:1.4;">${t.description || 'N/A'}</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-muted);">
+        <span>ステップ: ${t.steps ? t.steps.length : 0}</span>
+        <span>作成者: ${t.created_by || 'system'}</span>
+      </div>
+    </div>
+  `).join('');
+
+  container.innerHTML = html;
+}
+
+async function showTemplateDetail(templateId) {
+  try {
+    const res = await fetch(`/api/workflow-templates/${templateId}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    currentDetailTemplate = await res.json();
+    renderTemplateDetail(currentDetailTemplate);
+    document.getElementById('templateDetailModal').style.display = 'block';
+    document.getElementById('templateModalOverlay').style.display = 'block';
+  } catch(e) {
+    alert('テンプレート詳細の読み込みに失敗しました: ' + e.message);
+    console.error('Failed to fetch template detail:', e);
+  }
+}
+
+function renderTemplateDetail(template) {
+  document.getElementById('templateDetailTitle').textContent = template.name;
+  document.getElementById('templateDetailStatus').textContent = template.status;
+  document.getElementById('templateDetailDescription').textContent = template.description || 'N/A';
+  document.getElementById('templateDetailCreatedBy').textContent = template.created_by || 'system';
+  document.getElementById('templateDetailCreatedAt').textContent = template.created_at ? new Date(template.created_at).toLocaleDateString('ja-JP') : 'N/A';
+
+  const stepsContainer = document.getElementById('templateDetailSteps');
+  if (!template.steps || template.steps.length === 0) {
+    stepsContainer.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;">ステップなし</div>';
+    return;
+  }
+
+  const stepsHtml = template.steps.map((step, idx) => `
+    <div style="padding:12px;background:var(--bg);border-radius:6px;margin-bottom:8px;border-left:3px solid var(--accent);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <strong style="font-size:13px;">ステップ ${idx + 1}: ${step.phase_label}</strong>
+        <span style="font-size:11px;color:var(--text-muted);">${step.specialist_type}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">${step.phase_key}</div>
+      <div style="font-size:11px;color:var(--text-muted);">
+        タスク数: ${step.tasks ? step.tasks.length : 0} | 並列実行: ${step.is_parallel ? 'はい' : 'いいえ'}
+      </div>
+      ${step.tasks && step.tasks.length > 0 ? `
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+          <div style="font-size:11px;color:var(--text-muted);">タスク:</div>
+          ${step.tasks.slice(0, 2).map(t => `<div style="font-size:11px;margin-top:4px;padding:4px;background:var(--card);border-radius:4px;">• ${t.task_title}</div>`).join('')}
+          ${step.tasks.length > 2 ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">他 ${step.tasks.length - 2} タスク</div>` : ''}
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+
+  stepsContainer.innerHTML = stepsHtml;
+}
+
+function closeTemplateDetailModal() {
+  document.getElementById('templateDetailModal').style.display = 'none';
+  document.getElementById('templateModalOverlay').style.display = 'none';
+  currentDetailTemplate = null;
+}
+
+function launchTemplateWorkflow() {
+  if (!currentDetailTemplate) {
+    alert('テンプレートが選択されていません');
+    return;
+  }
+  alert(`テンプレート「${currentDetailTemplate.name}」でワークフローを開始します`);
+  closeTemplateDetailModal();
+}
+
+function applyMarketplaceFilters() {
+  const searchText = (document.getElementById('marketplaceSearchInput').value || '').toLowerCase();
+  const statusFilter = document.getElementById('marketplaceStatusFilter').value;
+
+  let filtered = marketplaceTemplates;
+
+  if (searchText) {
+    filtered = filtered.filter(t =>
+      t.name.toLowerCase().includes(searchText) ||
+      (t.description && t.description.toLowerCase().includes(searchText))
+    );
+  }
+
+  if (statusFilter) {
+    filtered = filtered.filter(t => t.status === statusFilter);
+  }
+
+  renderMarketplaceTemplates(filtered);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   teamDynamicsModule.init();
 
@@ -8848,6 +9049,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const resourceTab = document.querySelector('[data-tab="resource-management"]');
   if (resourceTab) {
     resourceTab.addEventListener('click', refreshResources);
+  }
+
+  // Add marketplace tab click handler
+  const marketplaceTab = document.querySelector('[data-tab="marketplace"]');
+  if (marketplaceTab) {
+    marketplaceTab.addEventListener('click', refreshMarketplaceTemplates);
+  }
+
+  // Add marketplace filter handlers
+  const searchInput = document.getElementById('marketplaceSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') applyMarketplaceFilters();
+    });
   }
 });
 </script>

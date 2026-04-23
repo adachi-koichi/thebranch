@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class UserBase(BaseModel):
@@ -331,6 +331,42 @@ class BudgetComparisonResponse(BaseModel):
     remaining: float
     utilization_percent: float
     alerts: List[CostAlertResponse] = []
+
+
+class CostRecordRequest(BaseModel):
+    department_id: int
+    agent_id: Optional[int] = None
+    api_provider: str
+    model_name: Optional[str] = None
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+    cost_usd: float
+
+
+class DepartmentCostResponse(BaseModel):
+    year: int
+    month: int
+    budget: float
+    spent: float
+    remaining: float
+    utilization_percent: float
+    api_call_count: int
+
+
+class CostSummaryItem(BaseModel):
+    department_id: int
+    year: int
+    month: int
+    total_cost_usd: float
+    api_call_count: int
+    failed_call_count: int = 0
+    top_model: Optional[str] = None
+
+
+class CostSummaryResponse(BaseModel):
+    items: List[CostSummaryItem]
 
 
 class RoleResponse(BaseModel):
@@ -800,6 +836,102 @@ class ApiKeyPermissionResponse(BaseModel):
     id: str
     resource_type: str
     action: str
+
+    class Config:
+        from_attributes = True
+
+
+class AgentEvaluationCreate(BaseModel):
+    agent_id: str
+    completion_rate: float  # 0.0-100.0
+    quality_score: float    # 1.0-5.0
+    overall_score: float    # 計算済みスコア
+
+
+class AgentEvaluationUpdate(BaseModel):
+    completion_rate: Optional[float] = None
+    quality_score: Optional[float] = None
+    overall_score: Optional[float] = None
+
+
+class AgentEvaluationResponse(BaseModel):
+    id: int
+    agent_id: str
+    completion_rate: float
+    quality_score: float
+    overall_score: float
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class EvaluationHistoryCreate(BaseModel):
+    agent_id: str
+    completion_rate: float
+    quality_score: float
+    overall_score: float
+
+
+class EvaluationHistoryResponse(BaseModel):
+    id: int
+    agent_id: str
+    completion_rate: float
+    quality_score: float
+    overall_score: float
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# =====================================================================
+# 部署間コラボレーション関連スキーマ (Task #2414)
+# =====================================================================
+
+class CrossDepartmentRequestCreate(BaseModel):
+    requesting_department_id: int
+    receiving_department_id: int
+    request_type: str  # task_request, resource_request, skill_request
+    priority: int = 3
+    description: Optional[str] = None
+
+    @field_validator('request_type')
+    @classmethod
+    def validate_request_type(cls, v):
+        if v not in ['task_request', 'resource_request', 'skill_request']:
+            raise ValueError('Invalid request_type')
+        return v
+
+    @field_validator('priority')
+    @classmethod
+    def validate_priority(cls, v):
+        if not (1 <= v <= 5):
+            raise ValueError('Priority must be between 1 and 5')
+        return v
+
+
+class CrossDepartmentRequestResponse(CrossDepartmentRequestCreate):
+    id: int
+    status: str
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class TaskSharingCreate(BaseModel):
+    request_id: int
+    task_id: int
+    sharing_terms: Optional[str] = None
+
+
+class TaskSharingResponse(TaskSharingCreate):
+    id: int
+    status: str
+    created_at: str
 
     class Config:
         from_attributes = True
