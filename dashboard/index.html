@@ -370,6 +370,454 @@
       }
     }
 
+    /* Wave28: Workflow Auto-Generation Section */
+    .workflow-section {
+      padding: 100px 0;
+      background-color: var(--bg-secondary);
+    }
+
+    .workflow-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      margin-top: 40px;
+    }
+
+    .workflow-card {
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    .workflow-card-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      color: var(--text-primary);
+    }
+
+    .workflow-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .form-textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      resize: vertical;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .form-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .form-select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 14px;
+      cursor: pointer;
+      transition: border-color 0.2s ease;
+    }
+
+    .form-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 14px;
+      transition: border-color 0.2s ease;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .form-hint {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 8px;
+    }
+
+    .btn-block {
+      width: 100%;
+    }
+
+    .loading-spinner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid var(--border-light);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-spinner p {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .alert {
+      padding: 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .alert-error {
+      background-color: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: var(--error);
+    }
+
+    .alert-success {
+      background-color: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: var(--success);
+    }
+
+    .alert-warning {
+      background-color: rgba(251, 191, 36, 0.1);
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      color: var(--warning);
+    }
+
+    .tab-buttons {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 12px 16px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--accent);
+    }
+
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      margin-bottom: 20px;
+    }
+
+    .dag-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .dag-table thead {
+      background-color: var(--bg-secondary);
+      border-bottom: 2px solid var(--border-light);
+    }
+
+    .dag-table th {
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .dag-table td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .dag-table tbody tr:hover {
+      background-color: var(--bg-secondary);
+    }
+
+    .validation-box {
+      background-color: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 13px;
+    }
+
+    .validation-item {
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .validation-item:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    .validation-status {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .validation-status.valid {
+      background-color: rgba(34, 197, 94, 0.2);
+      color: var(--success);
+    }
+
+    .validation-status.error {
+      background-color: rgba(239, 68, 68, 0.2);
+      color: var(--error);
+    }
+
+    .validation-status.warning {
+      background-color: rgba(251, 191, 36, 0.2);
+      color: var(--warning);
+    }
+
+    .validation-message {
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .workflow-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-light);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-tertiary);
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state p {
+      font-size: 14px;
+    }
+
+    /* Template Catalog */
+    .template-section {
+      padding: 100px 0;
+    }
+
+    .template-search-box {
+      margin-bottom: 40px;
+      background-color: var(--bg-secondary);
+      padding: 24px;
+      border-radius: 12px;
+    }
+
+    .search-input-wrapper {
+      display: flex;
+      gap: 12px;
+    }
+
+    .search-input-wrapper .form-input {
+      flex: 1;
+    }
+
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .template-card {
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 24px;
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .template-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+      transform: translateY(-4px);
+    }
+
+    .template-header {
+      margin-bottom: 16px;
+    }
+
+    .template-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .template-category {
+      display: inline-block;
+      padding: 4px 8px;
+      background-color: var(--bg-secondary);
+      color: var(--accent);
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .template-description {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      flex: 1;
+      line-height: 1.6;
+    }
+
+    .template-stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-light);
+      font-size: 12px;
+    }
+
+    .template-stat {
+      color: var(--text-tertiary);
+    }
+
+    .template-stat-value {
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .template-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-sm {
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: 6px;
+      flex: 1;
+      text-align: center;
+    }
+
+    .btn-primary.btn-sm {
+      background-color: var(--accent);
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    .btn-primary.btn-sm:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .btn-secondary.btn-sm {
+      background-color: transparent;
+      color: var(--accent);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary.btn-sm:hover {
+      border-color: var(--accent);
+      background-color: var(--bg-secondary);
+    }
+
+    @media (max-width: 768px) {
+      .workflow-grid {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+
+      .search-input-wrapper {
+        flex-direction: column;
+      }
+
+      .template-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .template-actions {
+        flex-direction: column;
+      }
+
+      .workflow-section {
+        padding: 60px 0;
+      }
+
+      .template-section {
+        padding: 60px 0;
+      }
+    }
+
     /* Features Section */
     .features {
       padding: 100px 0;
@@ -1020,6 +1468,167 @@
       </div>
     </section>
 
+    <!-- Wave28: Workflow Auto-Generation Section -->
+    <section id="workflow-autogen" class="workflow-section" aria-labelledby="workflow-heading">
+      <div class="container">
+        <div class="section-title">Wave28 業務フロー自動生成</div>
+        <h2 id="workflow-heading" class="section-heading">自然言語で業務フロー自動生成</h2>
+
+        <div class="workflow-grid">
+          <!-- Workflow Generation Form -->
+          <div class="workflow-card workflow-form-card">
+            <h3 class="workflow-card-title">業務フロー自動生成</h3>
+            <form id="workflow-autogen-form" class="workflow-form">
+              <div class="form-group">
+                <label for="workflow-description" class="form-label">業務フロー説明（自然言語）</label>
+                <textarea
+                  id="workflow-description"
+                  class="form-textarea"
+                  placeholder="例: 「営業案件の受付から提案書作成、顧客への提出、フォローアップまでの流れを自動化したい」"
+                  rows="8"
+                  required
+                ></textarea>
+                <p class="form-hint">日本語で業務の流れを説明してください。タスク、条件分岐、並列処理なども記述可能です。</p>
+              </div>
+
+              <div class="form-group">
+                <label for="workflow-template-category" class="form-label">テンプレートカテゴリ（オプション）</label>
+                <select id="workflow-template-category" class="form-select">
+                  <option value="">指定しない</option>
+                  <option value="sales">営業</option>
+                  <option value="customer_support">カスタマーサポート</option>
+                  <option value="hr">人事</option>
+                  <option value="finance">経理・財務</option>
+                  <option value="operations">業務運用</option>
+                  <option value="other">その他</option>
+                </select>
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-block">
+                <span>🚀 自動生成</span>
+              </button>
+            </form>
+
+            <div id="autogen-loading" class="loading-spinner" style="display: none;">
+              <div class="spinner"></div>
+              <p>業務フローを生成中...</p>
+            </div>
+
+            <div id="autogen-error" class="alert alert-error" style="display: none;"></div>
+          </div>
+
+          <!-- DAG Preview -->
+          <div class="workflow-card workflow-preview-card">
+            <h3 class="workflow-card-title">生成結果プレビュー</h3>
+
+            <div id="dag-preview" style="display: none;">
+              <div class="tab-buttons">
+                <button type="button" class="tab-btn active" data-tab="nodes-tab">ノード</button>
+                <button type="button" class="tab-btn" data-tab="edges-tab">エッジ（関連性）</button>
+                <button type="button" class="tab-btn" data-tab="validation-tab">バリデーション</button>
+              </div>
+
+              <!-- Nodes Table -->
+              <div id="nodes-tab" class="tab-content active">
+                <div class="table-wrapper">
+                  <table class="dag-table">
+                    <thead>
+                      <tr>
+                        <th>Task ID</th>
+                        <th>タスク名</th>
+                        <th>タイプ</th>
+                        <th>所要時間</th>
+                      </tr>
+                    </thead>
+                    <tbody id="nodes-tbody">
+                      <!-- 動的生成 -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Edges Table -->
+              <div id="edges-tab" class="tab-content">
+                <div class="table-wrapper">
+                  <table class="dag-table">
+                    <thead>
+                      <tr>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>関連性タイプ</th>
+                      </tr>
+                    </thead>
+                    <tbody id="edges-tbody">
+                      <!-- 動的生成 -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Validation Results -->
+              <div id="validation-tab" class="tab-content">
+                <div id="validation-results" class="validation-box">
+                  <!-- 動的生成 -->
+                </div>
+              </div>
+
+              <div class="workflow-actions">
+                <button type="button" id="btn-save-as-template" class="btn btn-secondary">
+                  <span>💾 テンプレートとして保存</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="dag-empty" class="empty-state">
+              <div class="empty-icon">📋</div>
+              <p>業務フローを生成するとここにプレビューが表示されます</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Wave28: Template Catalog Section -->
+    <section id="template-catalog" class="template-section" aria-labelledby="template-heading">
+      <div class="container">
+        <div class="section-title">テンプレートカタログ</div>
+        <h2 id="template-heading" class="section-heading">ワークフロー実績テンプレート</h2>
+
+        <div class="template-search-box">
+          <div class="form-group">
+            <label for="template-search-input" class="form-label">テンプレート検索</label>
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                id="template-search-input"
+                class="form-input"
+                placeholder="キーワードやカテゴリで検索..."
+              />
+              <button type="button" id="btn-template-search" class="btn btn-secondary">
+                🔍 検索
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="template-loading" class="loading-spinner" style="display: none;">
+          <div class="spinner"></div>
+          <p>テンプレートを読込中...</p>
+        </div>
+
+        <div id="template-error" class="alert alert-error" style="display: none;"></div>
+
+        <div id="template-list" class="template-grid">
+          <!-- テンプレート一覧は動的生成 -->
+        </div>
+
+        <div id="template-empty" class="empty-state" style="display: none;">
+          <div class="empty-icon">📚</div>
+          <p>利用可能なテンプレートがまだありません</p>
+        </div>
+      </div>
+    </section>
+
     <!-- Features Section -->
     <section id="features" class="features" aria-labelledby="features-heading">
       <div class="container">
@@ -1305,5 +1914,369 @@
     });
   </script>
   <script src="/js/onboarding.js"></script>
+
+  <!-- Wave28: Workflow Auto-Generation Script -->
+  <script>
+    // ========== Workflow Auto-Generation ==========
+    const workflowForm = document.getElementById('workflow-autogen-form');
+    const workflowDescription = document.getElementById('workflow-description');
+    const autogenLoading = document.getElementById('autogen-loading');
+    const autogenError = document.getElementById('autogen-error');
+    const dagPreview = document.getElementById('dag-preview');
+    const dagEmpty = document.getElementById('dag-empty');
+    const nodesTbody = document.getElementById('nodes-tbody');
+    const edgesTbody = document.getElementById('edges-tbody');
+    const validationResults = document.getElementById('validation-results');
+    const btnSaveAsTemplate = document.getElementById('btn-save-as-template');
+
+    // Tab switching
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tabName = btn.getAttribute('data-tab');
+
+        // Remove active state from all buttons and contents
+        tabBtns.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.remove('active'));
+
+        // Add active state to clicked button and corresponding content
+        btn.classList.add('active');
+        document.getElementById(tabName).classList.add('active');
+      });
+    });
+
+    // Form submission - Auto-generate workflow
+    workflowForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const description = workflowDescription.value.trim();
+      if (!description) {
+        showError(autogenError, 'フロー説明を入力してください');
+        return;
+      }
+
+      autogenError.style.display = 'none';
+      autogenLoading.style.display = 'flex';
+      dagPreview.style.display = 'none';
+      dagEmpty.style.display = 'none';
+
+      try {
+        // Call auto-generate API
+        const response = await fetch('/api/v1/workflows/auto-generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            description: description,
+            category: document.getElementById('workflow-template-category').value || undefined,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'ワークフロー生成に失敗しました');
+        }
+
+        const data = await response.json();
+
+        // Validate DAG
+        const validationResponse = await fetch('/api/v1/workflows/validate-dag', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data.dag),
+        });
+
+        const validationData = await validationResponse.json();
+
+        // Store current DAG for template saving
+        window.currentWorkflowDAG = data.dag;
+        window.currentWorkflowDescription = description;
+
+        // Display results
+        displayDAGPreview(data.dag, validationData);
+        dagPreview.style.display = 'block';
+        dagEmpty.style.display = 'none';
+
+      } catch (error) {
+        console.error('Error:', error);
+        showError(autogenError, error.message);
+      } finally {
+        autogenLoading.style.display = 'none';
+      }
+    });
+
+    function displayDAGPreview(dag, validation) {
+      // Clear existing rows
+      nodesTbody.innerHTML = '';
+      edgesTbody.innerHTML = '';
+
+      // Display nodes
+      if (dag.nodes && dag.nodes.length > 0) {
+        dag.nodes.forEach(node => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${escapeHtml(node.task_id)}</td>
+            <td>${escapeHtml(node.name)}</td>
+            <td>${escapeHtml(node.type || '-')}</td>
+            <td>${node.estimated_duration_minutes ? node.estimated_duration_minutes + ' 分' : '-'}</td>
+          `;
+          nodesTbody.appendChild(row);
+        });
+      }
+
+      // Display edges
+      if (dag.edges && dag.edges.length > 0) {
+        dag.edges.forEach(edge => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${escapeHtml(edge.from)}</td>
+            <td>${escapeHtml(edge.to)}</td>
+            <td>${escapeHtml(edge.relationship_type || 'sequential')}</td>
+          `;
+          edgesTbody.appendChild(row);
+        });
+      }
+
+      // Display validation results
+      validationResults.innerHTML = '';
+      if (validation) {
+        const statusClass = validation.is_valid ? 'valid' : 'error';
+        const statusText = validation.is_valid ? 'バリデーション成功' : 'バリデーション失敗';
+
+        const validationDiv = document.createElement('div');
+        validationDiv.innerHTML = `
+          <div class="validation-item">
+            <span class="validation-status ${statusClass}">${statusText}</span>
+            <div class="validation-message">
+              ${validation.is_valid ? '✓ DAG の構造は正しいです' : '✗ DAG に問題があります'}
+            </div>
+          </div>
+        `;
+
+        if (validation.errors && validation.errors.length > 0) {
+          validation.errors.forEach(error => {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'validation-item';
+            errorDiv.innerHTML = `
+              <span class="validation-status error">エラー</span>
+              <div class="validation-message">${escapeHtml(error)}</div>
+            `;
+            validationDiv.appendChild(errorDiv);
+          });
+        }
+
+        if (validation.warnings && validation.warnings.length > 0) {
+          validation.warnings.forEach(warning => {
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'validation-item';
+            warningDiv.innerHTML = `
+              <span class="validation-status warning">警告</span>
+              <div class="validation-message">${escapeHtml(warning)}</div>
+            `;
+            validationDiv.appendChild(warningDiv);
+          });
+        }
+
+        validationResults.appendChild(validationDiv);
+      }
+    }
+
+    // Save as template
+    btnSaveAsTemplate.addEventListener('click', async () => {
+      if (!window.currentWorkflowDAG) {
+        showError(autogenError, 'まずワークフローを生成してください');
+        return;
+      }
+
+      const templateName = prompt('テンプレート名を入力してください:');
+      if (!templateName) return;
+
+      autogenError.style.display = 'none';
+      autogenLoading.style.display = 'flex';
+
+      try {
+        const response = await fetch('/api/v1/templates', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: templateName,
+            description: window.currentWorkflowDescription,
+            category: document.getElementById('workflow-template-category').value || 'other',
+            dag: window.currentWorkflowDAG,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'テンプレート保存に失敗しました');
+        }
+
+        const result = await response.json();
+        showSuccess(autogenError, `テンプレート「${templateName}」を保存しました！`);
+
+        // Reload template list
+        loadTemplateList();
+
+      } catch (error) {
+        console.error('Error:', error);
+        showError(autogenError, error.message);
+      } finally {
+        autogenLoading.style.display = 'none';
+      }
+    });
+
+    // ========== Template Catalog ==========
+    const templateSearchInput = document.getElementById('template-search-input');
+    const btnTemplateSearch = document.getElementById('btn-template-search');
+    const templateList = document.getElementById('template-list');
+    const templateLoading = document.getElementById('template-loading');
+    const templateError = document.getElementById('template-error');
+    const templateEmpty = document.getElementById('template-empty');
+
+    // Load templates on page load
+    loadTemplateList();
+
+    // Search templates
+    btnTemplateSearch.addEventListener('click', () => {
+      loadTemplateList(templateSearchInput.value);
+    });
+
+    templateSearchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        loadTemplateList(templateSearchInput.value);
+      }
+    });
+
+    async function loadTemplateList(query = '') {
+      templateError.style.display = 'none';
+      templateLoading.style.display = 'flex';
+      templateList.innerHTML = '';
+      templateEmpty.style.display = 'none';
+
+      try {
+        let url = '/api/v1/templates';
+        if (query) {
+          url += `?q=${encodeURIComponent(query)}`;
+        }
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error('テンプレート一覧の取得に失敗しました');
+        }
+
+        const templates = await response.json();
+
+        if (templates.length === 0) {
+          templateEmpty.style.display = 'block';
+        } else {
+          displayTemplates(templates);
+        }
+
+      } catch (error) {
+        console.error('Error:', error);
+        showError(templateError, error.message);
+      } finally {
+        templateLoading.style.display = 'none';
+      }
+    }
+
+    function displayTemplates(templates) {
+      templateList.innerHTML = '';
+
+      templates.forEach(template => {
+        const card = document.createElement('div');
+        card.className = 'template-card';
+        card.innerHTML = `
+          <div class="template-header">
+            <h3 class="template-name">${escapeHtml(template.name)}</h3>
+            <span class="template-category">${escapeHtml(template.category)}</span>
+          </div>
+          <p class="template-description">${escapeHtml(template.description)}</p>
+          <div class="template-stats">
+            <span class="template-stat">
+              使用回数: <span class="template-stat-value">${template.usage_count || 0}</span>
+            </span>
+          </div>
+          <div class="template-actions">
+            <button type="button" class="btn btn-primary btn-sm btn-instantiate" data-template-id="${template.id}">
+              ✨ インスタンス化
+            </button>
+          </div>
+        `;
+
+        const instantiateBtn = card.querySelector('.btn-instantiate');
+        instantiateBtn.addEventListener('click', () => {
+          instantiateTemplate(template.id, template.name);
+        });
+
+        templateList.appendChild(card);
+      });
+    }
+
+    async function instantiateTemplate(templateId, templateName) {
+      templateError.style.display = 'none';
+      templateLoading.style.display = 'flex';
+
+      try {
+        const response = await fetch(`/api/v1/templates/${templateId}/instantiate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'ワークフローの作成に失敗しました');
+        }
+
+        const result = await response.json();
+        showSuccess(templateError, `ワークフロー「${templateName}」をインスタンス化しました！`);
+
+        // Optionally redirect to workflow details page
+        if (result.workflow_id) {
+          setTimeout(() => {
+            window.location.href = `/workflows/${result.workflow_id}`;
+          }, 1000);
+        }
+
+      } catch (error) {
+        console.error('Error:', error);
+        showError(templateError, error.message);
+      } finally {
+        templateLoading.style.display = 'none';
+      }
+    }
+
+    // ========== Utility Functions ==========
+    function showError(container, message) {
+      container.className = 'alert alert-error';
+      container.textContent = '❌ ' + message;
+      container.style.display = 'block';
+      window.scrollTo({ top: container.offsetTop - 100, behavior: 'smooth' });
+    }
+
+    function showSuccess(container, message) {
+      container.className = 'alert alert-success';
+      container.textContent = '✓ ' + message;
+      container.style.display = 'block';
+      window.scrollTo({ top: container.offsetTop - 100, behavior: 'smooth' });
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
 </body>
 </html>
