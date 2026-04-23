@@ -11,13 +11,16 @@
 ## 目次
 
 1. [概要](#概要)
-2. [Claude API 連携仕様](#claude-api-連携仕様)
-3. [REST API 設計](#rest-api-設計)
-4. [リクエスト・レスポンス仕様](#リクエストレスポンス仕様)
-5. [KuzuDB グラフスキーマ](#kuzudb-グラフスキーマ)
-6. [SQLite スキーマ拡張](#sqlite-スキーマ拡張)
-7. [バリデーション・エラーハンドリング](#バリデーションエラーハンドリング)
-8. [実装例](#実装例)
+2. [自然言語入力インターフェース](#自然言語入力インターフェース)
+3. [内部DAGスキーマ](#内部dagスキーマ)
+4. [Claude API 連携仕様](#claude-api-連携仕様)
+5. [REST API 設計](#rest-api-設計)
+6. [テンプレート参照I/F](#テンプレート参照if)
+7. [API仕様](#api仕様)
+8. [KuzuDB グラフスキーマ](#kuzudb-グラフスキーマ)
+9. [SQLite スキーマ拡張](#sqlite-スキーマ拡張)
+10. [エラーハンドリング・バリデーション](#エラーハンドリングバリデーション)
+11. [実装例](#実装例)
 
 ---
 
@@ -50,6 +53,119 @@ KuzuDB グラフマップ（可視化・解析）
 - ✅ ノード属性の推定（期間推定、優先度推定）
 - ✅ グラフの妥当性検証（単一開始点・終了点）
 - ✅ エラーメッセージの自然言語フィードバック
+
+---
+
+## 自然言語入力インターフェース
+
+### 入力形式・制約
+
+**入力テキストの仕様:**
+- **最小長**: 10文字以上
+- **最大長**: 10,000文字
+- **言語**: 日本語・英語に対応
+- **形式**: 自由形式テキスト（段落・箇条書き・表形式）
+
+**推奨入力パターン:**
+
+```
+【フロー名】
+プロダクトローンチフロー
+
+【概要】
+新機能をリリースするための標準的なフロー。
+要件定義から本番リリースまでの全プロセス。
+
+【詳細】
+1. 要件定義（PM）- 3営業日
+2. 設計・アーキテクチャ（Tech Lead）- 5営業日
+3. 実装（Engineer）- 10営業日
+4. テスト・品質保証（QA）- 5営業日
+5. ステージング環境デプロイ（DevOps）- 1営業日
+6. 本番リリース（DevOps）- 1営業日
+```
+
+**入力テキストの解析ポイント:**
+- フェーズ名・タスク名の自動抽出
+- 依存関係の推定（「の後に」「前に」「完了後」キーワード）
+- 所要時間の推定（数値＋時間単位の抽出）
+- 優先度の推定（重要度キーワード）
+- ロール/担当者の推定（職種キーワード）
+
+---
+
+## 内部DAGスキーマ
+
+### ノード定義（詳細）
+
+```json
+{
+  "task_id": "t001",
+  "name": "要件定義",
+  "type": "task",
+  "description": "プロダクト要件・スコープ確定",
+  "estimated_duration_minutes": 480,
+  "priority": "high",
+  "role_hint": "pm",
+  
+  // 追加属性
+  "source_text": "要件定義（PM）- 3営業日",
+  "confidence_score": 0.95,
+  "extracted_duration_original": "3営業日",
+  "extracted_from_line": 5,
+  "role_confidence": 0.98,
+  "priority_signals": ["重要", "最初"],
+  "phase_key": "planning"
+}
+```
+
+### エッジ定義（詳細）
+
+```json
+{
+  "from": "t001",
+  "to": "t002",
+  "type": "depends_on",
+  "condition": null,
+  
+  // 追加属性
+  "dependency_reason": "自然言語から推定：『の後に』",
+  "inferred_from": "設計・アーキテクチャ（Tech Lead）- 5営業日 は 要件定義（PM）の後に実行",
+  "confidence_score": 0.92,
+  "parallel_possible": false
+}
+```
+
+### DAG 構造の正規化
+
+**正規化ルール:**
+1. **ノードID の生成**: `t{001, 002, ...}` 形式で連番付与
+2. **重複排除**: 同一名のノードを検出・マージ
+3. **推移的閉包**: 明示的エッジから暗黙的エッジを検出
+4. **レベル割り当て**: トポロジカルソート → layer 属性を付与
+
+**正規化後の構造:**
+```json
+{
+  "nodes": [
+    {
+      "task_id": "t001",
+      "layer": 0,  // グラフレベル
+      "level": 1,  // トポロジカルレベル
+      "critical": true,  // クリティカルパス上
+      ...
+    }
+  ],
+  "edges": [...],
+  "metadata": {
+    "node_count": 5,
+    "edge_count": 6,
+    "max_depth": 4,
+    "critical_path_duration": 4320,
+    "is_normalized": true
+  }
+}
+```
 
 ---
 
@@ -295,6 +411,117 @@ Request:
     }
   }
 }
+```
+
+---
+
+## テンプレート参照I/F
+
+### テンプレートベース DAG 生成 API
+
+**目的**: 既存のワークフローテンプレートを参照して、ユーザー入力を該当テンプレートにマッピング。
+
+```http
+POST /api/v1/workflows/auto-generate-from-template
+Content-Type: application/json
+Authorization: Bearer {token}
+
+Request:
+{
+  "organization_id": "string",
+  "natural_language_input": "string",
+  "template_id": "integer (optional)",
+  "auto_match_template": boolean (default: true),
+  "options": {
+    "model": "claude-opus-4-7|claude-sonnet-4-6"
+  }
+}
+```
+
+**レスポンス** (200 OK):
+
+```json
+{
+  "success": true,
+  "data": {
+    "generation_id": "autogen-20260424-uuid",
+    "matched_template": {
+      "template_id": 1,
+      "name": "Product Launch",
+      "match_score": 0.87,
+      "match_reason": "自然言語入力の『プロダクトローンチ』がテンプレート名と一致"
+    },
+    "workflow": {
+      "name": "新機能ローンチ2026Q2",
+      "nodes": [...],
+      "edges": [...]
+    },
+    "customizations": {
+      "added_nodes": ["t004_extra_qa"],
+      "modified_nodes": ["t001_duration_extended"],
+      "removed_nodes": []
+    }
+  }
+}
+```
+
+### テンプレートマッピング戦略
+
+**マッチング方式:**
+1. **キーワード照合**: 入力テキストのキーワード ⟷ テンプレート名・説明
+2. **セマンティック類似度**: ベクトル埋め込みで意味的相似性を計算
+3. **構造的マッピング**: フェーズ数・タスク数・依存関係パターン
+4. **信頼度スコア**: 0.0～1.0 の数値で マッチ品質を定量化
+
+---
+
+## API仕様
+
+### エンドポイント一覧
+
+| メソッド | エンドポイント | 説明 | 認証 |
+|--------|--------|------|------|
+| `POST` | `/api/v1/workflows/auto-generate` | 自然言語 → DAG 変換 | ✅ Bearer |
+| `POST` | `/api/v1/workflows/auto-generate-from-template` | テンプレート参照で生成 | ✅ Bearer |
+| `POST` | `/api/v1/workflows/validate-dag` | DAG バリデーション | ✅ Bearer |
+| `POST` | `/api/v1/workflows/auto-fix-dag` | DAG 自動修正 | ✅ Bearer |
+| `GET` | `/api/v1/workflows/autogen-history/{generation_id}` | 生成履歴取得 | ✅ Bearer |
+| `PUT` | `/api/v1/workflows/autogen-history/{generation_id}` | 生成結果の承認/却下 | ✅ Bearer |
+
+### 認証・認可
+
+**認証方式**: OAuth 2.0 Bearer Token
+
+```http
+Authorization: Bearer {access_token}
+```
+
+**スコープ:**
+- `workflow:read` — ワークフロー読み取り
+- `workflow:write` — ワークフロー作成・更新
+- `workflow:autogen` — 自動生成実行
+
+### レート制限
+
+| リソース | 制限 | リセット周期 |
+|--------|------|----------|
+| `/auto-generate` | 100リクエスト/日 | UTC 00:00 |
+| `/validate-dag` | 1000リクエスト/日 | UTC 00:00 |
+| 全体 | 10,000トークン/日 | UTC 00:00 |
+
+### キャッシング戦略
+
+**キャッシュ対象:**
+- 入力テキスト（256字以上）→ 7日間キャッシュ
+- テンプレートマッピング結果 → 30日間キャッシュ
+- バリデーション結果 → 1日間キャッシュ
+
+**キャッシュキー生成:**
+```python
+import hashlib
+cache_key = hashlib.sha256(
+  f"{user_id}:{organization_id}:{input_hash}".encode()
+).hexdigest()
 ```
 
 ---
@@ -637,7 +864,29 @@ CREATE INDEX idx_autogen_history_status ON autogen_history(status);
 
 ---
 
-## バリデーション・エラーハンドリング
+## エラーハンドリング・バリデーション
+
+### バリデーション層（多層防御）
+
+**レイヤー 1: 入力バリデーション**
+```
+自然言語入力 → 長さチェック → 文字エンコーディング確認 → 禁止キーワード検出
+```
+
+**レイヤー 2: Claude API レスポンスバリデーション**
+```
+JSON デコード → スキーマ検証 → 必須フィールド確認 → データ型チェック
+```
+
+**レイヤー 3: DAG 構造バリデーション**
+```
+ノード重複チェック → エッジ参照チェック → 循環参照検出 → グラフ接続性チェック
+```
+
+**レイヤー 4: ビジネスロジックバリデーション**
+```
+組織権限チェック → テンプレート互換性確認 → リソース容量チェック
+```
 
 ### エラーコード一覧
 

@@ -63,3 +63,39 @@ class Template:
     updated_by: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+# ===== Template Catalog & Matching =====
+
+@dataclass
+class TemplateMetadata:
+    """Template metadata for catalog"""
+    template_id: int
+    name: str
+    description: str | None = None
+    category: str | None = None
+    usage_count: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+@dataclass
+class TemplateMatch:
+    """Template matching result with score"""
+    template_id: int
+    name: str
+    match_score: float  # 0.0 ~ 1.0
+    match_reason: str
+    matched_fields: list[str] = field(default_factory=list)
+
+
+# ===== Exceptions =====
+
+class TemplateNotFoundError(Exception):
+    """Template not found"""
+    pass
+
+
+class TemplateValidationError(Exception):
+    """Template validation error"""
+    pass
