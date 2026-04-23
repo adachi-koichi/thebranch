@@ -1576,6 +1576,7 @@
   <button class="tab-btn" data-tab="org-tree">組織ツリー</button>
   <button class="tab-btn" data-tab="team-dynamics">👥 チームダイナミクス</button>
   <button class="tab-btn" data-tab="learning-history">📚 学習履歴</button>
+  <button class="tab-btn" data-tab="resource-management">⚙️ リソース管理</button>
 </nav>
 
 <!-- Main -->
@@ -2540,6 +2541,69 @@
         <h3 style="margin:0 0 12px 0;font-size:14px;">最近の学習パターン</h3>
         <div id="learningPatternsList" style="max-height:600px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
           <div style="padding:20px;text-align:center;color:var(--text-muted);">読み込み中...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resource Management Tab Panel -->
+  <div class="tab-panel" id="tab-resource-management" style="display:none;">
+    <div style="padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h2 style="margin:0;">⚙️ リソース管理・最適配分</h2>
+        <div style="display:flex;gap:8px;">
+          <button onclick="refreshResources()" style="padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;">更新</button>
+          <button onclick="openResourceRequestModal()" style="padding:8px 16px;background:var(--green);color:white;border:none;border-radius:6px;cursor:pointer;">📥 要求</button>
+        </div>
+      </div>
+
+      <!-- Resource Summary -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px;">
+        <div style="padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text-muted);">リソースタイプ数</div>
+          <div style="font-size:24px;font-weight:600;margin-top:8px;" id="resourceTypeCount">—</div>
+        </div>
+        <div style="padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text-muted);">配分要求中</div>
+          <div style="font-size:24px;font-weight:600;margin-top:8px;" id="pendingRequestCount">—</div>
+        </div>
+        <div style="padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text-muted);">アクティブ配分</div>
+          <div style="font-size:24px;font-weight:600;margin-top:8px;" id="activeAllocationCount">—</div>
+        </div>
+        <div style="padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text-muted);">平均利用率</div>
+          <div style="font-size:24px;font-weight:600;margin-top:8px;" id="avgUtilization">—</div>
+        </div>
+      </div>
+
+      <!-- Tabs for Resource Details -->
+      <div style="margin-top:20px;">
+        <div style="display:flex;gap:8px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+          <button onclick="showResourceTab('overview')" id="resourceOverviewBtn" style="padding:10px 16px;background:transparent;border:none;border-bottom:2px solid var(--accent);cursor:pointer;font-weight:600;">リソース一覧</button>
+          <button onclick="showResourceTab('requests')" id="resourceRequestsBtn" style="padding:10px 16px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--text-muted);">要求履歴</button>
+          <button onclick="showResourceTab('allocations')" id="resourceAllocationsBtn" style="padding:10px 16px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--text-muted);">配分状況</button>
+        </div>
+
+        <!-- Resource Overview -->
+        <div id="resourceOverviewPanel" style="display:block;">
+          <div id="resourcesList" style="max-height:500px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+            <div style="padding:20px;text-align:center;color:var(--text-muted);">読み込み中...</div>
+          </div>
+        </div>
+
+        <!-- Resource Requests -->
+        <div id="resourceRequestsPanel" style="display:none;">
+          <div id="requestsList" style="max-height:500px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+            <div style="padding:20px;text-align:center;color:var(--text-muted);">読み込み中...</div>
+          </div>
+        </div>
+
+        <!-- Resource Allocations -->
+        <div id="resourceAllocationsPanel" style="display:none;">
+          <div id="allocationsList" style="max-height:500px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+            <div style="padding:20px;text-align:center;color:var(--text-muted);">読み込み中...</div>
+          </div>
         </div>
       </div>
     </div>
@@ -8574,6 +8638,203 @@ function refreshLearningPatterns() {
   loadLearningPatterns();
 }
 
+// Resource Management Functions
+async function loadResources() {
+  try {
+    const response = await fetch('/api/resources/');
+    const data = await response.json();
+
+    if (data.success && data.resources) {
+      const resourcesByDept = {};
+      data.resources.forEach(r => {
+        if (!resourcesByDept[r.department_id]) {
+          resourcesByDept[r.department_id] = [];
+        }
+        resourcesByDept[r.department_id].push(r);
+      });
+
+      const html = Object.entries(resourcesByDept).map(([deptId, resources]) => {
+        const utilized = resources.reduce((sum, r) => sum + r.current_used, 0);
+        const total = resources.reduce((sum, r) => sum + r.total_allocated, 0);
+        const utilizationPercent = total > 0 ? ((utilized / total) * 100).toFixed(1) : '0';
+
+        return `
+          <div style="padding:12px;border-bottom:1px solid var(--border);background:var(--bg);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <strong>部署 ID: ${deptId}</strong>
+              <span style="font-size:12px;color:var(--text-muted);">${resources.length} リソースタイプ</span>
+            </div>
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">
+              ${resources.map(r => {
+                const available = r.total_allocated - r.current_used - r.reserved;
+                const utilizationRate = ((r.current_used / r.total_allocated) * 100).toFixed(1);
+                return `
+                  <div style="display:grid;grid-template-columns:1fr 2fr 2fr;gap:12px;padding:6px 0;font-size:12px;">
+                    <div><strong>${r.resource_type}</strong></div>
+                    <div>
+                      配分: ${r.total_allocated} ${r.unit}
+                      | 使用: ${r.current_used}
+                      | 予約: ${r.reserved}
+                      | 利用可: ${available}
+                    </div>
+                    <div style="background:var(--card);padding:4px 8px;border-radius:4px;">
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="width:100px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+                          <div style="width:${utilizationRate}%;height:100%;background:var(--accent);"></div>
+                        </div>
+                        <span style="font-size:11px;">${utilizationRate}%</span>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('resourcesList').innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text-muted);">リソースなし</div>';
+      document.getElementById('resourceTypeCount').textContent = data.count;
+    }
+  } catch (e) {
+    console.error('Failed to load resources:', e);
+    document.getElementById('resourcesList').innerHTML = '<div style="padding:20px;text-align:center;color:var(--red);">読み込みエラー</div>';
+  }
+}
+
+function openResourceRequestModal() {
+  const html = `
+    <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;min-width:400px;max-width:500px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h3 style="margin:0;">リソース要求</h3>
+        <button onclick="this.closest('[data-modal]').remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;">&times;</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <label style="font-size:13px;color:var(--text-muted);">部署 ID</label>
+          <input id="reqDeptId" type="number" placeholder="部署ID" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;">
+        </div>
+        <div>
+          <label style="font-size:13px;color:var(--text-muted);">リソースタイプ</label>
+          <input id="reqResourceType" type="text" placeholder="cpu, memory, threads, api_calls等" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;">
+        </div>
+        <div>
+          <label style="font-size:13px;color:var(--text-muted);">要求量</label>
+          <input id="reqAmount" type="number" placeholder="数量" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;">
+        </div>
+        <div>
+          <label style="font-size:13px;color:var(--text-muted);">理由（オプション）</label>
+          <textarea id="reqReason" placeholder="要求理由" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;min-height:80px;"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button onclick="submitResourceRequest()" style="flex:1;padding:10px;background:var(--green);color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;">送信</button>
+          <button onclick="this.closest('[data-modal]').remove()" style="flex:1;padding:10px;background:var(--border);color:var(--text);border:none;border-radius:6px;cursor:pointer;font-weight:600;">キャンセル</button>
+        </div>
+      </div>
+    </div>
+  `;
+  const modal = document.createElement('div');
+  modal.setAttribute('data-modal', 'true');
+  modal.innerHTML = html;
+  document.body.appendChild(modal);
+}
+
+async function submitResourceRequest() {
+  const deptId = document.getElementById('reqDeptId').value;
+  const resourceType = document.getElementById('reqResourceType').value;
+  const amount = document.getElementById('reqAmount').value;
+  const reason = document.getElementById('reqReason').value;
+
+  if (!deptId || !resourceType || !amount) {
+    alert('必須項目を入力してください');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/resources/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        department_id: parseInt(deptId),
+        resource_type: resourceType,
+        required_amount: parseInt(amount),
+        reason: reason || null
+      })
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      alert(`要求ID: ${data.resource_request_id} で送信されました`);
+      document.querySelector('[data-modal]').remove();
+      loadResources();
+      loadResourceRequests();
+    } else {
+      alert('エラー: ' + (data.detail || '不明なエラー'));
+    }
+  } catch (e) {
+    console.error('Failed to submit request:', e);
+    alert('送信に失敗しました');
+  }
+}
+
+async function loadResourceRequests() {
+  try {
+    // Note: We'd need an endpoint to get all requests
+    // For now, this shows the structure
+    document.getElementById('requestsList').innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">リクエスト履歴データを取得中...</div>';
+  } catch (e) {
+    console.error('Failed to load requests:', e);
+  }
+}
+
+async function loadResourceAllocations() {
+  try {
+    // Note: We'd need an endpoint to get all allocations
+    document.getElementById('allocationsList').innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">配分データを取得中...</div>';
+  } catch (e) {
+    console.error('Failed to load allocations:', e);
+  }
+}
+
+function showResourceTab(tabName) {
+  // Hide all panels
+  document.getElementById('resourceOverviewPanel').style.display = 'none';
+  document.getElementById('resourceRequestsPanel').style.display = 'none';
+  document.getElementById('resourceAllocationsPanel').style.display = 'none';
+
+  // Reset button styles
+  document.getElementById('resourceOverviewBtn').style.borderBottom = '2px solid transparent';
+  document.getElementById('resourceRequestsBtn').style.borderBottom = '2px solid transparent';
+  document.getElementById('resourceAllocationsBtn').style.borderBottom = '2px solid transparent';
+  document.getElementById('resourceOverviewBtn').style.color = 'var(--text-muted)';
+  document.getElementById('resourceRequestsBtn').style.color = 'var(--text-muted)';
+  document.getElementById('resourceAllocationsBtn').style.color = 'var(--text-muted)';
+
+  // Show selected panel
+  if (tabName === 'overview') {
+    document.getElementById('resourceOverviewPanel').style.display = 'block';
+    document.getElementById('resourceOverviewBtn').style.borderBottom = '2px solid var(--accent)';
+    document.getElementById('resourceOverviewBtn').style.color = 'var(--text)';
+    loadResources();
+  } else if (tabName === 'requests') {
+    document.getElementById('resourceRequestsPanel').style.display = 'block';
+    document.getElementById('resourceRequestsBtn').style.borderBottom = '2px solid var(--accent)';
+    document.getElementById('resourceRequestsBtn').style.color = 'var(--text)';
+    loadResourceRequests();
+  } else if (tabName === 'allocations') {
+    document.getElementById('resourceAllocationsPanel').style.display = 'block';
+    document.getElementById('resourceAllocationsBtn').style.borderBottom = '2px solid var(--accent)';
+    document.getElementById('resourceAllocationsBtn').style.color = 'var(--text)';
+    loadResourceAllocations();
+  }
+}
+
+function refreshResources() {
+  loadResources();
+  loadResourceRequests();
+  loadResourceAllocations();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   teamDynamicsModule.init();
 
@@ -8581,6 +8842,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const learningTab = document.querySelector('[data-tab="learning-history"]');
   if (learningTab) {
     learningTab.addEventListener('click', loadLearningPatterns);
+  }
+
+  // Add resource management tab click handler
+  const resourceTab = document.querySelector('[data-tab="resource-management"]');
+  if (resourceTab) {
+    resourceTab.addEventListener('click', refreshResources);
   }
 });
 </script>
