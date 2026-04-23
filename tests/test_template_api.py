@@ -544,7 +544,9 @@ class TestResponseFormat:
             json={
                 "name": "Test Template",
                 "description": "Test",
-                "nodes": [],
+                "nodes": [
+                    {"task_id": "t1", "name": "Task", "type": "task"}
+                ],
                 "edges": []
             },
             headers=auth_header

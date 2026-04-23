@@ -216,8 +216,9 @@ async def list_templates(
     Returns paginated list of template summaries.
     """
     try:
-        # Get templates from service
-        templates = service.list_templates(category=category, page=page, limit=limit)
+        # Get all templates from service (without pagination first to apply search)
+        # Use large limit to get all templates for client-side pagination
+        templates = service.list_templates(category=category, page=1, limit=10000)
 
         # Apply search filter if provided
         if search_q:
@@ -228,8 +229,14 @@ async def list_templates(
                    search_lower in (t.description or "").lower()
             ]
 
+        # Calculate total count before pagination
         total_count = len(templates)
         total_pages = (total_count + limit - 1) // limit
+
+        # Apply pagination after search and filtering
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
+        paginated_templates = templates[start_idx:end_idx]
 
         log_api_event("TEMPLATES_LISTED", {
             "category": category,
@@ -238,6 +245,14 @@ async def list_templates(
             "page": page,
             "user_id": current_user["user_id"],
         })
+
+        # Helper function to convert datetime to ISO format string
+        def to_iso_format(dt):
+            if dt is None:
+                return None
+            if hasattr(dt, 'isoformat'):
+                return dt.isoformat()
+            return str(dt)
 
         return {
             "success": True,
@@ -249,10 +264,10 @@ async def list_templates(
                         "description": t.description,
                         "category": t.category,
                         "usage_count": t.usage_count,
-                        "created_at": t.created_at.isoformat(),
-                        "updated_at": t.updated_at.isoformat(),
+                        "created_at": to_iso_format(t.created_at),
+                        "updated_at": to_iso_format(t.updated_at),
                     }
-                    for t in templates[(page-1)*limit:page*limit]
+                    for t in paginated_templates
                 ],
                 "pagination": {
                     "page": page,
@@ -356,8 +371,17 @@ async def update_template(
         log_api_event("TEMPLATE_UPDATED", {
             "template_id": template_id,
             "user_id": current_user["user_id"],
-            "fields_updated": [k for k, v in request.dict(exclude_unset=True).items() if v is not None],
+            "fields_updated": [k for k, v in request.model_dump(exclude_unset=True).items() if v is not None],
         })
+
+        # Handle both datetime and string formats
+        created_at = template_metadata.created_at
+        updated_at = template_metadata.updated_at
+
+        if hasattr(created_at, 'isoformat'):
+            created_at = created_at.isoformat()
+        if hasattr(updated_at, 'isoformat'):
+            updated_at = updated_at.isoformat()
 
         return {
             "success": True,
@@ -366,8 +390,8 @@ async def update_template(
                 "name": template_metadata.name,
                 "description": template_metadata.description,
                 "category": template_metadata.category,
-                "created_at": template_metadata.created_at.isoformat(),
-                "updated_at": template_metadata.updated_at.isoformat(),
+                "created_at": created_at,
+                "updated_at": updated_at,
                 "usage_count": template_metadata.usage_count,
             }
         }
