@@ -4473,6 +4473,117 @@ async def add_role(role_req: models.UserRoleCreate, authorization: Optional[str]
 
 
 # ──────────────────────────────────────────────
+# Onboarding (#2532)
+# ──────────────────────────────────────────────
+
+@app.get("/api/onboarding/status", response_model=models.OnboardingStatusResponse)
+async def get_onboarding_status(user: dict = Depends(get_current_user)):
+    """Get user's current onboarding status."""
+    try:
+        async with aiosqlite.connect(str(auth.DB_PATH)) as db:
+            db.row_factory = aiosqlite.Row
+
+            cursor = await db.execute(
+                "SELECT current_step, organization_type, department_choice FROM onboarding_state WHERE user_id = ? LIMIT 1",
+                (user["id"],)
+            )
+            state = await cursor.fetchone()
+
+            if not state:
+                state = {
+                    "current_step": 1,
+                    "organization_type": None,
+                    "department_choice": None
+                }
+
+            return models.OnboardingStatusResponse(
+                user_id=user["id"],
+                current_step=state["current_step"] if state else 1,
+                organization_type=state["organization_type"] if state else None,
+                department_choice=state["department_choice"] if state else None,
+                onboarding_completed=user.get("onboarding_completed", 0)
+            )
+    except Exception as e:
+        logger.error(f"Error fetching onboarding status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/step", response_model=models.OnboardingStateResponse)
+async def update_onboarding_step(req: models.OnboardingStateUpdate, user: dict = Depends(get_current_user)):
+    """Update onboarding step and save choices."""
+    try:
+        async with aiosqlite.connect(str(auth.DB_PATH)) as db:
+            db.row_factory = aiosqlite.Row
+
+            cursor = await db.execute(
+                "SELECT id FROM onboarding_state WHERE user_id = ? LIMIT 1",
+                (user["id"],)
+            )
+            existing = await cursor.fetchone()
+
+            if existing:
+                await db.execute(
+                    """UPDATE onboarding_state
+                       SET current_step = COALESCE(?, current_step), organization_type = COALESCE(?, organization_type), department_choice = COALESCE(?, department_choice), updated_at = ?
+                       WHERE user_id = ?""",
+                    (req.current_step, req.organization_type, req.department_choice, datetime.now().isoformat(), user["id"])
+                )
+            else:
+                await db.execute(
+                    """INSERT INTO onboarding_state
+                       (user_id, current_step, organization_type, department_choice, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (user["id"], req.current_step or 1, req.organization_type, req.department_choice, datetime.now().isoformat(), datetime.now().isoformat())
+                )
+            await db.commit()
+
+            cursor = await db.execute(
+                "SELECT id, user_id, current_step, organization_type, department_choice, created_at, updated_at FROM onboarding_state WHERE user_id = ? LIMIT 1",
+                (user["id"],)
+            )
+            state = await cursor.fetchone()
+
+            if state:
+                return models.OnboardingStateResponse(**dict(state))
+            raise HTTPException(status_code=500, detail="Failed to update state")
+    except Exception as e:
+        logger.error(f"Error updating onboarding step: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/complete", response_model=dict)
+async def complete_onboarding(user: dict = Depends(get_current_user)):
+    """Mark onboarding as completed."""
+    try:
+        async with aiosqlite.connect(str(auth.DB_PATH)) as db:
+            await db.execute(
+                "UPDATE users SET onboarding_completed = 1, updated_at = ? WHERE id = ?",
+                (datetime.now().isoformat(), user["id"])
+            )
+            await db.commit()
+            return {"ok": True, "message": "Onboarding completed"}
+    except Exception as e:
+        logger.error(f"Error completing onboarding: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/skip", response_model=dict)
+async def skip_onboarding(user: dict = Depends(get_current_user)):
+    """Skip onboarding."""
+    try:
+        async with aiosqlite.connect(str(auth.DB_PATH)) as db:
+            await db.execute(
+                "UPDATE users SET onboarding_completed = 1, updated_at = ? WHERE id = ?",
+                (datetime.now().isoformat(), user["id"])
+            )
+            await db.commit()
+            return {"ok": True, "message": "Onboarding skipped"}
+    except Exception as e:
+        logger.error(f"Error skipping onboarding: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
 # Departments (#2362) & Agents (#2391)
 # ──────────────────────────────────────────────
 

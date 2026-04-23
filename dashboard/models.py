@@ -74,6 +74,40 @@ class UserOnboardingProgressResponse(BaseModel):
     onboarding_completed: int = 0
 
 
+class OnboardingStateCreate(BaseModel):
+    user_id: str
+    current_step: int = 1
+    organization_type: Optional[str] = None
+    department_choice: Optional[str] = None
+
+
+class OnboardingStateUpdate(BaseModel):
+    current_step: Optional[int] = None
+    organization_type: Optional[str] = None
+    department_choice: Optional[str] = None
+
+
+class OnboardingStateResponse(BaseModel):
+    id: int
+    user_id: str
+    current_step: int
+    organization_type: Optional[str] = None
+    department_choice: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class OnboardingStatusResponse(BaseModel):
+    user_id: str
+    current_step: int
+    organization_type: Optional[str] = None
+    department_choice: Optional[str] = None
+    onboarding_completed: bool
+
+
 class AgentConfig(BaseModel):
     role: str
     tasks: str
