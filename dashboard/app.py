@@ -60,6 +60,82 @@ logger = logging.getLogger(__name__)
 
 THEBRANCH_DB = DASHBOARD_DIR / "data" / "thebranch.sqlite"
 
+# ──────────────────────────────────────────────
+# Zero Trust Authentication (Task #2755)
+# ──────────────────────────────────────────────
+
+async def verify_token_with_scope(authorization: Optional[str], required_scope: Optional[list] = None) -> tuple[Optional[str], Optional[list], Optional[str]]:
+    """
+    トークンを検証し、スコープをチェック。
+    Bearer {session_token} または APIトークン両方に対応。
+
+    Returns:
+        (user_id, scopes, token_type) or (None, None, None)
+    """
+    if not authorization:
+        return None, None, None
+
+    try:
+        # Bearer token (session token)
+        if authorization.startswith("Bearer "):
+            token = authorization[7:]
+            result = await auth.verify_token(token)
+            # verify_token returns (user_id, org_id) tuple
+            if isinstance(result, tuple):
+                user_id, org_id = result
+            else:
+                user_id = result
+                org_id = None
+
+            if user_id:
+                await auth.update_last_activity(token)
+                await auth.enforce_max_sessions(user_id, max_sessions=3)
+                return user_id, ["read", "write", "admin"], "session"
+            return None, None, None
+
+        # API token
+        token = authorization
+        result = await auth.verify_api_token_scope(token, required_scope or "read")
+        if result:
+            user_id, token_id, has_scope = result
+            if user_id and has_scope:
+                return user_id, [required_scope or "read"], "api_token"
+
+        return None, None, None
+    except Exception as e:
+        logger.error(f"Token verification error: {e}")
+        return None, None, None
+
+
+async def get_current_user_zero_trust(authorization: Optional[str] = Header(None)) -> dict:
+    """FastAPI dependency for zero trust authentication."""
+    user_id, scopes, token_type = await verify_token_with_scope(authorization)
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Fetch user details
+    async with aiosqlite.connect(str(auth.DB_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id, username, email, created_at, updated_at, COALESCE(onboarding_completed, 0) as onboarding_completed FROM users WHERE id = ?",
+            (user_id,),
+        )
+        user_row = await cursor.fetchone()
+        if not user_row:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        return {
+            "id": user_row["id"],
+            "username": user_row["username"],
+            "email": user_row["email"],
+            "created_at": user_row["created_at"],
+            "updated_at": user_row["updated_at"],
+            "onboarding_completed": user_row["onboarding_completed"],
+            "scopes": scopes,
+            "token_type": token_type,
+        }
+
 # SLA メトリクス計算エンジン
 sla_scheduler_task = None
 
@@ -302,7 +378,7 @@ async def root():
 # ──────────────────────────────────────────────
 
 @app.get("/api/ports")
-async def get_ports():
+async def get_ports(user: dict = Depends(get_current_user_zero_trust)):
     if not PORTS_YAML.exists():
         return {"reserved": [], "projects": {}}
     try:
@@ -318,7 +394,7 @@ async def get_ports():
 # ──────────────────────────────────────────────
 
 @app.get("/api/tasks")
-async def get_tasks(status: str = "", category: str = "", dir_filter: str = "", limit: int = 0):
+async def get_tasks(status: str = "", category: str = "", dir_filter: str = "", limit: int = 0, user: dict = Depends(get_current_user_zero_trust)):
     if not TASKS_DB.exists():
         return []
     async with aiosqlite.connect(str(TASKS_DB)) as db:
@@ -356,7 +432,7 @@ class CreateTaskRequest(BaseModel):
 
 
 @app.get("/api/workflow-templates")
-async def get_workflow_templates(status: str = ""):
+async def get_workflow_templates(status: str = "", user: dict = Depends(get_current_user_zero_trust)):
     """全ワークフローテンプレート一覧を JSON で返却"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -429,7 +505,7 @@ async def get_workflow_templates(status: str = ""):
 
 
 @app.get("/api/workflow-templates/{template_id}")
-async def get_workflow_template_detail(template_id: int):
+async def get_workflow_template_detail(template_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """ワークフローテンプレート詳細を JSON で返却"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -498,7 +574,7 @@ async def get_workflow_template_detail(template_id: int):
 
 
 @app.post("/api/tasks")
-async def create_task(req: CreateTaskRequest):
+async def create_task(req: CreateTaskRequest, user: dict = Depends(get_current_user_zero_trust)):
     cmd = [
         "python3", str(TASK_SCRIPT),
         "add", req.title,
@@ -518,7 +594,7 @@ class UpdateStatusRequest(BaseModel):
 
 
 @app.patch("/api/tasks/{task_id}/status")
-async def update_task_status(task_id: int, req: UpdateStatusRequest):
+async def update_task_status(task_id: int, req: UpdateStatusRequest, user: dict = Depends(get_current_user_zero_trust)):
     if req.status == "done":
         cmd = ["python3", str(TASK_SCRIPT), "done", str(task_id)]
     else:
@@ -537,7 +613,7 @@ class ReorderRequest(BaseModel):
     order: list[ReorderItem]
 
 @app.patch("/api/tasks/reorder")
-async def reorder_tasks(req: ReorderRequest):
+async def reorder_tasks(req: ReorderRequest, user: dict = Depends(get_current_user_zero_trust)):
     """ドラッグ&ドロップ並び替え後の優先度を一括更新する。"""
     if not req.order:
         return {"ok": True, "updated": 0}
@@ -552,7 +628,7 @@ async def reorder_tasks(req: ReorderRequest):
 
 
 @app.get("/api/dashboard/summary")
-async def get_dashboard_summary():
+async def get_dashboard_summary(user: dict = Depends(get_current_user_zero_trust)):
     """ダッシュボード統計まとめを返す。 (#459)
 
     Returns:
@@ -616,7 +692,7 @@ async def get_dashboard_summary():
 
 
 @app.get("/api/tasks/export")
-async def export_tasks(format: str = "json"):
+async def export_tasks(format: str = "json", user: dict = Depends(get_current_user_zero_trust)):
     """全タスクを CSV または JSON でエクスポートする。
 
     Query params:
@@ -666,7 +742,7 @@ async def export_tasks(format: str = "json"):
 
 
 @app.get("/api/tasks/stats")
-async def get_tasks_stats(days: int = 30):
+async def get_tasks_stats(days: int = 30, user: dict = Depends(get_current_user_zero_trust)):
     """ステータス別・カテゴリ別タスク統計と日別完了タスク数を返す (#439 #780)。
 
     Returns:
@@ -737,7 +813,7 @@ async def get_tasks_stats(days: int = 30):
 
 
 @app.get("/api/tasks/agent-performance")
-async def get_agent_performance():
+async def get_agent_performance(user: dict = Depends(get_current_user_zero_trust)):
     """エージェント別パフォーマンスランキングを返す (#337)。
 
     Returns:
@@ -813,7 +889,7 @@ class PatchTaskRequest(BaseModel):
 
 
 @app.patch("/api/tasks/{task_id}")
-async def patch_task(task_id: int, req: PatchTaskRequest):
+async def patch_task(task_id: int, req: PatchTaskRequest, user: dict = Depends(get_current_user_zero_trust)):
     """タスクのステータスを更新し、更新後のタスク JSON を返す (#442 #1111)。"""
     VALID_STATUSES = {"pending", "open", "in_progress", "completed", "done", "blocked"}
     if req.status not in VALID_STATUSES:
@@ -851,7 +927,7 @@ async def patch_task(task_id: int, req: PatchTaskRequest):
 # ──────────────────────────────────────────────
 
 @app.get("/api/department-templates")
-async def get_department_templates():
+async def get_department_templates(user: dict = Depends(get_current_user_zero_trust)):
     if not THEBRANCH_DB.exists():
         return []
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -865,7 +941,7 @@ async def get_department_templates():
 
 
 @app.get("/api/departments_templates/{template_id}")
-async def get_department_template_detail(template_id: int):
+async def get_department_template_detail(template_id: int, user: dict = Depends(get_current_user_zero_trust)):
     if not THEBRANCH_DB.exists():
         raise HTTPException(status_code=404, detail="Template not found")
 
@@ -906,7 +982,7 @@ async def get_department_template_detail(template_id: int):
 
 
 @app.post("/api/departments")
-async def create_department(request: models.DepartmentCreateRequest):
+async def create_department(request: models.DepartmentCreateRequest, user: dict = Depends(get_current_user_zero_trust)):
     if not THEBRANCH_DB.exists():
         raise HTTPException(status_code=500, detail="Database not found")
 
@@ -944,7 +1020,7 @@ async def create_department(request: models.DepartmentCreateRequest):
 
 
 @app.post("/api/customize_template")
-async def customize_template(request: models.CustomizeTemplateRequest):
+async def customize_template(request: models.CustomizeTemplateRequest, user: dict = Depends(get_current_user_zero_trust)):
     if not THEBRANCH_DB.exists():
         raise HTTPException(status_code=500, detail="Database not found")
 
@@ -1238,7 +1314,7 @@ async def get_agents_data() -> list:
 
 
 @app.get("/api/agents")
-async def get_agents():
+async def get_agents(user: dict = Depends(get_current_user_zero_trust)):
     return await get_agents_data()
 
 
@@ -1247,7 +1323,7 @@ class DelegateRequest(BaseModel):
 
 
 @app.put("/api/agents/{agent_id}/delegate")
-async def delegate_agent(agent_id: int, req: DelegateRequest):
+async def delegate_agent(agent_id: int, req: DelegateRequest, user: dict = Depends(get_current_user_zero_trust)):
     """エージェントのタスクを別のエージェントに委譲"""
     try:
         if not req.delegateToId:
@@ -1294,7 +1370,7 @@ async def agent_event_generator() -> AsyncGenerator[str, None]:
 
 
 @app.get("/api/stream")
-async def stream_agents():
+async def stream_agents(user: dict = Depends(get_current_user_zero_trust)):
     return StreamingResponse(
         agent_event_generator(),
         media_type="text/event-stream",
@@ -1309,7 +1385,7 @@ async def stream_agents():
 import socket as _socket
 
 @app.get("/api/projects")
-async def get_projects(status: str = "incomplete"):
+async def get_projects(status: str = "incomplete", user: dict = Depends(get_current_user_zero_trust)):
     """プロジェクト単位で agents + tasks + service status をまとめて返す"""
     agents = await get_agents_data()
 
@@ -1475,7 +1551,7 @@ def get_daemon_status(cfg):
 
 
 @app.get("/api/daemons")
-async def api_daemons():
+async def api_daemons(user: dict = Depends(get_current_user_zero_trust)):
     loop = asyncio.get_event_loop()
     results = await asyncio.gather(*[
         loop.run_in_executor(None, get_daemon_status, cfg)
@@ -1558,7 +1634,7 @@ def _list_panes() -> list[dict]:
 
 
 @app.get("/api/panes")
-async def get_panes():
+async def get_panes(user: dict = Depends(get_current_user_zero_trust)):
     """tmuxペイン状態をJSON形式で返す"""
     try:
         return _list_panes()
@@ -1571,7 +1647,7 @@ async def get_panes():
 # ──────────────────────────────────────────────
 
 @app.get("/api/workflows/instances")
-async def get_wf_instances(status: str = ""):
+async def get_wf_instances(status: str = "", user: dict = Depends(get_current_user_zero_trust)):
     if not TASKS_DB.exists():
         return []
     async with aiosqlite.connect(str(TASKS_DB)) as db:
@@ -1601,7 +1677,7 @@ async def get_wf_instances(status: str = ""):
 
 
 @app.get("/api/workflows/templates")
-async def get_wf_templates():
+async def get_wf_templates(user: dict = Depends(get_current_user_zero_trust)):
     if not TASKS_DB.exists():
         return []
     async with aiosqlite.connect(str(TASKS_DB)) as db:
@@ -1637,7 +1713,7 @@ SELF_IMPROVEMENT_REPORT = Path("/tmp/self_improvement_report.md")
 
 
 @app.get("/api/self-improvement")
-async def get_self_improvement():
+async def get_self_improvement(user: dict = Depends(get_current_user_zero_trust)):
     """自動改善提案レポートを返す"""
     if not SELF_IMPROVEMENT_REPORT.exists():
         result = subprocess.run(
@@ -1660,7 +1736,7 @@ async def get_self_improvement():
 # ──────────────────────────────────────────────
 
 @app.get("/api/sessions")
-async def get_sessions():
+async def get_sessions(user: dict = Depends(get_current_user_zero_trust)):
     """~/.claude/sessions/*.json からセッション一覧を返す"""
     sessions = []
     if not SESSIONS_DIR.exists():
@@ -1993,7 +2069,7 @@ def _extract_project_name(cwd: str) -> str:
 
 
 @app.get("/api/costs")
-async def get_costs():
+async def get_costs(user: dict = Depends(get_current_user_zero_trust)):
     if not SESSIONS_DIR.exists():
         return {"today_total": 0, "all_total": 0, "by_session": [], "by_project": [], "by_date": []}
 
@@ -2051,7 +2127,7 @@ async def get_costs():
 
 
 @app.get("/api/departments/{dept_id}/budget")
-async def get_budget_comparison(dept_id: int):
+async def get_budget_comparison(dept_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """Get budget vs cost comparison with alerts"""
     try:
         init_workflow_services()
@@ -2074,7 +2150,7 @@ async def get_budget_comparison(dept_id: int):
 
 
 @app.get("/api/cost-alerts")
-async def list_cost_alerts(department_id: Optional[int] = None, status: str = "unresolved"):
+async def list_cost_alerts(department_id: Optional[int] = None, status: str = "unresolved", user: dict = Depends(get_current_user_zero_trust)):
     """List cost alerts"""
     try:
         init_workflow_services()
@@ -2085,7 +2161,7 @@ async def list_cost_alerts(department_id: Optional[int] = None, status: str = "u
 
 
 @app.post("/api/cost-alerts/{alert_id}/resolve")
-async def resolve_cost_alert(alert_id: int, request_data: dict):
+async def resolve_cost_alert(alert_id: int, request_data: dict, user: dict = Depends(get_current_user_zero_trust)):
     """Resolve cost alert"""
     try:
         init_workflow_services()
@@ -2099,7 +2175,7 @@ async def resolve_cost_alert(alert_id: int, request_data: dict):
 
 
 @app.post("/api/costs/record")
-async def record_cost(request: models.CostRecordRequest):
+async def record_cost(request: models.CostRecordRequest, user: dict = Depends(get_current_user_zero_trust)):
     """Record API call cost"""
     try:
         init_workflow_services()
@@ -2120,7 +2196,7 @@ async def record_cost(request: models.CostRecordRequest):
 
 
 @app.get("/api/departments/{department_id}/costs")
-async def get_department_cost_summary(department_id: int):
+async def get_department_cost_summary(department_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """Get department cost summary for current month"""
     try:
         init_workflow_services()
@@ -2140,7 +2216,7 @@ async def get_department_cost_summary(department_id: int):
 
 
 @app.get("/api/costs/summary")
-async def get_costs_summary():
+async def get_costs_summary(user: dict = Depends(get_current_user_zero_trust)):
     """Get cost summary for all departments"""
     try:
         init_workflow_services()
@@ -2210,7 +2286,7 @@ def _save_resolved_alerts(resolved: set):
 
 
 @app.get("/api/metrics")
-async def get_metrics():
+async def get_metrics(user: dict = Depends(get_current_user_zero_trust)):
     now = datetime.now()
     tasks_per_hour = 0.0
     avg_task_duration_min = 0.0
@@ -2447,7 +2523,7 @@ async def _get_long_pending_alerts(resolved_ids: set, threshold_hours: int = 24)
 
 
 @app.get("/api/alerts")
-async def get_alerts():
+async def get_alerts(user: dict = Depends(get_current_user_zero_trust)):
     resolved_ids = _load_resolved_alerts()
     alerts: list[dict] = []
 
@@ -2507,7 +2583,7 @@ async def get_alerts():
 
 
 @app.post("/api/alerts/{alert_id:path}/resolve")
-async def resolve_alert(alert_id: str):
+async def resolve_alert(alert_id: str, user: dict = Depends(get_current_user_zero_trust)):
     resolved_ids = _load_resolved_alerts()
     resolved_ids.add(alert_id)
     _save_resolved_alerts(resolved_ids)
@@ -2519,7 +2595,7 @@ async def resolve_alert(alert_id: str):
 # ──────────────────────────────────────────────
 
 @app.get("/api/gantt")
-async def get_gantt(status: str = "incomplete", dir_filter: str = ""):
+async def get_gantt(status: str = "incomplete", dir_filter: str = "", user: dict = Depends(get_current_user_zero_trust)):
     """タスクと依存関係をGanttチャート用にまとめて返す"""
     if not TASKS_DB.exists():
         return {"tasks": [], "dependencies": []}
@@ -2574,7 +2650,7 @@ _DAG_STATUS_COLORS = {
 
 
 @app.get("/api/dag")
-async def get_dag(status: str = "incomplete"):
+async def get_dag(status: str = "incomplete", user: dict = Depends(get_current_user_zero_trust)):
     """タスク依存関係をvis-network形式（nodes/edges）で返す。"""
     if not TASKS_DB.exists():
         return {"nodes": [], "edges": []}
@@ -2643,7 +2719,7 @@ CYCLE_STATS_DB = Path.home() / ".claude" / "orchestrator" / "cycle_stats.sqlite"
 
 
 @app.get("/api/cycle-stats")
-async def api_cycle_stats(limit: int = 100):
+async def api_cycle_stats(limit: int = 100, user: dict = Depends(get_current_user_zero_trust)):
     """サイクル実行統計を返す（新しい順）。"""
     if not CYCLE_STATS_DB.exists():
         return {"stats": [], "total": 0}
@@ -2675,7 +2751,7 @@ ORCHESTRATE_LOOP_LOGS_DB = Path("/tmp/orchestrate_cycles.sqlite")
 
 
 @app.get("/api/orchestrate/history")
-async def api_orchestrate_history(limit: int = 100):
+async def api_orchestrate_history(limit: int = 100, user: dict = Depends(get_current_user_zero_trust)):
     """オーケストレーターのサイクル別実行履歴を返す（新しい順）。
 
     プライマリソース: /tmp/orchestrate_cycles.sqlite (cycles テーブル)
@@ -2733,7 +2809,7 @@ async def api_orchestrate_history(limit: int = 100):
 # ──────────────────────────────────────────────
 
 @app.get("/api/orchestrate/performance")
-async def api_orchestrate_performance(limit: int = 100):
+async def api_orchestrate_performance(limit: int = 100, user: dict = Depends(get_current_user_zero_trust)):
     """エージェントループのパフォーマンス指標（レイテンシ・スループット）を返す。
 
     レスポンス:
@@ -2826,7 +2902,7 @@ async def api_orchestrate_performance(limit: int = 100):
 # ──────────────────────────────────────────────
 
 @app.get("/api/sessions/{session_name:path}")
-async def get_session_detail(session_name: str):
+async def get_session_detail(session_name: str, user: dict = Depends(get_current_user_zero_trust)):
     """セッション詳細: 関連タスク一覧とtmuxログプレビューを返す。"""
 
     # tmuxペイン一覧からpane_idと稼働状態を取得
@@ -3035,7 +3111,7 @@ async def prometheus_metrics():
 # ──────────────────────────────────────────────
 
 @app.get("/api/stats")
-async def get_stats():
+async def get_stats(user: dict = Depends(get_current_user_zero_trust)):
     """タスク完了率・ステータス別件数・カテゴリ別件数を返す。"""
     status_counts: dict = {}
     category_counts: dict = {}
@@ -3077,7 +3153,7 @@ async def get_stats():
 
 
 @app.get("/api/projects/summary")
-async def get_projects_summary():
+async def get_projects_summary(user: dict = Depends(get_current_user_zero_trust)):
     if not MONITORING_YAML.exists():
         return []
     with open(MONITORING_YAML, encoding="utf-8") as f:
@@ -3111,7 +3187,7 @@ async def get_projects_summary():
 # ──────────────────────────────────────────────
 
 @app.get("/api/trend")
-async def get_trend(hours: int = 24):
+async def get_trend(hours: int = 24, user: dict = Depends(get_current_user_zero_trust)):
     """過去N時間のタスク完了・作成トレンドを1時間刻みで返す。"""
     from datetime import timedelta
 
@@ -3180,7 +3256,7 @@ async def get_trend(hours: int = 24):
 # ──────────────────────────────────────────────
 
 @app.get("/api/stats/history")
-async def get_stats_history(hours: int = 24):
+async def get_stats_history(hours: int = 24, user: dict = Depends(get_current_user_zero_trust)):
     """過去N時間（1時間刻み）の完了タスク数時系列データを返す。
 
     Response: [{"timestamp": "ISO8601", "completed_count": N}, ...]
@@ -3228,7 +3304,7 @@ async def get_stats_history(hours: int = 24):
 # ──────────────────────────────────────────────
 
 @app.get("/api/alerts/pending")
-async def get_alerts_pending(days: int = 7):
+async def get_alerts_pending(days: int = 7, user: dict = Depends(get_current_user_zero_trust)):
     """長期pendingタスク一覧を返す（デフォルト7日以上）。"""
     import datetime as _dt
     if not TASKS_DB.exists():
@@ -3249,7 +3325,7 @@ async def get_alerts_pending(days: int = 7):
 
 
 @app.get("/api/tasks/pending/alert")
-async def get_tasks_pending_alert(days: int = 7):
+async def get_tasks_pending_alert(days: int = 7, user: dict = Depends(get_current_user_zero_trust)):
     """長期pendingタスク警告一覧（/api/alerts/pending のエイリアス）。"""
     return await get_alerts_pending(days=days)
 
@@ -3259,7 +3335,7 @@ async def get_tasks_pending_alert(days: int = 7):
 # ──────────────────────────────────────────────
 
 @app.get("/api/alerts/pending-long")
-async def get_alerts_pending_long(minutes: int = 60):
+async def get_alerts_pending_long(minutes: int = 60, user: dict = Depends(get_current_user_zero_trust)):
     """60分以上 pending のタスク一覧を返す。バナー表示用。"""
     import datetime as _dt
     if not TASKS_DB.exists():
@@ -3301,7 +3377,7 @@ async def get_alerts_pending_long(minutes: int = 60):
 # ──────────────────────────────────────────────
 
 @app.get("/api/cycle/timings")
-async def get_cycle_timings(limit: int = 50):
+async def get_cycle_timings(limit: int = 50, user: dict = Depends(get_current_user_zero_trust)):
     """ステップ別実行時間統計を返す。cycle_stats テーブルから集計。"""
     if not CYCLE_STATS_DB.exists():
         return {"timings": [], "avg_duration_seconds": None}
@@ -3325,7 +3401,7 @@ async def get_cycle_timings(limit: int = 50):
 # ──────────────────────────────────────────────
 
 @app.get("/api/cycle/stats")
-async def get_cycle_stats(limit: int = 100):
+async def get_cycle_stats(limit: int = 100, user: dict = Depends(get_current_user_zero_trust)):
     """最新N件サイクル統計（/api/cycle-stats のエイリアス）。"""
     return await api_cycle_stats(limit=limit)
 
@@ -3339,7 +3415,7 @@ _health_history_lock = asyncio.Lock()
 
 
 @app.get("/api/health/history")
-async def get_health_history(hours: int = 24):
+async def get_health_history(hours: int = 24, user: dict = Depends(get_current_user_zero_trust)):
     """過去N時間のヘルスチェック履歴を返す。"""
     import datetime as _dt
     history = []
@@ -3366,7 +3442,7 @@ async def get_health_history(hours: int = 24):
 # ──────────────────────────────────────────────
 
 @app.get("/api/health/detail")
-async def get_health_detail():
+async def get_health_detail(user: dict = Depends(get_current_user_zero_trust)):
     """ヘルスチェック詳細（各サービス + プロセス状態）。"""
     base = await get_health()
     checks = base.get("checks", [])
@@ -3406,7 +3482,7 @@ async def get_health_detail():
 # ──────────────────────────────────────────────
 
 @app.get("/api/sessions/summary")
-async def get_sessions_summary():
+async def get_sessions_summary(user: dict = Depends(get_current_user_zero_trust)):
     """セッション統計サマリーを返す。"""
     if not SESSIONS_DIR.exists():
         return {"total": 0, "alive": 0, "dead": 0, "total_cost_usd": 0.0}
@@ -3450,7 +3526,7 @@ async def get_sessions_summary():
 # ──────────────────────────────────────────────
 
 @app.get("/api/sessions/active")
-async def get_sessions_active():
+async def get_sessions_active(user: dict = Depends(get_current_user_zero_trust)):
     """アクティブ（alive）なセッション一覧を返す。"""
     all_sessions = await get_sessions()
     active = [s for s in all_sessions if s.get("alive")]
@@ -3462,7 +3538,7 @@ async def get_sessions_active():
 # ──────────────────────────────────────────────
 
 @app.get("/api/sessions/status")
-async def get_sessions_status():
+async def get_sessions_status(user: dict = Depends(get_current_user_zero_trust)):
     """セッション稼働状態サマリー。"""
     summary = await get_sessions_summary()
     tmux_sessions = []
@@ -3496,13 +3572,13 @@ class RegisterSessionRequest(BaseModel):
 
 
 @app.post("/api/sessions")
-async def create_session(req: RegisterSessionRequest):
+async def create_session(req: RegisterSessionRequest, user: dict = Depends(get_current_user_zero_trust)):
     """セッション情報を登録する（JSON ファイルとして保存）。"""
     return await _register_session(req)
 
 
 @app.post("/api/sessions/register")
-async def register_session(req: RegisterSessionRequest):
+async def register_session(req: RegisterSessionRequest, user: dict = Depends(get_current_user_zero_trust)):
     """セッション登録エンドポイント（/api/sessions POST のエイリアス）。"""
     return await _register_session(req)
 
@@ -3532,7 +3608,7 @@ class BulkCreateTasksRequest(BaseModel):
 
 
 @app.post("/api/tasks/bulk")
-async def bulk_create_tasks(req: BulkCreateTasksRequest):
+async def bulk_create_tasks(req: BulkCreateTasksRequest, user: dict = Depends(get_current_user_zero_trust)):
     """タスクを一括作成する。"""
     results = []
     for task_req in req.tasks:
@@ -3562,7 +3638,7 @@ ORCHESTRATE_STATS_LOG = Path("/tmp/orchestrate_stats.log")
 
 
 @app.get("/api/logs/alerts")
-async def get_logs_alerts(limit: int = 500):
+async def get_logs_alerts(limit: int = 500, user: dict = Depends(get_current_user_zero_trust)):
     """orchestrate_alerts.log の最新N行を返す。"""
     lines_all: list[str] = []
 
@@ -3594,7 +3670,7 @@ async def get_logs_alerts(limit: int = 500):
 # ──────────────────────────────────────────────
 
 @app.get("/api/session-task-assignments")
-async def get_session_task_assignments():
+async def get_session_task_assignments(user: dict = Depends(get_current_user_zero_trust)):
     """セッション別タスク割り当て状況を返す。
 
     Returns:
@@ -3695,7 +3771,7 @@ async def get_session_task_assignments():
 # ──────────────────────────────────────────────
 
 @app.get("/api/workflow_instances")
-async def get_workflow_instances():
+async def get_workflow_instances(user: dict = Depends(get_current_user_zero_trust)):
     """SQLiteの workflow_instances テーブルから一覧を返す。テーブルが存在しない場合は空リスト。"""
     if not TASKS_DB.exists():
         return []
@@ -3717,7 +3793,7 @@ CYCLE_STATS_JSONL = Path("/tmp/orchestrate_cycle_stats.jsonl")
 
 
 @app.get("/api/loop/stats")
-async def get_loop_stats(limit: int = 50):
+async def get_loop_stats(limit: int = 50, user: dict = Depends(get_current_user_zero_trust)):
     """サイクル統計の最新50件を返す（cycle_stats DBまたはJSONLから）。"""
     # 1. cycle_stats SQLite から取得
     if CYCLE_STATS_DB.exists():
@@ -3758,7 +3834,7 @@ HEALTH_CHECK_SCRIPT = Path(__file__).parent.parent / "scripts" / "health_check.p
 
 
 @app.get("/api/health/all")
-async def get_health_all():
+async def get_health_all(user: dict = Depends(get_current_user_zero_trust)):
     """health_check.py を実行してその結果を返す。存在しなければ簡易ヘルス返却。"""
     if HEALTH_CHECK_SCRIPT.exists():
         try:
@@ -3811,7 +3887,7 @@ async def get_health_all():
 # ──────────────────────────────────────────────
 
 @app.get("/api/kpi")
-async def get_kpi():
+async def get_kpi(user: dict = Depends(get_current_user_zero_trust)):
     """KPIサマリー: 完了率・スループット・稼働ペイン数を返す。"""
     completion_rate = 0.0
     throughput_today = 0
@@ -3940,7 +4016,7 @@ def _build_activity_from_alerts(limit: int = 30) -> list[dict]:
 
 
 @app.get("/api/activity")
-async def get_activity(limit: int = 50):
+async def get_activity(limit: int = 50, user: dict = Depends(get_current_user_zero_trust)):
     task_events = await _build_activity_from_db(limit=limit)
     alert_events = _build_activity_from_alerts(limit=20)
     all_events = task_events + alert_events
@@ -3954,8 +4030,8 @@ async def get_agent_chat_history(
     event_type: str = None,
     date_from: str = None,
     date_to: str = None,
-    limit: int = 50
-):
+    limit: int = 50,
+user: dict = Depends(get_current_user_zero_trust)):
     items = []
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         # delegation_events の取得
@@ -4216,8 +4292,8 @@ async def get_notifications(
     limit: int = 50,
     status: Optional[str] = None,
     notification_type: Optional[str] = None,
-    severity: Optional[str] = None
-):
+    severity: Optional[str] = None,
+user: dict = Depends(get_current_user_zero_trust)):
     """通知一覧を取得（フィルタ対応）"""
     if not THEBRANCH_DB.exists():
         return {"notifications": [], "total": 0}
@@ -4267,7 +4343,7 @@ async def get_notifications(
         return {"notifications": [], "total": 0, "error": str(e)}
 
 @app.post("/api/notifications/{notification_id}/read")
-async def mark_notification_read(notification_id: int):
+async def mark_notification_read(notification_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """通知を既読化する"""
     if not THEBRANCH_DB.exists():
         raise HTTPException(status_code=404, detail="Database not found")
@@ -4287,7 +4363,7 @@ async def mark_notification_read(notification_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/notifications/create")
-async def create_notification_endpoint(req: NotificationRequest):
+async def create_notification_endpoint(req: NotificationRequest, user: dict = Depends(get_current_user_zero_trust)):
     """通知を手動作成（テスト・内部用）"""
     try:
         notification_key = await create_notification_log(
@@ -4312,7 +4388,7 @@ async def create_notification_endpoint(req: NotificationRequest):
 # ──────────────────────────────────────────────
 
 @app.get("/api/agent-rankings")
-async def get_agent_rankings():
+async def get_agent_rankings(user: dict = Depends(get_current_user_zero_trust)):
     """エージェント別完了タスク数・スループットランキングを返す。
 
     Returns:
@@ -4468,7 +4544,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
 
 
 @app.post("/api/auth/role", response_model=dict)
-async def add_role(role_req: models.UserRoleCreate, authorization: Optional[str] = Header(None)):
+async def add_role(role_req: models.UserRoleCreate, authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
 
@@ -4489,7 +4565,7 @@ async def add_role(role_req: models.UserRoleCreate, authorization: Optional[str]
 # ──────────────────────────────────────────────
 
 @app.post("/api/auth/tokens", response_model=models.APITokenCreateResponse)
-async def create_api_token(token_req: models.APITokenCreate, authorization: Optional[str] = Header(None)):
+async def create_api_token(token_req: models.APITokenCreate, authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """Create a new personal access token."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -4525,7 +4601,7 @@ async def create_api_token(token_req: models.APITokenCreate, authorization: Opti
 
 
 @app.get("/api/auth/tokens", response_model=models.APITokenListResponse)
-async def list_api_tokens(authorization: Optional[str] = Header(None)):
+async def list_api_tokens(authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """List all personal access tokens for the current user."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -4540,7 +4616,7 @@ async def list_api_tokens(authorization: Optional[str] = Header(None)):
 
 
 @app.delete("/api/auth/tokens/{token_id}")
-async def revoke_api_token(token_id: str, authorization: Optional[str] = Header(None)):
+async def revoke_api_token(token_id: str, authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """Revoke a personal access token."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -4741,7 +4817,7 @@ async def startup_event():
     await ensure_db_initialized()
 
 @app.post("/api/departments", status_code=201)
-async def create_department(dept_req: models.DepartmentCreate):
+async def create_department(dept_req: models.DepartmentCreate, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -4773,7 +4849,7 @@ async def create_department(dept_req: models.DepartmentCreate):
         raise HTTPException(status_code=400, detail="データ完全性エラー")
 
 @app.get("/api/departments")
-async def list_departments(status: str = "", parent_id: int = None, page: int = 1, limit: int = 20):
+async def list_departments(status: str = "", parent_id: int = None, page: int = 1, limit: int = 20, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -4809,7 +4885,7 @@ async def list_departments(status: str = "", parent_id: int = None, page: int = 
     }
 
 @app.get("/api/departments/hierarchy")
-async def get_departments_hierarchy():
+async def get_departments_hierarchy(user: dict = Depends(get_current_user_zero_trust)):
     """Get all departments in hierarchical tree structure"""
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -4826,7 +4902,7 @@ async def get_departments_hierarchy():
     return hierarchy
 
 @app.get("/api/departments/{dept_id}")
-async def get_department(dept_id: int):
+async def get_department(dept_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -4853,7 +4929,7 @@ async def get_department(dept_id: int):
     return dept
 
 @app.put("/api/departments/{dept_id}")
-async def update_department(dept_id: int, update_req: models.DepartmentUpdate):
+async def update_department(dept_id: int, update_req: models.DepartmentUpdate, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     init_workflow_services()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -4925,7 +5001,7 @@ async def _build_dept_tree(dept_id: int, db) -> dict:
     return dept
 
 @app.put("/api/departments/{dept_id}/parent")
-async def change_department_parent(dept_id: int, parent_req: models.ParentChangeRequest):
+async def change_department_parent(dept_id: int, parent_req: models.ParentChangeRequest, user: dict = Depends(get_current_user_zero_trust)):
     """Change a department's parent"""
     await ensure_db_initialized()
     init_workflow_services()
@@ -4962,7 +5038,7 @@ async def change_department_parent(dept_id: int, parent_req: models.ParentChange
     return dict(row) if row else {"error": "更新失敗"}
 
 @app.delete("/api/departments/{dept_id}", status_code=204)
-async def delete_department(dept_id: int):
+async def delete_department(dept_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         cursor = await db.execute("SELECT COUNT(*) FROM departments WHERE parent_id = ?", (dept_id,))
@@ -4984,7 +5060,7 @@ async def delete_department(dept_id: int):
         await db.commit()
 
 @app.get("/api/departments/templates")
-async def list_department_templates(category: str = "", status: str = "active"):
+async def list_department_templates(category: str = "", status: str = "active", user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5005,7 +5081,7 @@ async def list_department_templates(category: str = "", status: str = "active"):
     return [dict(r) for r in rows]
 
 @app.post("/api/departments/{dept_id}/agents", status_code=201)
-async def add_agent_to_department(dept_id: int, agent_req: models.DepartmentAgentCreate):
+async def add_agent_to_department(dept_id: int, agent_req: models.DepartmentAgentCreate, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (dept_id,))
@@ -5040,7 +5116,7 @@ async def add_agent_to_department(dept_id: int, agent_req: models.DepartmentAgen
     raise HTTPException(status_code=500, detail="エージェント追加に失敗しました")
 
 @app.get("/api/departments/{dept_id}/agents")
-async def list_department_agents(dept_id: int):
+async def list_department_agents(dept_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5066,7 +5142,7 @@ async def list_department_agents(dept_id: int):
     return {"data": agents, "total": len(agents)}
 
 @app.delete("/api/departments/{dept_id}/agents/{agent_id}", status_code=204)
-async def remove_agent_from_department(dept_id: int, agent_id: int):
+async def remove_agent_from_department(dept_id: int, agent_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         await db.execute(
@@ -5080,7 +5156,7 @@ async def remove_agent_from_department(dept_id: int, agent_id: int):
 # ──────────────────────────────────────────────
 
 @app.post("/api/agents", status_code=201)
-async def create_agent(agent_req: models.AgentCreate):
+async def create_agent(agent_req: models.AgentCreate, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -5120,7 +5196,7 @@ async def create_agent(agent_req: models.AgentCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/agents/{agent_id}")
-async def get_agent(agent_id: int):
+async def get_agent(agent_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5136,7 +5212,7 @@ async def get_agent(agent_id: int):
     return dict(row)
 
 @app.get("/api/departments/{dept_id}/agents-managed")
-async def list_department_agents_managed(dept_id: int):
+async def list_department_agents_managed(dept_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5150,7 +5226,7 @@ async def list_department_agents_managed(dept_id: int):
     return {"data": [dict(r) for r in rows], "total": len(rows)}
 
 @app.post("/api/agents/{agent_id}/stop", status_code=200)
-async def stop_agent(agent_id: int):
+async def stop_agent(agent_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5210,7 +5286,7 @@ async def activity_event_generator(dept_id: int) -> AsyncGenerator[str, None]:
         await asyncio.sleep(5)
 
 @app.get("/api/departments/{dept_id}/activity-feed")
-async def stream_activity_feed(dept_id: int):
+async def stream_activity_feed(dept_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """SSE endpoint for agent activity logs."""
     await ensure_db_initialized()
     return StreamingResponse(
@@ -5224,8 +5300,8 @@ async def stream_activity_feed(dept_id: int):
 async def create_agent_mission(
     dept_id: int,
     agent_id: int,
-    mission_req: models.MissionCreate
-):
+    mission_req: models.MissionCreate,
+user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5274,7 +5350,7 @@ async def create_agent_mission(
 
 
 @app.get("/api/departments/{dept_id}/agents/{agent_id}/mission")
-async def get_agent_mission(dept_id: int, agent_id: int):
+async def get_agent_mission(dept_id: int, agent_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5305,7 +5381,7 @@ async def get_agent_mission(dept_id: int, agent_id: int):
 
 
 @app.post("/api/departments/{dept_id}/teams", status_code=201)
-async def create_team(dept_id: int, team_req: models.TeamCreate):
+async def create_team(dept_id: int, team_req: models.TeamCreate, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5330,7 +5406,7 @@ async def create_team(dept_id: int, team_req: models.TeamCreate):
     return dict(row) if row else {"error": "チーム作成失敗"}
 
 @app.get("/api/departments/{dept_id}/teams")
-async def list_teams(dept_id: int):
+async def list_teams(dept_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5343,7 +5419,7 @@ async def list_teams(dept_id: int):
     return {"data": [dict(r) for r in rows], "total": len(rows)}
 
 @app.get("/api/departments/{dept_id}/teams/{team_id}")
-async def get_team(dept_id: int, team_id: int):
+async def get_team(dept_id: int, team_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5358,7 +5434,7 @@ async def get_team(dept_id: int, team_id: int):
     return dict(row)
 
 @app.put("/api/departments/{dept_id}/teams/{team_id}")
-async def update_team(dept_id: int, team_id: int, update_req: models.TeamUpdate):
+async def update_team(dept_id: int, team_id: int, update_req: models.TeamUpdate, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5396,7 +5472,7 @@ async def update_team(dept_id: int, team_id: int, update_req: models.TeamUpdate)
     return dict(row) if row else {"error": "チーム更新失敗"}
 
 @app.delete("/api/departments/{dept_id}/teams/{team_id}", status_code=204)
-async def delete_team(dept_id: int, team_id: int):
+async def delete_team(dept_id: int, team_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         await db.execute(
@@ -5409,7 +5485,7 @@ async def delete_team(dept_id: int, team_id: int):
 # Department Relations
 
 @app.post("/api/departments/{dept_id}/relations", status_code=201)
-async def create_relation(dept_id: int, rel_req: models.RelationCreate):
+async def create_relation(dept_id: int, rel_req: models.RelationCreate, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5440,7 +5516,7 @@ async def create_relation(dept_id: int, rel_req: models.RelationCreate):
 
 
 @app.get("/api/departments/{dept_id}/relations")
-async def list_relations(dept_id: int):
+async def list_relations(dept_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         db.row_factory = aiosqlite.Row
@@ -5462,7 +5538,7 @@ async def list_relations(dept_id: int):
 
 
 @app.delete("/api/departments/{dept_id}/relations/{related_dept_id}", status_code=204)
-async def delete_relation(dept_id: int, related_dept_id: int):
+async def delete_relation(dept_id: int, related_dept_id: int, user: dict = Depends(get_current_user_zero_trust)):
     await ensure_db_initialized()
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
         await db.execute(
@@ -5477,7 +5553,7 @@ async def delete_relation(dept_id: int, related_dept_id: int):
 # ──────────────────────────────────────────────
 
 @app.get("/api/departments/{dept_id}/metrics")
-async def get_department_metrics(dept_id: int):
+async def get_department_metrics(dept_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """Get department metrics including agent uptime and task completion."""
     await ensure_db_initialized()
     try:
@@ -5616,7 +5692,7 @@ class CreateTaskRequest(BaseModel):
     task_order: int = 0
 
 @app.post("/api/templates")
-async def create_template(req: CreateTemplateRequest):
+async def create_template(req: CreateTemplateRequest, user: dict = Depends(get_current_user_zero_trust)):
     try:
         service = get_template_service()
         template = service.create_template(
@@ -5636,7 +5712,7 @@ async def create_template(req: CreateTemplateRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/templates")
-async def list_templates(status: Optional[str] = None, limit: int = 50, offset: int = 0):
+async def list_templates(status: Optional[str] = None, limit: int = 50, offset: int = 0, user: dict = Depends(get_current_user_zero_trust)):
     try:
         service = get_template_service()
         templates = service.list_templates(status=status, limit=limit, offset=offset)
@@ -5657,7 +5733,7 @@ async def list_templates(status: Optional[str] = None, limit: int = 50, offset: 
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/templates/{template_id}")
-async def get_template(template_id: int):
+async def get_template(template_id: int, user: dict = Depends(get_current_user_zero_trust)):
     try:
         service = get_template_service()
         template = service.get_template(template_id)
@@ -5703,7 +5779,7 @@ async def get_template(template_id: int):
         raise HTTPException(status_code=404, detail=str(e))
 
 @app.post("/api/templates/{template_id}/phases")
-async def create_phase(template_id: int, req: CreatePhaseRequest):
+async def create_phase(template_id: int, req: CreatePhaseRequest, user: dict = Depends(get_current_user_zero_trust)):
     try:
         service = get_template_service()
         phase = service.add_phase(
@@ -5726,7 +5802,7 @@ async def create_phase(template_id: int, req: CreatePhaseRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/templates/{template_id}/phases/{phase_id}/tasks")
-async def create_task_def(template_id: int, phase_id: int, req: CreateTaskRequest):
+async def create_task_def(template_id: int, phase_id: int, req: CreateTaskRequest, user: dict = Depends(get_current_user_zero_trust)):
     try:
         service = get_template_service()
         task = service.add_task_to_phase(
@@ -5753,7 +5829,7 @@ async def create_task_def(template_id: int, phase_id: int, req: CreateTaskReques
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/templates/{template_id}/publish")
-async def publish_template(template_id: int):
+async def publish_template(template_id: int, user: dict = Depends(get_current_user_zero_trust)):
     try:
         service = get_template_service()
         template = service.publish_template(template_id)
@@ -5794,7 +5870,7 @@ class ExpenseSubmissionRequest(BaseModel):
     items: list = []
 
 @app.post("/api/accounting/invoices", status_code=201)
-async def create_invoice(req: InvoiceCreateRequest):
+async def create_invoice(req: InvoiceCreateRequest, user: dict = Depends(get_current_user_zero_trust)):
     try:
         init_workflow_services()
         service = get_accounting_service()
@@ -5819,7 +5895,7 @@ async def create_invoice(req: InvoiceCreateRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/accounting/invoices/{invoice_id}")
-async def get_invoice(invoice_id: int):
+async def get_invoice(invoice_id: int, user: dict = Depends(get_current_user_zero_trust)):
     try:
         init_workflow_services()
         service = get_accounting_service()
@@ -5829,7 +5905,7 @@ async def get_invoice(invoice_id: int):
         raise HTTPException(status_code=404, detail=str(e))
 
 @app.post("/api/accounting/invoices/{invoice_id}/approve")
-async def approve_invoice(invoice_id: int, approver_id: int):
+async def approve_invoice(invoice_id: int, approver_id: int, user: dict = Depends(get_current_user_zero_trust)):
     try:
         init_workflow_services()
         service = get_accounting_service()
@@ -5839,7 +5915,7 @@ async def approve_invoice(invoice_id: int, approver_id: int):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/accounting/expenses", status_code=201)
-async def submit_expense(req: ExpenseSubmissionRequest):
+async def submit_expense(req: ExpenseSubmissionRequest, user: dict = Depends(get_current_user_zero_trust)):
     try:
         init_workflow_services()
         service = get_accounting_service()
@@ -5864,7 +5940,7 @@ async def submit_expense(req: ExpenseSubmissionRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/accounting/expenses/{submission_id}")
-async def get_expense(submission_id: int):
+async def get_expense(submission_id: int, user: dict = Depends(get_current_user_zero_trust)):
     try:
         init_workflow_services()
         service = get_accounting_service()
@@ -5874,7 +5950,7 @@ async def get_expense(submission_id: int):
         raise HTTPException(status_code=404, detail=str(e))
 
 @app.post("/api/accounting/expenses/{submission_id}/approve")
-async def approve_expense(submission_id: int, approver_id: int):
+async def approve_expense(submission_id: int, approver_id: int, user: dict = Depends(get_current_user_zero_trust)):
     try:
         init_workflow_services()
         service = get_accounting_service()
@@ -5884,7 +5960,7 @@ async def approve_expense(submission_id: int, approver_id: int):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/accounting/departments/{department_id}/summary")
-async def get_accounting_summary(department_id: int):
+async def get_accounting_summary(department_id: int, user: dict = Depends(get_current_user_zero_trust)):
     try:
         init_workflow_services()
         service = get_accounting_service()
@@ -5894,7 +5970,7 @@ async def get_accounting_summary(department_id: int):
         raise HTTPException(status_code=404, detail=str(e))
 
 @app.post("/api/accounting/reports/monthly")
-async def generate_monthly_report(department_id: int, year: int, month: int):
+async def generate_monthly_report(department_id: int, year: int, month: int, user: dict = Depends(get_current_user_zero_trust)):
     try:
         init_workflow_services()
         service = get_accounting_service()
@@ -5909,7 +5985,7 @@ async def generate_monthly_report(department_id: int, year: int, month: int):
 # ──────────────────────────────────────────────
 
 @app.get("/onboarding", response_class=HTMLResponse)
-async def get_onboarding_page():
+async def get_onboarding_page(user: dict = Depends(get_current_user_zero_trust)):
     """オンボーディングウィザードページを提供"""
     html_path = DASHBOARD_DIR / "onboarding-wizard.html"
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
@@ -5918,8 +5994,8 @@ async def get_onboarding_page():
 @app.post("/api/onboarding/vision", status_code=201, response_model=models.VisionInputResponse)
 async def post_onboarding_vision(
     req: models.VisionInputRequest,
-    authorization: Optional[str] = Header(None)
-):
+    authorization: Optional[str] = Header(None),
+user: dict = Depends(get_current_user_zero_trust)):
     """ビジョン入力を保存"""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -5956,8 +6032,8 @@ async def post_onboarding_vision(
 @app.post("/api/onboarding/suggest", response_model=models.DepartmentSuggestionResponse)
 async def post_onboarding_suggest(
     req: models.DepartmentSuggestionRequest,
-    authorization: Optional[str] = Header(None)
-):
+    authorization: Optional[str] = Header(None),
+user: dict = Depends(get_current_user_zero_trust)):
     """AI が部署を提案"""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -6016,8 +6092,8 @@ async def post_onboarding_suggest(
 @app.post("/api/onboarding/setup", response_model=models.SetupResponse)
 async def post_onboarding_setup(
     req: models.DetailedSetupRequest,
-    authorization: Optional[str] = Header(None)
-):
+    authorization: Optional[str] = Header(None),
+user: dict = Depends(get_current_user_zero_trust)):
     """部署の詳細設定・予算検証・初期タスク生成"""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -6089,8 +6165,8 @@ async def post_onboarding_setup(
 @app.post("/api/onboarding/execute", response_model=models.ExecuteResponse)
 async def execute_onboarding(
     req: models.ExecuteRequest,
-    authorization: Optional[str] = Header(None)
-):
+    authorization: Optional[str] = Header(None),
+user: dict = Depends(get_current_user_zero_trust)):
     """初期タスク生成 → エージェント起動"""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -6213,8 +6289,8 @@ async def execute_onboarding(
 @app.post("/api/onboarding/complete", status_code=201, response_model=models.OnboardingCompleteResponse)
 async def complete_onboarding(
     req: models.OnboardingRequest,
-    authorization: Optional[str] = Header(None)
-):
+    authorization: Optional[str] = Header(None),
+user: dict = Depends(get_current_user_zero_trust)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
 
@@ -6314,7 +6390,7 @@ class ExpenseItemCreate(BaseModel):
 
 # Invoice endpoints
 @app.post("/api/accounting/invoices")
-async def create_invoice(department_id: int, invoice: InvoiceCreate):
+async def create_invoice(department_id: int, invoice: InvoiceCreate, user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         invoice_id = accounting_service.create_invoice(
@@ -6333,7 +6409,7 @@ async def create_invoice(department_id: int, invoice: InvoiceCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/accounting/invoices/{invoice_id}")
-async def get_invoice(invoice_id: int):
+async def get_invoice(invoice_id: int, user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         invoice = accounting_service.get_invoice(invoice_id)
@@ -6344,7 +6420,7 @@ async def get_invoice(invoice_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/accounting/invoices")
-async def list_invoices(department_id: int, status: Optional[str] = None):
+async def list_invoices(department_id: int, status: Optional[str] = None, user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         invoices = accounting_service.get_invoices(department_id, status)
@@ -6353,7 +6429,7 @@ async def list_invoices(department_id: int, status: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/accounting/invoices/{invoice_id}/items")
-async def add_invoice_item(invoice_id: int, item: InvoiceItemCreate):
+async def add_invoice_item(invoice_id: int, item: InvoiceItemCreate, user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         item_id = accounting_service.add_invoice_item(
@@ -6368,7 +6444,7 @@ async def add_invoice_item(invoice_id: int, item: InvoiceItemCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/accounting/invoices/{invoice_id}/approve")
-async def approve_invoice(invoice_id: int, approver_id: int):
+async def approve_invoice(invoice_id: int, approver_id: int, user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         accounting_service.approve_invoice(invoice_id, approver_id)
@@ -6378,8 +6454,8 @@ async def approve_invoice(invoice_id: int, approver_id: int):
 
 @app.put("/api/accounting/invoices/{invoice_id}/status")
 async def update_invoice_status(
-    invoice_id: int, status: str, approval_status: Optional[str] = None
-):
+    invoice_id: int, status: str, approval_status: Optional[str] = None,
+user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         accounting_service.update_invoice_status(invoice_id, status, approval_status)
@@ -6390,8 +6466,8 @@ async def update_invoice_status(
 # Expense endpoints
 @app.post("/api/accounting/expenses")
 async def create_expense_submission(
-    department_id: int, submission: ExpenseSubmissionCreate
-):
+    department_id: int, submission: ExpenseSubmissionCreate,
+user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         submission_id = accounting_service.create_expense_submission(
@@ -6410,7 +6486,7 @@ async def create_expense_submission(
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/accounting/expenses/{submission_id}")
-async def get_expense_submission(submission_id: int):
+async def get_expense_submission(submission_id: int, user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         submission = accounting_service.get_expense_submission(submission_id)
@@ -6421,7 +6497,7 @@ async def get_expense_submission(submission_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/accounting/expenses")
-async def list_expense_submissions(department_id: int, status: Optional[str] = None):
+async def list_expense_submissions(department_id: int, status: Optional[str] = None, user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         submissions = accounting_service.get_expense_submissions(department_id, status)
@@ -6430,7 +6506,7 @@ async def list_expense_submissions(department_id: int, status: Optional[str] = N
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/accounting/expenses/{submission_id}/items")
-async def add_expense_item(submission_id: int, item: ExpenseItemCreate):
+async def add_expense_item(submission_id: int, item: ExpenseItemCreate, user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         item_id = accounting_service.add_expense_item(
@@ -6446,7 +6522,7 @@ async def add_expense_item(submission_id: int, item: ExpenseItemCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/accounting/expenses/{submission_id}/approve")
-async def approve_expense_submission(submission_id: int, approver_id: int):
+async def approve_expense_submission(submission_id: int, approver_id: int, user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         accounting_service.approve_expense_submission(submission_id, approver_id)
@@ -6456,7 +6532,7 @@ async def approve_expense_submission(submission_id: int, approver_id: int):
 
 # Report endpoints
 @app.get("/api/accounting/reports/monthly/{year}/{month}")
-async def get_monthly_report(department_id: int, year: int, month: int):
+async def get_monthly_report(department_id: int, year: int, month: int, user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         report = accounting_service.generate_monthly_report(department_id, year, month)
@@ -6465,7 +6541,7 @@ async def get_monthly_report(department_id: int, year: int, month: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/accounting/reports/pending-approvals")
-async def get_pending_approvals(department_id: int):
+async def get_pending_approvals(department_id: int, user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         result = accounting_service.get_pending_approvals(department_id)
@@ -6475,8 +6551,8 @@ async def get_pending_approvals(department_id: int):
 
 @app.get("/api/accounting/reports/expenses-by-category")
 async def get_expenses_by_category(
-    department_id: int, year: int, month: int
-):
+    department_id: int, year: int, month: int,
+user: dict = Depends(get_current_user_zero_trust)):
     init_accounting_services()
     try:
         result = accounting_service.get_expense_summary_by_category(
@@ -6493,8 +6569,8 @@ async def get_expenses_by_category(
 
 @app.get("/api/teams/{team_id}/communication-timeline")
 async def get_communication_timeline(
-    team_id: int, date_from: str = None, date_to: str = None, event_type: str = None, agent_id: int = None, limit: int = 100
-):
+    team_id: int, date_from: str = None, date_to: str = None, event_type: str = None, agent_id: int = None, limit: int = 100,
+user: dict = Depends(get_current_user_zero_trust)):
     """チーム内の通信タイムラインを時系列で取得（delegation_events）"""
     await ensure_db_initialized()
     try:
@@ -6537,7 +6613,7 @@ async def get_communication_timeline(
 
 
 @app.get("/api/teams/{team_id}/communication-graph")
-async def get_communication_graph(team_id: int):
+async def get_communication_graph(team_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """チーム内の通信ネットワークデータを取得（nodes/edges）"""
     await ensure_db_initialized()
     try:
@@ -6578,7 +6654,7 @@ async def get_communication_graph(team_id: int):
 
 
 @app.get("/api/teams/{team_id}/performance-summary")
-async def get_performance_summary(team_id: int):
+async def get_performance_summary(team_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """チーム全体のパフォーマンスサマリーを取得"""
     await ensure_db_initialized()
     try:
@@ -6628,7 +6704,7 @@ async def get_performance_summary(team_id: int):
 
 
 @app.get("/api/teams/{team_id}/member-performance")
-async def get_member_performance(team_id: int, sort_by: str = "workload"):
+async def get_member_performance(team_id: int, sort_by: str = "workload", user: dict = Depends(get_current_user_zero_trust)):
     """チームメンバーの個別パフォーマンスを取得"""
     await ensure_db_initialized()
     try:
@@ -6665,7 +6741,7 @@ async def get_member_performance(team_id: int, sort_by: str = "workload"):
 
 
 @app.get("/api/teams/{team_id}/collaboration-heatmap")
-async def get_collaboration_heatmap(team_id: int):
+async def get_collaboration_heatmap(team_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """チーム内のコミュニケーションマトリックスを取得"""
     await ensure_db_initialized()
     try:
@@ -6786,7 +6862,7 @@ def calculate_task_allocation_score(task: dict, agent: dict) -> dict:
 
 
 @app.post("/api/tasks/{task_id}/auto-allocate")
-async def auto_allocate_task(task_id: int, team_id: int):
+async def auto_allocate_task(task_id: int, team_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """タスクを最適なエージェントに自動割り当てする"""
     await ensure_db_initialized()
     try:
@@ -6860,7 +6936,7 @@ async def auto_allocate_task(task_id: int, team_id: int):
 
 
 @app.get("/api/teams/{team_id}/allocation-recommendations")
-async def get_allocation_recommendations(team_id: int):
+async def get_allocation_recommendations(team_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """タスク割り当て推奨一覧を取得（v2_skill_matchingアルゴリズム使用）"""
     await ensure_db_initialized()
     try:
@@ -6926,7 +7002,7 @@ async def get_allocation_recommendations(team_id: int):
 
 
 @app.post("/api/teams/{team_id}/dynamics-report/generate")
-async def generate_dynamics_report(team_id: int, period: str = "week", include_charts: bool = True):
+async def generate_dynamics_report(team_id: int, period: str = "week", include_charts: bool = True, user: dict = Depends(get_current_user_zero_trust)):
     """チーム動的レポートを生成（week/month/day対応）"""
     await ensure_db_initialized()
     try:
@@ -7038,7 +7114,7 @@ async def generate_dynamics_report(team_id: int, period: str = "week", include_c
 
 
 @app.get("/api/teams/{team_id}/dynamics-report")
-async def get_dynamics_report(team_id: int, report_id: int = None, period: str = None):
+async def get_dynamics_report(team_id: int, report_id: int = None, period: str = None, user: dict = Depends(get_current_user_zero_trust)):
     """チーム動的レポートを取得（report_id指定 or 最新レポート）"""
     await ensure_db_initialized()
     try:
@@ -7101,7 +7177,7 @@ async def get_dynamics_report(team_id: int, report_id: int = None, period: str =
 # ──────────────────────────────────────────────
 
 @app.post("/api/agent-decision/log", response_model=models.AgentDecisionLogResponse)
-async def log_agent_decision(decision: models.AgentDecisionLogCreate):
+async def log_agent_decision(decision: models.AgentDecisionLogCreate, user: dict = Depends(get_current_user_zero_trust)):
     """エージェント意思決定をログに記録"""
     await ensure_db_initialized()
     try:
@@ -7152,7 +7228,7 @@ async def log_agent_decision(decision: models.AgentDecisionLogCreate):
 
 
 @app.get("/api/agent-decision/logs")
-async def get_decision_logs(agent_id: int, limit: int = 50):
+async def get_decision_logs(agent_id: int, limit: int = 50, user: dict = Depends(get_current_user_zero_trust)):
     """エージェント意思決定ログを取得"""
     await ensure_db_initialized()
     try:
@@ -7184,7 +7260,7 @@ async def get_decision_logs(agent_id: int, limit: int = 50):
 
 
 @app.get("/api/agent-decision/logs/{log_id}")
-async def get_decision_log(log_id: int):
+async def get_decision_log(log_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """特定の意思決定ログを取得"""
     await ensure_db_initialized()
     try:
@@ -7214,7 +7290,7 @@ async def get_decision_log(log_id: int):
 
 
 @app.post("/api/agent-decision/{log_id}/explain")
-async def generate_decision_explanation(log_id: int, report: models.DecisionExplanationReportCreate):
+async def generate_decision_explanation(log_id: int, report: models.DecisionExplanationReportCreate, user: dict = Depends(get_current_user_zero_trust)):
     """意思決定の説明を生成"""
     await ensure_db_initialized()
     try:
@@ -7251,7 +7327,7 @@ async def generate_decision_explanation(log_id: int, report: models.DecisionExpl
 
 
 @app.get("/api/agent-decision/{log_id}/explanation")
-async def get_decision_explanation(log_id: int):
+async def get_decision_explanation(log_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """意思決定の説明を取得"""
     await ensure_db_initialized()
     try:
@@ -7273,7 +7349,7 @@ async def get_decision_explanation(log_id: int):
 
 
 @app.post("/api/agent-decision/audit")
-async def log_action_audit(audit: models.AgentActionAuditCreate):
+async def log_action_audit(audit: models.AgentActionAuditCreate, user: dict = Depends(get_current_user_zero_trust)):
     """エージェント行動を監査ログに記録"""
     await ensure_db_initialized()
     try:
@@ -7302,7 +7378,7 @@ async def log_action_audit(audit: models.AgentActionAuditCreate):
 
 
 @app.get("/api/agent-decision/audit/{agent_id}")
-async def get_action_audit(agent_id: int, limit: int = 100):
+async def get_action_audit(agent_id: int, limit: int = 100, user: dict = Depends(get_current_user_zero_trust)):
     """エージェントの行動監査ログを取得"""
     await ensure_db_initialized()
     try:
@@ -7321,7 +7397,7 @@ async def get_action_audit(agent_id: int, limit: int = 100):
 
 
 @app.get("/api/agent-decision/report/{agent_id}")
-async def get_transparency_report(agent_id: int):
+async def get_transparency_report(agent_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """エージェントの透明性レポートを取得"""
     await ensure_db_initialized()
     try:
@@ -7400,7 +7476,7 @@ async def get_transparency_report(agent_id: int):
 # ──────────────────────────────────────────────
 
 @app.get("/api/learning/patterns")
-async def get_learning_patterns():
+async def get_learning_patterns(user: dict = Depends(get_current_user_zero_trust)):
     """Get analyzed learning patterns from workflow executions"""
     try:
         db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
@@ -7430,7 +7506,7 @@ async def get_learning_patterns():
 # ──────────────────────────────────────────────
 
 @app.get("/api/sla/policies")
-async def get_sla_policies():
+async def get_sla_policies(user: dict = Depends(get_current_user_zero_trust)):
     """SLAポリシー一覧を取得"""
     try:
         db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
@@ -7444,7 +7520,7 @@ async def get_sla_policies():
 
 
 @app.post("/api/sla/policies")
-async def create_sla_policy(policy: models.SLAPolicyCreate):
+async def create_sla_policy(policy: models.SLAPolicyCreate, user: dict = Depends(get_current_user_zero_trust)):
     """新規SLAポリシーを作成"""
     try:
         db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
@@ -7470,7 +7546,7 @@ async def create_sla_policy(policy: models.SLAPolicyCreate):
 
 
 @app.put("/api/sla/policies/{policy_id}")
-async def update_sla_policy(policy_id: int, policy: models.SLAPolicyUpdate):
+async def update_sla_policy(policy_id: int, policy: models.SLAPolicyUpdate, user: dict = Depends(get_current_user_zero_trust)):
     """SLAポリシーを更新"""
     try:
         db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
@@ -7515,7 +7591,7 @@ async def update_sla_policy(policy_id: int, policy: models.SLAPolicyUpdate):
 
 
 @app.delete("/api/sla/policies/{policy_id}")
-async def delete_sla_policy(policy_id: int):
+async def delete_sla_policy(policy_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """SLAポリシーを削除"""
     try:
         db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
@@ -7534,7 +7610,7 @@ async def delete_sla_policy(policy_id: int):
 
 
 @app.get("/api/sla/metrics/{policy_id}")
-async def get_sla_metrics(policy_id: int):
+async def get_sla_metrics(policy_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """SLAメトリクスを取得"""
     try:
         db_path = DASHBOARD_DIR / "data" / "thebranch.sqlite"
@@ -7584,7 +7660,7 @@ async def get_sla_metrics(policy_id: int):
 # ──────────────────────────────────────────────
 
 @app.post("/auth/signup", response_model=models.SignupResponse)
-async def signup(request: models.SignupRequest):
+async def signup(request: models.SignupRequest, user: dict = Depends(get_current_user_zero_trust)):
     success, message, user_id = await auth.create_user(
         request.username, request.email, request.password, request.org_id
     )
@@ -7598,7 +7674,7 @@ async def signup(request: models.SignupRequest):
 
 
 @app.post("/auth/login", response_model=models.LoginResponse)
-async def login(request: models.LoginRequest):
+async def login(request: models.LoginRequest, user: dict = Depends(get_current_user_zero_trust)):
     user_id, token, org_id = await auth.authenticate_user(
         request.username, request.password, request.org_id
     )
@@ -7619,7 +7695,7 @@ async def login(request: models.LoginRequest):
 
 
 @app.post("/auth/logout", response_model=models.LogoutResponse)
-async def logout(authorization: Optional[str] = Header(None)):
+async def logout(authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     if not authorization:
         raise HTTPException(status_code=400, detail="Authorization header required")
 
@@ -7633,7 +7709,7 @@ async def logout(authorization: Optional[str] = Header(None)):
 
 
 @app.get("/auth/verify", response_model=models.AuthTokenValidationResponse)
-async def verify_token(authorization: Optional[str] = Header(None)):
+async def verify_token(authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     if not authorization:
         return models.AuthTokenValidationResponse(
             success=False,
@@ -7662,7 +7738,7 @@ async def verify_token(authorization: Optional[str] = Header(None)):
 # ──────────────────────────────────────────────
 
 @app.get("/api/v1/departments", response_model=list)
-async def get_public_departments(auth: dict = Depends(verify_api_key)):
+async def get_public_departments(auth: dict = Depends(verify_api_key), user: dict = Depends(get_current_user_zero_trust)):
     """公開API: 部署一覧取得"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -7679,7 +7755,7 @@ async def get_public_departments(auth: dict = Depends(verify_api_key)):
 
 
 @app.get("/api/v1/agents", response_model=list)
-async def get_public_agents(auth: dict = Depends(verify_api_key)):
+async def get_public_agents(auth: dict = Depends(verify_api_key), user: dict = Depends(get_current_user_zero_trust)):
     """公開API: AIエージェント一覧取得"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -7696,7 +7772,7 @@ async def get_public_agents(auth: dict = Depends(verify_api_key)):
 
 
 @app.get("/api/v1/workflows", response_model=list)
-async def get_public_workflows(auth: dict = Depends(verify_api_key)):
+async def get_public_workflows(auth: dict = Depends(verify_api_key), user: dict = Depends(get_current_user_zero_trust)):
     """公開API: ワークフロー一覧取得"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -7715,8 +7791,8 @@ async def get_public_workflows(auth: dict = Depends(verify_api_key)):
 @app.post("/api/v1/api-keys", response_model=models.ApiKeyWithSecret)
 async def create_api_key(
     key_create: models.ApiKeyCreate,
-    authorization: Optional[str] = Header(None)
-):
+    authorization: Optional[str] = Header(None),
+user: dict = Depends(get_current_user_zero_trust)):
     """APIキー作成（管理者向け）"""
     if not authorization:
         raise HTTPException(status_code=401, detail="認証が必要です")
@@ -7757,7 +7833,7 @@ async def create_api_key(
 
 
 @app.get("/api/v1/api-keys", response_model=list)
-async def list_api_keys(authorization: Optional[str] = Header(None)):
+async def list_api_keys(authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """APIキー一覧取得"""
     if not authorization:
         raise HTTPException(status_code=401, detail="認証が必要です")
@@ -7784,7 +7860,7 @@ async def list_api_keys(authorization: Optional[str] = Header(None)):
 
 
 @app.delete("/api/v1/api-keys/{key_id}")
-async def revoke_api_key(key_id: str, authorization: Optional[str] = Header(None)):
+async def revoke_api_key(key_id: str, authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """APIキー無効化"""
     if not authorization:
         raise HTTPException(status_code=401, detail="認証が必要です")
@@ -7813,7 +7889,7 @@ async def revoke_api_key(key_id: str, authorization: Optional[str] = Header(None
 # ──────────────────────────────────────────────
 
 @app.get("/api/resources/")
-async def get_resources(department_id: Optional[int] = None):
+async def get_resources(department_id: Optional[int] = None, user: dict = Depends(get_current_user_zero_trust)):
     """Get all resources or resources for a specific department"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -7850,7 +7926,7 @@ async def get_resources(department_id: Optional[int] = None):
 
 
 @app.post("/api/resources/")
-async def request_resource(request: models.ResourceAllocationRequest):
+async def request_resource(request: models.ResourceAllocationRequest, user: dict = Depends(get_current_user_zero_trust)):
     """Request resource allocation"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -7889,7 +7965,7 @@ async def request_resource(request: models.ResourceAllocationRequest):
 
 
 @app.put("/api/resources/{request_id}/allocate")
-async def allocate_resource(request_id: int, approval: models.ResourceAllocationApprovalRequest):
+async def allocate_resource(request_id: int, approval: models.ResourceAllocationApprovalRequest, user: dict = Depends(get_current_user_zero_trust)):
     """Approve and allocate resources"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -7978,7 +8054,7 @@ async def allocate_resource(request_id: int, approval: models.ResourceAllocation
 
 
 @app.get("/api/resources/{request_id}/status")
-async def get_resource_status(request_id: int):
+async def get_resource_status(request_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """Get resource allocation status"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -8048,7 +8124,7 @@ class SLAPolicyUpdate(BaseModel):
     error_rate_limit: float = None
 
 @app.get("/api/sla/policies")
-async def get_sla_policies():
+async def get_sla_policies(user: dict = Depends(get_current_user_zero_trust)):
     """Get all SLA policies"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -8063,7 +8139,7 @@ async def get_sla_policies():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/sla/policies")
-async def create_sla_policy(policy: SLAPolicyCreate):
+async def create_sla_policy(policy: SLAPolicyCreate, user: dict = Depends(get_current_user_zero_trust)):
     """Create new SLA policy"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -8088,7 +8164,7 @@ async def create_sla_policy(policy: SLAPolicyCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/sla/policies/{policy_id}")
-async def update_sla_policy(policy_id: int, update: SLAPolicyUpdate):
+async def update_sla_policy(policy_id: int, update: SLAPolicyUpdate, user: dict = Depends(get_current_user_zero_trust)):
     """Update SLA policy"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -8126,7 +8202,7 @@ async def update_sla_policy(policy_id: int, update: SLAPolicyUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/sla/policies/{policy_id}")
-async def delete_sla_policy(policy_id: int):
+async def delete_sla_policy(policy_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """Delete SLA policy"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -8138,7 +8214,7 @@ async def delete_sla_policy(policy_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/sla/metrics/{policy_id}")
-async def get_sla_metrics(policy_id: int, limit: int = 10):
+async def get_sla_metrics(policy_id: int, limit: int = 10, user: dict = Depends(get_current_user_zero_trust)):
     """Get SLA metrics for a policy"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -8155,7 +8231,7 @@ async def get_sla_metrics(policy_id: int, limit: int = 10):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/sla/violations")
-async def get_sla_violations(policy_id: int = None, limit: int = 50):
+async def get_sla_violations(policy_id: int = None, limit: int = 50, user: dict = Depends(get_current_user_zero_trust)):
     """Get SLA violations"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -8180,7 +8256,7 @@ async def get_sla_violations(policy_id: int = None, limit: int = 50):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/agents", status_code=201)
-async def create_agent(req: models.AgentCreate):
+async def create_agent(req: models.AgentCreate, user: dict = Depends(get_current_user_zero_trust)):
     """エージェントを作成"""
     await ensure_db_initialized()
     try:
@@ -8225,7 +8301,7 @@ async def create_agent(req: models.AgentCreate):
 
 
 @app.post("/api/agents/{agent_id}/start", status_code=200)
-async def start_agent(agent_id: int):
+async def start_agent(agent_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """エージェントを起動"""
     await ensure_db_initialized()
     try:
@@ -8267,7 +8343,7 @@ async def start_agent(agent_id: int):
 
 
 @app.get("/api/workflows")
-async def get_workflows(workflow_type: str = "all"):
+async def get_workflows(workflow_type: str = "all", user: dict = Depends(get_current_user_zero_trust)):
     """ワークフロー一覧取得（テンプレートとインスタンスを統合）"""
     try:
         if not TASKS_DB.exists():
@@ -8326,7 +8402,7 @@ async def get_workflows(workflow_type: str = "all"):
 async def create_cross_department_request(
     req: models.CrossDepartmentRequestCreate,
     auth: dict = Depends(verify_api_key),
-):
+user: dict = Depends(get_current_user_zero_trust)):
     """他部署にタスク / リソース / スキルを依頼する"""
     try:
         # バリデーション: 同一部署チェック
@@ -8405,7 +8481,7 @@ async def create_cross_department_request(
 async def create_task_sharing(
     req: models.TaskSharingCreate,
     auth: dict = Depends(verify_api_key),
-):
+user: dict = Depends(get_current_user_zero_trust)):
     """リクエストに基づいてタスクを部署間で共有する"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -8468,7 +8544,7 @@ async def get_received_requests(
     status: Optional[str] = None,
     limit: int = 20,
     auth: dict = Depends(verify_api_key),
-):
+user: dict = Depends(get_current_user_zero_trust)):
     """指定部署が受け取った他部署からのリクエスト一覧"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -8504,7 +8580,7 @@ async def get_shared_tasks(
     status: Optional[str] = None,
     limit: int = 20,
     auth: dict = Depends(verify_api_key),
-):
+user: dict = Depends(get_current_user_zero_trust)):
     """指定部署が受け取った共有タスク一覧"""
     try:
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
@@ -8567,7 +8643,7 @@ from .integrations.webhook_service import (
 
 
 @app.post("/api/webhooks/slack")
-async def webhook_slack(request: models.SlackWebhookPayload):
+async def webhook_slack(request: models.SlackWebhookPayload, user: dict = Depends(get_current_user_zero_trust)):
     """
     Slack webhook endpoint.
     
@@ -8647,7 +8723,7 @@ async def webhook_slack(request: models.SlackWebhookPayload):
 
 
 @app.post("/api/webhooks/discord")
-async def webhook_discord(payload: models.DiscordWebhookPayload):
+async def webhook_discord(payload: models.DiscordWebhookPayload, user: dict = Depends(get_current_user_zero_trust)):
     """
     Discord webhook endpoint.
     
@@ -8714,7 +8790,7 @@ async def list_integration_configs(
     integration_type: Optional[str] = None,
     is_active: Optional[int] = None,
     limit: int = 50,
-):
+user: dict = Depends(get_current_user_zero_trust)):
     """
     List integration configurations.
     
@@ -8757,7 +8833,7 @@ async def list_integration_configs(
 
 
 @app.post("/api/integrations/configs")
-async def create_integration_config(req: models.IntegrationConfigCreate):
+async def create_integration_config(req: models.IntegrationConfigCreate, user: dict = Depends(get_current_user_zero_trust)):
     """
     Create a new integration configuration.
     """
@@ -8819,7 +8895,7 @@ async def create_integration_config(req: models.IntegrationConfigCreate):
 
 
 @app.get("/api/integrations/configs/{config_id}")
-async def get_integration_config(config_id: int):
+async def get_integration_config(config_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """
     Get a specific integration configuration.
     """
@@ -8848,8 +8924,8 @@ async def get_integration_config(config_id: int):
 
 @app.put("/api/integrations/configs/{config_id}")
 async def update_integration_config(
-    config_id: int, req: models.IntegrationConfigUpdate
-):
+    config_id: int, req: models.IntegrationConfigUpdate,
+user: dict = Depends(get_current_user_zero_trust)):
     """
     Update an integration configuration (partial update).
     """
@@ -8899,7 +8975,7 @@ async def update_integration_config(
 
 
 @app.delete("/api/integrations/configs/{config_id}")
-async def delete_integration_config(config_id: int):
+async def delete_integration_config(config_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """
     Delete an integration configuration.
     """
@@ -8927,7 +9003,7 @@ async def delete_integration_config(config_id: int):
 
 
 @app.post("/api/integrations/verify/{config_id}")
-async def verify_integration_webhook(config_id: int):
+async def verify_integration_webhook(config_id: int, user: dict = Depends(get_current_user_zero_trust)):
     """
     Verify that a webhook URL is reachable.
 
@@ -9030,7 +9106,7 @@ async def create_team_invite(team_id: int, req: models.InvitationCreate, auth_he
 
 
 @app.post("/api/invites/{token}/accept", status_code=201)
-async def accept_invitation(token: str, req: models.InviteAcceptRequest, auth_header: Optional[str] = Header(None)):
+async def accept_invitation(token: str, req: models.InviteAcceptRequest, auth_header: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """招待リンクを受け入れてチームメンバーになる"""
     await ensure_db_initialized()
     try:
@@ -9104,7 +9180,7 @@ async def accept_invitation(token: str, req: models.InviteAcceptRequest, auth_he
 
 
 @app.get("/api/teams/{team_id}/members")
-async def list_team_members(team_id: int, role: Optional[str] = None, status: str = "active", auth_header: Optional[str] = Header(None)):
+async def list_team_members(team_id: int, role: Optional[str] = None, status: str = "active", auth_header: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """チームメンバー一覧を取得"""
     await ensure_db_initialized()
     try:
@@ -9275,7 +9351,7 @@ async def remove_team_member(team_id: int, user_id: str, auth_header: Optional[s
 
 
 @app.get("/api/auth/sessions")
-async def get_active_sessions(auth_header: Optional[str] = Header(None)):
+async def get_active_sessions(auth_header: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """アクティブなセッション一覧を取得"""
     try:
         if not auth_header:
@@ -9297,7 +9373,7 @@ async def get_active_sessions(auth_header: Optional[str] = Header(None)):
 
 
 @app.post("/api/auth/sessions/{session_id}/force-logout")
-async def force_logout_user_session(session_id: str, auth_header: Optional[str] = Header(None)):
+async def force_logout_user_session(session_id: str, auth_header: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """セッションを強制ログアウト"""
     try:
         if not auth_header:
@@ -9336,7 +9412,7 @@ class Disable2FARequest(BaseModel):
 
 
 @app.post("/api/2fa/enable")
-async def enable_2fa(req: Enable2FARequest, auth_header: Optional[str] = Header(None)):
+async def enable_2fa(req: Enable2FARequest, auth_header: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """TOTP 2FAを有効化（初期設定）"""
     try:
         if not auth_header:
@@ -9367,7 +9443,7 @@ async def enable_2fa(req: Enable2FARequest, auth_header: Optional[str] = Header(
 
 
 @app.post("/api/2fa/verify")
-async def verify_2fa(req: Verify2FARequest, auth_header: Optional[str] = Header(None)):
+async def verify_2fa(req: Verify2FARequest, auth_header: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """TOTP トークンを検証して2FAを有効化"""
     try:
         if not auth_header:
@@ -9393,7 +9469,7 @@ async def verify_2fa(req: Verify2FARequest, auth_header: Optional[str] = Header(
 
 
 @app.delete("/api/2fa/disable")
-async def disable_2fa(req: Disable2FARequest, auth_header: Optional[str] = Header(None)):
+async def disable_2fa(req: Disable2FARequest, auth_header: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
     """TOTP 2FAを無効化（パスワード確認が必要）"""
     try:
         if not auth_header:
