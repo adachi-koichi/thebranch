@@ -1654,6 +1654,18 @@
                 部署間コラボ <span id="collab-unread-badge" class="collab-badge" style="display:none">0</span>
               </a>
             </li>
+            <li>
+              <a href="#" onclick="openLogsModal(); return false;" id="logs-nav-link">ログ</a>
+            </li>
+            <li>
+              <a href="/projects" onclick="openProjectsModal(); history.replaceState(null, '', '/projects'); return false;" id="projects-nav-link">プロジェクト</a>
+            </li>
+            <li>
+              <a href="/workflows" onclick="openWorkflowsModal(); history.replaceState(null, '', '/workflows'); return false;" id="workflows-nav-link">ワークフロー</a>
+            </li>
+            <li>
+              <a href="/workflow-templates" onclick="openTemplatesModal(); history.replaceState(null, '', '/workflow-templates'); return false;" id="templates-nav-link">テンプレート</a>
+            </li>
           </ul>
           <div class="header-actions">
             <span id="user-role-badge" class="role-badge role-badge--member" style="display:none"></span>
@@ -2450,6 +2462,258 @@
         <div id="collab-notifications-list" class="collab-list">
           <p class="collab-loading">読み込み中...</p>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ログモーダル (Task #2501) -->
+  <div id="logs-modal" class="collab-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="logs-modal-title" style="display:none">
+    <div class="collab-modal" style="width: min(1100px, 96vw);">
+      <div class="collab-modal-header">
+        <h2 id="logs-modal-title" class="collab-modal-title">ログ閲覧</h2>
+        <button class="collab-modal-close" onclick="closeLogsModal()" aria-label="閉じる">&times;</button>
+      </div>
+
+      <!-- タブ -->
+      <div class="collab-tabs">
+        <button class="collab-tab-btn active" data-logs-tab="agent" onclick="switchLogsTab('agent')">エージェント稼働ログ</button>
+        <button class="collab-tab-btn" data-logs-tab="audit" onclick="switchLogsTab('audit')">監査ログ</button>
+      </div>
+
+      <!-- エージェント稼働ログ -->
+      <div id="logs-tab-agent" class="collab-tab-content active">
+        <div class="collab-filter-bar">
+          <select id="logs-agent-action" onchange="loadAgentLogs(1)">
+            <option value="">全アクション</option>
+            <option value="started">起動 (started)</option>
+            <option value="stopped">停止 (stopped)</option>
+            <option value="failed">エラー (failed)</option>
+            <option value="message">メッセージ (message)</option>
+          </select>
+          <input type="number" id="logs-agent-id" placeholder="エージェントID" min="1"
+                 style="width:140px;padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;"
+                 onchange="loadAgentLogs(1)" />
+          <input type="date" id="logs-agent-date-from" onchange="loadAgentLogs(1)"
+                 style="padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;" />
+          <span style="font-size:0.85rem;color:var(--text-secondary,#6b7280)">〜</span>
+          <input type="date" id="logs-agent-date-to" onchange="loadAgentLogs(1)"
+                 style="padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;" />
+          <input type="text" id="logs-agent-search" placeholder="検索 (詳細・エージェント名)"
+                 style="flex:1;min-width:200px;padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;"
+                 onkeydown="if(event.key==='Enter'){loadAgentLogs(1);}" />
+          <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="loadAgentLogs(1)">適用</button>
+          <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="resetAgentLogsFilter()">リセット</button>
+        </div>
+        <div id="logs-agent-meta" style="font-size:0.8rem;color:var(--text-secondary,#6b7280);margin-bottom:8px;"></div>
+        <div style="overflow-x:auto;border:1px solid var(--border-color,#e5e7eb);border-radius:10px;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+            <thead style="background:var(--bg-secondary,#f9fafb);">
+              <tr>
+                <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">日時</th>
+                <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">エージェント</th>
+                <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">役職</th>
+                <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">アクション</th>
+                <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">詳細</th>
+              </tr>
+            </thead>
+            <tbody id="logs-agent-tbody">
+              <tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="logs-agent-pagination" class="collab-pagination"></div>
+      </div>
+
+      <!-- 監査ログ -->
+      <div id="logs-tab-audit" class="collab-tab-content">
+        <div class="collab-filter-bar">
+          <select id="logs-audit-action" onchange="loadAuditLogs(1)">
+            <option value="">全アクション</option>
+            <option value="login">ログイン (login)</option>
+            <option value="logout">ログアウト (logout)</option>
+            <option value="create">作成 (create)</option>
+            <option value="update">更新 (update)</option>
+            <option value="delete">削除 (delete)</option>
+            <option value="access">アクセス (access)</option>
+            <option value="config_change">設定変更 (config_change)</option>
+            <option value="permission_change">権限変更 (permission_change)</option>
+          </select>
+          <select id="logs-audit-status" onchange="loadAuditLogs(1)">
+            <option value="">全ステータス</option>
+            <option value="success">成功 (success)</option>
+            <option value="failure">失敗 (failure)</option>
+            <option value="denied">拒否 (denied)</option>
+          </select>
+          <input type="text" id="logs-audit-resource-type" placeholder="リソース種別"
+                 style="width:140px;padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;"
+                 onkeydown="if(event.key==='Enter'){loadAuditLogs(1);}" />
+          <input type="text" id="logs-audit-user-id" placeholder="ユーザーID"
+                 style="width:140px;padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;"
+                 onkeydown="if(event.key==='Enter'){loadAuditLogs(1);}" />
+          <input type="date" id="logs-audit-date-from" onchange="loadAuditLogs(1)"
+                 style="padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;" />
+          <span style="font-size:0.85rem;color:var(--text-secondary,#6b7280)">〜</span>
+          <input type="date" id="logs-audit-date-to" onchange="loadAuditLogs(1)"
+                 style="padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;" />
+          <input type="text" id="logs-audit-search" placeholder="検索 (詳細・ユーザー名)"
+                 style="flex:1;min-width:200px;padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;"
+                 onkeydown="if(event.key==='Enter'){loadAuditLogs(1);}" />
+          <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="loadAuditLogs(1)">適用</button>
+          <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="resetAuditLogsFilter()">リセット</button>
+        </div>
+        <div id="logs-audit-meta" style="font-size:0.8rem;color:var(--text-secondary,#6b7280);margin-bottom:8px;"></div>
+        <div style="overflow-x:auto;border:1px solid var(--border-color,#e5e7eb);border-radius:10px;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+            <thead style="background:var(--bg-secondary,#f9fafb);">
+              <tr>
+                <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">日時</th>
+                <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">ユーザー</th>
+                <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">アクション</th>
+                <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">対象リソース</th>
+                <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">ステータス</th>
+                <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">詳細 / IP</th>
+              </tr>
+            </thead>
+            <tbody id="logs-audit-tbody">
+              <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="logs-audit-pagination" class="collab-pagination"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task #2793: プロジェクト一覧モーダル -->
+  <div id="projects-modal" class="collab-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="projects-modal-title" style="display:none">
+    <div class="collab-modal" style="width: min(1100px, 96vw);">
+      <div class="collab-modal-header">
+        <h2 id="projects-modal-title" class="collab-modal-title">プロジェクト一覧</h2>
+        <button class="collab-modal-close" onclick="closeProjectsModal()" aria-label="閉じる">&times;</button>
+      </div>
+
+      <!-- 新規追加フォーム -->
+      <div style="background:var(--bg-secondary,#f9fafb);border:1px solid var(--border-color,#e5e7eb);border-radius:10px;padding:14px;margin-bottom:14px;">
+        <h3 style="margin:0 0 10px 0;font-size:0.95rem;">新規プロジェクト追加</h3>
+        <div style="display:grid;grid-template-columns:1fr 2fr 140px auto;gap:8px;align-items:end;">
+          <div>
+            <label style="display:block;font-size:0.75rem;color:var(--text-secondary,#6b7280);margin-bottom:4px;">名前 *</label>
+            <input type="text" id="project-new-name" placeholder="プロジェクト名"
+                   style="width:100%;padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;" />
+          </div>
+          <div>
+            <label style="display:block;font-size:0.75rem;color:var(--text-secondary,#6b7280);margin-bottom:4px;">説明</label>
+            <input type="text" id="project-new-description" placeholder="プロジェクトの説明"
+                   style="width:100%;padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;" />
+          </div>
+          <div>
+            <label style="display:block;font-size:0.75rem;color:var(--text-secondary,#6b7280);margin-bottom:4px;">ステータス</label>
+            <select id="project-new-status"
+                    style="width:100%;padding:6px 10px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;font-size:0.85rem;">
+              <option value="active">active</option>
+              <option value="draft">draft</option>
+              <option value="archived">archived</option>
+            </select>
+          </div>
+          <button class="collab-btn collab-btn-primary collab-btn-sm" onclick="createProject()">追加</button>
+        </div>
+        <div id="project-create-msg" style="font-size:0.8rem;margin-top:6px;"></div>
+      </div>
+
+      <div class="collab-filter-bar">
+        <select id="project-filter-status" onchange="loadProjects()">
+          <option value="">全ステータス</option>
+          <option value="active" selected>active</option>
+          <option value="draft">draft</option>
+          <option value="archived">archived</option>
+        </select>
+        <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="loadProjects()">再読込</button>
+        <span id="projects-meta" style="font-size:0.8rem;color:var(--text-secondary,#6b7280);margin-left:auto;"></span>
+      </div>
+
+      <div style="overflow-x:auto;border:1px solid var(--border-color,#e5e7eb);border-radius:10px;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+          <thead style="background:var(--bg-secondary,#f9fafb);">
+            <tr>
+              <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);width:60px;">ID</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">名前</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);">説明</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);width:120px;">ステータス</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);width:160px;">作成日時</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color,#e5e7eb);width:170px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="projects-tbody">
+            <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task #2793: 稼働中ワークフロー一覧モーダル -->
+  <div id="workflows-modal" class="collab-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="workflows-modal-title" style="display:none">
+    <div class="collab-modal" style="width: min(1200px, 96vw);">
+      <div class="collab-modal-header">
+        <h2 id="workflows-modal-title" class="collab-modal-title">ワークフロー一覧</h2>
+        <button class="collab-modal-close" onclick="closeWorkflowsModal()" aria-label="閉じる">&times;</button>
+      </div>
+
+      <div class="collab-tabs">
+        <button class="collab-tab-btn active" data-wf-tab="instances" onclick="switchWorkflowsTab('instances')">稼働中ワークフロー</button>
+        <button class="collab-tab-btn" data-wf-tab="templates" onclick="switchWorkflowsTab('templates')">利用可能テンプレート</button>
+      </div>
+
+      <!-- 稼働中ワークフロー（workflow_instances） -->
+      <div id="wf-tab-instances" class="collab-tab-content active">
+        <div class="collab-filter-bar">
+          <select id="wf-instance-status" onchange="loadWorkflowInstances()">
+            <option value="">全ステータス</option>
+            <option value="running">running</option>
+            <option value="pending">pending</option>
+            <option value="completed">completed</option>
+            <option value="failed">failed</option>
+          </select>
+          <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="loadWorkflowInstances()">再読込</button>
+          <span id="wf-instances-meta" style="font-size:0.8rem;color:var(--text-secondary,#6b7280);margin-left:auto;"></span>
+        </div>
+        <div id="wf-instances-list">
+          <div style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</div>
+        </div>
+      </div>
+
+      <!-- テンプレート一覧（workflow_templates、フェーズ・タスク含む） -->
+      <div id="wf-tab-templates" class="collab-tab-content">
+        <div class="collab-filter-bar">
+          <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="loadWorkflowTemplates()">再読込</button>
+          <span id="wf-templates-meta" style="font-size:0.8rem;color:var(--text-secondary,#6b7280);margin-left:auto;"></span>
+        </div>
+        <div id="wf-templates-list">
+          <div style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task #2793: ワークフローテンプレート一覧モーダル -->
+  <div id="templates-modal" class="collab-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="templates-modal-title" style="display:none">
+    <div class="collab-modal" style="width: min(1200px, 96vw);">
+      <div class="collab-modal-header">
+        <h2 id="templates-modal-title" class="collab-modal-title">ワークフローテンプレート（フェーズ・タスク階層）</h2>
+        <button class="collab-modal-close" onclick="closeTemplatesModal()" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="collab-filter-bar">
+        <select id="template-filter-status" onchange="loadTemplates()">
+          <option value="">全ステータス</option>
+          <option value="active" selected>active</option>
+          <option value="draft">draft</option>
+          <option value="archived">archived</option>
+        </select>
+        <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="loadTemplates()">再読込</button>
+        <span id="templates-meta" style="font-size:0.8rem;color:var(--text-secondary,#6b7280);margin-left:auto;"></span>
+      </div>
+      <div id="templates-list">
+        <div style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</div>
       </div>
     </div>
   </div>
@@ -3266,6 +3530,551 @@
   // ページ読み込み時にバッジ更新
   window.addEventListener('load', () => {
     if (collabGetToken()) refreshCollabUnreadBadge();
+  });
+
+  // ── ログ閲覧 (Task #2501) ────────────────────────────────────────────
+  const logsState = {
+    agent: { page: 1 },
+    audit: { page: 1 },
+    currentTab: 'agent',
+  };
+
+  function logsGetToken() {
+    return localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+  }
+
+  function logsEscapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function logsFormatDate(s) {
+    if (!s) return '';
+    try {
+      const d = new Date(s.replace(' ', 'T'));
+      if (isNaN(d.getTime())) return s;
+      return d.toLocaleString('ja-JP', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+    } catch { return s; }
+  }
+
+  function openLogsModal() {
+    document.getElementById('logs-modal').style.display = 'flex';
+    switchLogsTab('agent');
+  }
+
+  function closeLogsModal() {
+    document.getElementById('logs-modal').style.display = 'none';
+  }
+
+  function switchLogsTab(tab) {
+    logsState.currentTab = tab;
+    document.querySelectorAll('[data-logs-tab]').forEach(b => {
+      b.classList.toggle('active', b.dataset.logsTab === tab);
+    });
+    document.querySelectorAll('#logs-modal .collab-tab-content').forEach(c => {
+      c.classList.toggle('active', c.id === `logs-tab-${tab}`);
+    });
+    if (tab === 'agent') loadAgentLogs(logsState.agent.page);
+    else if (tab === 'audit') loadAuditLogs(logsState.audit.page);
+  }
+
+  function resetAgentLogsFilter() {
+    ['logs-agent-action','logs-agent-id','logs-agent-date-from','logs-agent-date-to','logs-agent-search']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    loadAgentLogs(1);
+  }
+
+  function resetAuditLogsFilter() {
+    ['logs-audit-action','logs-audit-status','logs-audit-resource-type','logs-audit-user-id','logs-audit-date-from','logs-audit-date-to','logs-audit-search']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    loadAuditLogs(1);
+  }
+
+  async function loadAgentLogs(page = 1) {
+    logsState.agent.page = page;
+    const tbody = document.getElementById('logs-agent-tbody');
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</td></tr>';
+
+    const params = new URLSearchParams();
+    params.set('page', page);
+    params.set('limit', 25);
+    const action = document.getElementById('logs-agent-action')?.value;
+    const agentId = document.getElementById('logs-agent-id')?.value;
+    const dateFrom = document.getElementById('logs-agent-date-from')?.value;
+    const dateTo = document.getElementById('logs-agent-date-to')?.value;
+    const search = document.getElementById('logs-agent-search')?.value;
+    if (action) params.set('action', action);
+    if (agentId) params.set('agent_id', agentId);
+    if (dateFrom) params.set('date_from', dateFrom);
+    if (dateTo) params.set('date_to', dateTo);
+    if (search) params.set('search', search);
+
+    try {
+      const r = await fetch(`/api/agent-logs?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${logsGetToken()}` },
+      });
+      if (r.status === 401) {
+        tbody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:#ef4444;">認証が必要です。ログインしてください。</td></tr>';
+        return;
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const items = data.data || [];
+
+      const meta = document.getElementById('logs-agent-meta');
+      if (meta && data.pagination) {
+        meta.textContent = `${data.pagination.total}件中 ${(data.pagination.page - 1) * data.pagination.limit + 1}〜${Math.min(data.pagination.page * data.pagination.limit, data.pagination.total)}件を表示`;
+      }
+
+      if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">該当するログがありません</td></tr>';
+        document.getElementById('logs-agent-pagination').innerHTML = '';
+        return;
+      }
+
+      tbody.innerHTML = items.map(it => {
+        const actionColor = {
+          started: '#10b981', stopped: '#6b7280', failed: '#ef4444', message: '#3b82f6'
+        }[it.action] || '#6b7280';
+        return `
+          <tr style="border-bottom:1px solid var(--border-color,#f3f4f6);">
+            <td style="padding:10px 12px;white-space:nowrap;">${logsEscapeHtml(logsFormatDate(it.created_at))}</td>
+            <td style="padding:10px 12px;">${logsEscapeHtml(it.agent_name || '#' + it.agent_id)}</td>
+            <td style="padding:10px 12px;color:var(--text-secondary,#6b7280);">${logsEscapeHtml(it.role || '')}</td>
+            <td style="padding:10px 12px;"><span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;color:#fff;background:${actionColor};">${logsEscapeHtml(it.action)}</span></td>
+            <td style="padding:10px 12px;color:var(--text-secondary,#374151);">${logsEscapeHtml(it.detail || '')}</td>
+          </tr>`;
+      }).join('');
+
+      renderLogsPagination('logs-agent-pagination', data.pagination, 'loadAgentLogs');
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="5" style="padding:24px;text-align:center;color:#ef4444;">読み込みエラー: ${logsEscapeHtml(e.message)}</td></tr>`;
+    }
+  }
+
+  async function loadAuditLogs(page = 1) {
+    logsState.audit.page = page;
+    const tbody = document.getElementById('logs-audit-tbody');
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</td></tr>';
+
+    const params = new URLSearchParams();
+    params.set('page', page);
+    params.set('limit', 25);
+    const action = document.getElementById('logs-audit-action')?.value;
+    const status = document.getElementById('logs-audit-status')?.value;
+    const resourceType = document.getElementById('logs-audit-resource-type')?.value;
+    const userId = document.getElementById('logs-audit-user-id')?.value;
+    const dateFrom = document.getElementById('logs-audit-date-from')?.value;
+    const dateTo = document.getElementById('logs-audit-date-to')?.value;
+    const search = document.getElementById('logs-audit-search')?.value;
+    if (action) params.set('action', action);
+    if (status) params.set('status', status);
+    if (resourceType) params.set('resource_type', resourceType);
+    if (userId) params.set('user_id', userId);
+    if (dateFrom) params.set('date_from', dateFrom);
+    if (dateTo) params.set('date_to', dateTo);
+    if (search) params.set('search', search);
+
+    try {
+      const r = await fetch(`/api/audit-logs?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${logsGetToken()}` },
+      });
+      if (r.status === 401) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:#ef4444;">認証が必要です。ログインしてください。</td></tr>';
+        return;
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const items = data.data || [];
+
+      const meta = document.getElementById('logs-audit-meta');
+      if (meta && data.pagination) {
+        meta.textContent = `${data.pagination.total}件中 ${(data.pagination.page - 1) * data.pagination.limit + 1}〜${Math.min(data.pagination.page * data.pagination.limit, data.pagination.total)}件を表示`;
+      }
+
+      if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">該当するログがありません</td></tr>';
+        document.getElementById('logs-audit-pagination').innerHTML = '';
+        return;
+      }
+
+      tbody.innerHTML = items.map(it => {
+        const statusColor = { success: '#10b981', failure: '#ef4444', denied: '#7c3aed' }[it.status] || '#6b7280';
+        const statusLabel = { success: '成功', failure: '失敗', denied: '拒否' }[it.status] || it.status;
+        const resource = (it.resource_type || it.resource_id)
+          ? `${logsEscapeHtml(it.resource_type || '')}${it.resource_id ? ' #' + logsEscapeHtml(it.resource_id) : ''}`
+          : '<span style="color:var(--text-tertiary,#9ca3af)">-</span>';
+        const detailParts = [];
+        if (it.detail) detailParts.push(logsEscapeHtml(it.detail));
+        if (it.ip_address) detailParts.push(`<span style="color:var(--text-tertiary,#9ca3af);font-size:0.75rem;">IP: ${logsEscapeHtml(it.ip_address)}</span>`);
+        return `
+          <tr style="border-bottom:1px solid var(--border-color,#f3f4f6);">
+            <td style="padding:10px 12px;white-space:nowrap;">${logsEscapeHtml(logsFormatDate(it.created_at))}</td>
+            <td style="padding:10px 12px;">${logsEscapeHtml(it.username || it.user_id || '')}</td>
+            <td style="padding:10px 12px;"><span style="font-family:monospace;font-size:0.8rem;background:var(--bg-secondary,#f3f4f6);padding:2px 6px;border-radius:4px;">${logsEscapeHtml(it.action)}</span></td>
+            <td style="padding:10px 12px;">${resource}</td>
+            <td style="padding:10px 12px;"><span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;color:#fff;background:${statusColor};">${logsEscapeHtml(statusLabel)}</span></td>
+            <td style="padding:10px 12px;color:var(--text-secondary,#374151);">${detailParts.join('<br>') || '<span style="color:var(--text-tertiary,#9ca3af)">-</span>'}</td>
+          </tr>`;
+      }).join('');
+
+      renderLogsPagination('logs-audit-pagination', data.pagination, 'loadAuditLogs');
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#ef4444;">読み込みエラー: ${logsEscapeHtml(e.message)}</td></tr>`;
+    }
+  }
+
+  function renderLogsPagination(elId, pagination, funcName) {
+    const el = document.getElementById(elId);
+    if (!el || !pagination || pagination.pages <= 1) { if (el) el.innerHTML = ''; return; }
+    const cur = pagination.page;
+    const total = pagination.pages;
+    let html = '';
+    const addBtn = (p, label, active = false, disabled = false) => {
+      if (disabled) { html += `<button class="collab-page-btn" disabled style="opacity:0.4;">${label}</button>`; return; }
+      html += `<button class="collab-page-btn${active ? ' active' : ''}" onclick="${funcName}(${p})">${label}</button>`;
+    };
+    addBtn(Math.max(1, cur - 1), '‹', false, cur === 1);
+    const start = Math.max(1, cur - 3);
+    const end = Math.min(total, cur + 3);
+    if (start > 1) {
+      addBtn(1, '1');
+      if (start > 2) html += '<span style="padding:4px 6px;color:var(--text-tertiary,#9ca3af);">…</span>';
+    }
+    for (let i = start; i <= end; i++) addBtn(i, String(i), i === cur);
+    if (end < total) {
+      if (end < total - 1) html += '<span style="padding:4px 6px;color:var(--text-tertiary,#9ca3af);">…</span>';
+      addBtn(total, String(total));
+    }
+    addBtn(Math.min(total, cur + 1), '›', false, cur === total);
+    el.innerHTML = html;
+  }
+
+  // Esc キーで閉じる
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('logs-modal')?.style.display !== 'none') {
+      closeLogsModal();
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────
+  // Task #2793: プロジェクト一覧 / ワークフロー一覧 / テンプレート一覧
+  // ────────────────────────────────────────────────────────────
+  function tbEscapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  async function tbAuthFetch(url, opts = {}) {
+    const headers = Object.assign({}, opts.headers || {});
+    const token = (typeof getAuthToken === 'function' ? getAuthToken() : null)
+      || localStorage.getItem('access_token')
+      || localStorage.getItem('api_token');
+    if (token && !headers['Authorization']) headers['Authorization'] = 'Bearer ' + token;
+    if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    const res = await fetch(url, Object.assign({}, opts, { headers, credentials: 'include' }));
+    return res;
+  }
+
+  // ─── プロジェクト一覧 ───
+  function openProjectsModal() {
+    const modal = document.getElementById('projects-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    loadProjects();
+  }
+  function closeProjectsModal() {
+    const modal = document.getElementById('projects-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+    if (location.pathname === '/projects') history.replaceState(null, '', '/');
+  }
+  async function loadProjects() {
+    const tbody = document.getElementById('projects-tbody');
+    const meta = document.getElementById('projects-meta');
+    const status = document.getElementById('project-filter-status')?.value || '';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</td></tr>';
+    try {
+      const url = status ? `/api/projects?status=${encodeURIComponent(status)}` : '/api/projects';
+      const res = await tbAuthFetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.projects || []);
+      if (meta) meta.textContent = `件数: ${list.length}`;
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">プロジェクトがありません</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(p => {
+        const created = (p.created_at || '').replace('T', ' ').slice(0, 19);
+        const statusColor = p.status === 'active' ? '#10b981' : (p.status === 'draft' ? '#f59e0b' : '#9ca3af');
+        return `<tr data-pid="${p.id}">
+          <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#f3f4f6);">${p.id}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#f3f4f6);font-weight:600;">${tbEscapeHtml(p.name)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#f3f4f6);color:var(--text-secondary,#374151);">${tbEscapeHtml(p.description || '')}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#f3f4f6);"><span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;color:#fff;background:${statusColor};">${tbEscapeHtml(p.status || '')}</span></td>
+          <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#f3f4f6);font-size:0.8rem;color:var(--text-secondary,#6b7280);">${tbEscapeHtml(created)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#f3f4f6);">
+            <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="editProjectPrompt(${p.id}, '${tbEscapeHtml(p.name).replace(/'/g, '&#39;')}', '${tbEscapeHtml(p.description || '').replace(/'/g, '&#39;')}', '${tbEscapeHtml(p.status || 'active')}')">編集</button>
+            <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="deleteProject(${p.id}, '${tbEscapeHtml(p.name).replace(/'/g, '&#39;')}')" style="color:#ef4444;">削除</button>
+          </td>
+        </tr>`;
+      }).join('');
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#ef4444;">読み込みエラー: ${tbEscapeHtml(e.message)}</td></tr>`;
+    }
+  }
+  async function createProject() {
+    const msg = document.getElementById('project-create-msg');
+    const name = document.getElementById('project-new-name')?.value.trim();
+    const description = document.getElementById('project-new-description')?.value.trim() || '';
+    const status = document.getElementById('project-new-status')?.value || 'active';
+    if (!name) { msg.style.color = '#ef4444'; msg.textContent = '名前は必須です'; return; }
+    msg.style.color = ''; msg.textContent = '送信中...';
+    try {
+      const res = await tbAuthFetch('/api/projects', {
+        method: 'POST',
+        body: JSON.stringify({ name, description, status, workflows: [] }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || ('HTTP ' + res.status));
+      }
+      msg.style.color = '#10b981'; msg.textContent = '✓ 追加しました';
+      document.getElementById('project-new-name').value = '';
+      document.getElementById('project-new-description').value = '';
+      setTimeout(() => { msg.textContent = ''; }, 2000);
+      loadProjects();
+    } catch (e) {
+      msg.style.color = '#ef4444'; msg.textContent = 'エラー: ' + e.message;
+    }
+  }
+  async function editProjectPrompt(id, oldName, oldDesc, oldStatus) {
+    const name = prompt('プロジェクト名', oldName);
+    if (name === null) return;
+    const description = prompt('説明', oldDesc);
+    if (description === null) return;
+    const status = prompt('ステータス (active / draft / archived)', oldStatus);
+    if (status === null) return;
+    try {
+      const res = await tbAuthFetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name, description, status }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || ('HTTP ' + res.status));
+      }
+      loadProjects();
+    } catch (e) { alert('更新エラー: ' + e.message); }
+  }
+  async function deleteProject(id, name) {
+    if (!confirm(`プロジェクト「${name}」を削除しますか？`)) return;
+    try {
+      const res = await tbAuthFetch(`/api/projects/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || ('HTTP ' + res.status));
+      }
+      loadProjects();
+    } catch (e) { alert('削除エラー: ' + e.message); }
+  }
+
+  // ─── ワークフロー一覧 ───
+  function openWorkflowsModal() {
+    const modal = document.getElementById('workflows-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    switchWorkflowsTab('instances');
+  }
+  function closeWorkflowsModal() {
+    const modal = document.getElementById('workflows-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+    if (location.pathname === '/workflows') history.replaceState(null, '', '/');
+  }
+  function switchWorkflowsTab(tab) {
+    document.querySelectorAll('[data-wf-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.wfTab === tab);
+    });
+    document.getElementById('wf-tab-instances').classList.toggle('active', tab === 'instances');
+    document.getElementById('wf-tab-templates').classList.toggle('active', tab === 'templates');
+    document.getElementById('wf-tab-instances').style.display = tab === 'instances' ? '' : 'none';
+    document.getElementById('wf-tab-templates').style.display = tab === 'templates' ? '' : 'none';
+    if (tab === 'instances') loadWorkflowInstances();
+    else loadWorkflowTemplates();
+  }
+  async function loadWorkflowInstances() {
+    const list = document.getElementById('wf-instances-list');
+    const meta = document.getElementById('wf-instances-meta');
+    const status = document.getElementById('wf-instance-status')?.value || '';
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</div>';
+    try {
+      const url = status ? `/api/workflows/instances?status=${encodeURIComponent(status)}` : '/api/workflows/instances';
+      const res = await tbAuthFetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const arr = Array.isArray(data) ? data : (data.instances || []);
+      if (meta) meta.textContent = `件数: ${arr.length}`;
+      if (!arr.length) {
+        list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">稼働中ワークフローはありません</div>';
+        return;
+      }
+      list.innerHTML = arr.map(inst => {
+        const nodes = (inst.nodes || []).map(n => `
+          <li style="padding:4px 0;border-bottom:1px dashed var(--border-color,#e5e7eb);font-size:0.82rem;">
+            <span style="font-weight:600;">${tbEscapeHtml(n.task_title || n.node_key || '(no title)')}</span>
+            <span style="margin-left:8px;color:var(--text-secondary,#6b7280);">[${tbEscapeHtml(n.task_status || n.status || '-')}]</span>
+            ${n.task_role ? `<span style="margin-left:8px;color:var(--text-tertiary,#9ca3af);">role: ${tbEscapeHtml(n.task_role)}</span>` : ''}
+          </li>`).join('');
+        const statusColor = inst.status === 'running' ? '#3b82f6' : (inst.status === 'completed' ? '#10b981' : (inst.status === 'failed' ? '#ef4444' : '#9ca3af'));
+        return `<div style="border:1px solid var(--border-color,#e5e7eb);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--bg-primary,#fff);">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+            <span style="font-weight:700;font-size:0.95rem;">#${inst.id}</span>
+            <span style="font-weight:600;">${tbEscapeHtml(inst.template_name || '(template?)')}</span>
+            <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;color:#fff;background:${statusColor};">${tbEscapeHtml(inst.status || 'unknown')}</span>
+            <span style="margin-left:auto;font-size:0.78rem;color:var(--text-secondary,#6b7280);">${tbEscapeHtml((inst.created_at || '').replace('T',' ').slice(0,19))}</span>
+          </div>
+          ${nodes ? `<ul style="margin:8px 0 0 0;padding:0 0 0 14px;list-style:disc;">${nodes}</ul>` : '<div style="margin-top:6px;font-size:0.8rem;color:var(--text-tertiary,#9ca3af);">ノードなし</div>'}
+        </div>`;
+      }).join('');
+    } catch (e) {
+      list.innerHTML = `<div style="padding:24px;text-align:center;color:#ef4444;">読み込みエラー: ${tbEscapeHtml(e.message)}</div>`;
+    }
+  }
+  async function loadWorkflowTemplates() {
+    const list = document.getElementById('wf-templates-list');
+    const meta = document.getElementById('wf-templates-meta');
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</div>';
+    try {
+      const res = await tbAuthFetch('/api/workflow-templates');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const arr = data.templates || [];
+      if (meta) meta.textContent = `件数: ${arr.length}`;
+      if (!arr.length) {
+        list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">テンプレートがありません</div>';
+        return;
+      }
+      list.innerHTML = arr.map(t => renderTemplateCard(t, false)).join('');
+    } catch (e) {
+      list.innerHTML = `<div style="padding:24px;text-align:center;color:#ef4444;">読み込みエラー: ${tbEscapeHtml(e.message)}</div>`;
+    }
+  }
+
+  // ─── テンプレート階層表示 ───
+  function openTemplatesModal() {
+    const modal = document.getElementById('templates-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    loadTemplates();
+  }
+  function closeTemplatesModal() {
+    const modal = document.getElementById('templates-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+    if (location.pathname === '/workflow-templates') history.replaceState(null, '', '/');
+  }
+  async function loadTemplates() {
+    const list = document.getElementById('templates-list');
+    const meta = document.getElementById('templates-meta');
+    const status = document.getElementById('template-filter-status')?.value || '';
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</div>';
+    try {
+      const url = status ? `/api/workflow-templates?status=${encodeURIComponent(status)}` : '/api/workflow-templates';
+      const res = await tbAuthFetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const arr = data.templates || [];
+      if (meta) meta.textContent = `件数: ${arr.length}`;
+      if (!arr.length) {
+        list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">テンプレートがありません</div>';
+        return;
+      }
+      list.innerHTML = arr.map(t => renderTemplateCard(t, true)).join('');
+    } catch (e) {
+      list.innerHTML = `<div style="padding:24px;text-align:center;color:#ef4444;">読み込みエラー: ${tbEscapeHtml(e.message)}</div>`;
+    }
+  }
+  function renderTemplateCard(t, expanded) {
+    const phases = (t.steps || []).map(p => {
+      const tasks = (p.tasks || []).map(task => {
+        const prio = task.priority === 1 ? '高' : (task.priority === 2 ? '中' : '低');
+        const prioColor = task.priority === 1 ? '#ef4444' : (task.priority === 2 ? '#f59e0b' : '#9ca3af');
+        return `<li style="padding:6px 0;border-bottom:1px dashed var(--border-color,#e5e7eb);">
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+            <code style="font-size:0.75rem;color:var(--text-tertiary,#9ca3af);">${tbEscapeHtml(task.task_key || '')}</code>
+            <span style="font-weight:600;font-size:0.85rem;">${tbEscapeHtml(task.task_title || '')}</span>
+            <span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:0.7rem;color:#fff;background:${prioColor};">優先度: ${prio}</span>
+            ${task.estimated_hours ? `<span style="font-size:0.75rem;color:var(--text-secondary,#6b7280);">⏱ ${task.estimated_hours}h</span>` : ''}
+          </div>
+          ${task.task_description ? `<div style="font-size:0.78rem;color:var(--text-secondary,#6b7280);margin-top:2px;">${tbEscapeHtml(task.task_description)}</div>` : ''}
+        </li>`;
+      }).join('');
+      const specColor = ({ designer: '#a855f7', researcher: '#06b6d4', engineer: '#3b82f6', product_manager: '#f59e0b' })[p.specialist_type] || '#6b7280';
+      return `<div style="margin-top:8px;border-left:4px solid ${specColor};padding:8px 12px;background:var(--bg-secondary,#f9fafb);border-radius:6px;">
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+          <span style="font-weight:700;font-size:0.9rem;">フェーズ ${p.phase_order ?? ''}: ${tbEscapeHtml(p.phase_label || '')}</span>
+          <code style="font-size:0.75rem;color:var(--text-tertiary,#9ca3af);">${tbEscapeHtml(p.phase_key || '')}</code>
+          ${p.specialist_type ? `<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:0.7rem;color:#fff;background:${specColor};">${tbEscapeHtml(p.specialist_type)}</span>` : ''}
+          ${p.is_parallel ? '<span style="font-size:0.7rem;color:#10b981;">⚡ 並列</span>' : ''}
+          <span style="margin-left:auto;font-size:0.75rem;color:var(--text-secondary,#6b7280);">${(p.tasks || []).length} タスク</span>
+        </div>
+        ${tasks ? `<ul style="margin:6px 0 0 0;padding:0 0 0 14px;list-style:none;">${tasks}</ul>` : ''}
+      </div>`;
+    }).join('');
+    const cardId = `tpl-card-${t.id}`;
+    const initialDisplay = expanded ? 'block' : 'none';
+    const arrow = expanded ? '▼' : '▶';
+    return `<div style="border:1px solid var(--border-color,#e5e7eb);border-radius:10px;padding:12px;margin-bottom:12px;background:var(--bg-primary,#fff);">
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;cursor:pointer;" onclick="toggleTemplateCard('${cardId}', this)">
+        <span class="tpl-arrow" style="font-size:0.8rem;">${arrow}</span>
+        <span style="font-weight:700;font-size:1rem;">#${t.id} ${tbEscapeHtml(t.name || '')}</span>
+        <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.72rem;font-weight:600;color:#fff;background:${t.status === 'active' ? '#10b981' : '#9ca3af'};">${tbEscapeHtml(t.status || '')}</span>
+        <span style="margin-left:auto;font-size:0.78rem;color:var(--text-secondary,#6b7280);">${(t.steps || []).length} フェーズ</span>
+      </div>
+      ${t.description ? `<div style="font-size:0.85rem;color:var(--text-secondary,#374151);margin:6px 0 4px 18px;">${tbEscapeHtml(t.description)}</div>` : ''}
+      <div id="${cardId}" style="display:${initialDisplay};margin-top:6px;">${phases}</div>
+    </div>`;
+  }
+  function toggleTemplateCard(id, headerEl) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const isHidden = el.style.display === 'none';
+    el.style.display = isHidden ? 'block' : 'none';
+    const arrow = headerEl.querySelector('.tpl-arrow');
+    if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
+  }
+
+  // Esc キーで Task#2793 モーダルを閉じる
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('projects-modal')?.style.display !== 'none') closeProjectsModal();
+    else if (document.getElementById('workflows-modal')?.style.display !== 'none') closeWorkflowsModal();
+    else if (document.getElementById('templates-modal')?.style.display !== 'none') closeTemplatesModal();
+  });
+
+  // パスベースで自動的に該当モーダルを開く
+  document.addEventListener('DOMContentLoaded', () => {
+    const path = location.pathname;
+    if (path === '/projects') openProjectsModal();
+    else if (path === '/workflows') openWorkflowsModal();
+    else if (path === '/workflow-templates') openTemplatesModal();
   });
   </script>
   <script src="/js/marketplace.js"></script>

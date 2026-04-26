@@ -17,12 +17,12 @@ from typing import AsyncGenerator, Optional
 import aiosqlite
 import yaml
 import httpx
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header, Depends
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header, Depends, Query, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from dashboard import auth, models, autogen_routes, blueprints, manage_routes, scores_routes, marketplace_routes, agents_control_routes
+from dashboard import auth, models, autogen_routes, blueprints, manage_routes, scores_routes, marketplace_routes, agents_control_routes, project_routes
 from workflow.repositories.template import TemplateRepository
 from workflow.services.template import TemplateService
 from workflow.validation.template import TemplateValidator
@@ -53,6 +53,27 @@ if static_styles.exists():
 if static_js.exists():
     app.mount("/js", StaticFiles(directory=str(static_js)), name="js")
 
+
+# ── Task #2793: SPA ページルート（include_router より前に登録して優先させる）
+# index.html を返し、フロント側で window.location.pathname に応じてモーダルを表示する
+@app.get("/projects", response_class=HTMLResponse)
+async def page_projects_spa():
+    html_path = DASHBOARD_DIR / "index.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
+@app.get("/workflows", response_class=HTMLResponse)
+async def page_workflows_spa():
+    html_path = DASHBOARD_DIR / "index.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
+@app.get("/workflow-templates", response_class=HTMLResponse)
+async def page_workflow_templates_spa():
+    html_path = DASHBOARD_DIR / "index.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
 app.include_router(autogen_routes.router)
 app.include_router(blueprints.router)
 app.include_router(manage_routes.router)
@@ -60,6 +81,7 @@ app.include_router(scores_routes.router)
 app.include_router(scores_routes.dept_router)
 app.include_router(marketplace_routes.router)
 app.include_router(agents_control_routes.router)
+app.include_router(project_routes.router)
 
 logger = logging.getLogger(__name__)
 
@@ -10248,3 +10270,328 @@ async def reject_cross_dept_task(
     - 拒否理由は req.reason に格納（任意）
     """
     return await _transition_cross_dept_task(task_id, "rejected", user, reject_reason=req.reason)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 監査ログ・エージェント稼働ログ API (Task #2501)
+# ─────────────────────────────────────────────────────────────────────
+
+ALLOWED_AUDIT_ACTIONS = {
+    "login", "logout", "create", "update", "delete",
+    "access", "config_change", "permission_change",
+}
+ALLOWED_AUDIT_STATUSES = {"success", "failure", "denied"}
+ALLOWED_AGENT_LOG_ACTIONS = {"started", "stopped", "failed", "message"}
+
+
+async def log_user_action(
+    user_id: Optional[str],
+    username: Optional[str],
+    action: str,
+    resource_type: Optional[str] = None,
+    resource_id: Optional[str] = None,
+    detail: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    status: str = "success",
+) -> Optional[int]:
+    """ユーザー操作監査ログを audit_logs テーブルに記録する共通ヘルパ。
+
+    呼び出し側で例外を投げないようガードしておく。失敗しても本処理は継続。
+    """
+    if action not in ALLOWED_AUDIT_ACTIONS:
+        logging.warning(f"log_user_action: unknown action={action}")
+        return None
+    if status not in ALLOWED_AUDIT_STATUSES:
+        status = "success"
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            cursor = await db.execute(
+                """
+                INSERT INTO audit_logs
+                  (user_id, username, action, resource_type, resource_id,
+                   detail, ip_address, user_agent, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (user_id, username, action, resource_type, resource_id,
+                 detail, ip_address, user_agent, status),
+            )
+            await db.commit()
+            return cursor.lastrowid
+    except Exception as e:
+        logging.error(f"log_user_action failed: {e}")
+        return None
+
+
+def _row_to_audit_log(row: tuple) -> dict:
+    return {
+        "id": row[0],
+        "user_id": row[1],
+        "username": row[2],
+        "action": row[3],
+        "resource_type": row[4],
+        "resource_id": row[5],
+        "detail": row[6],
+        "ip_address": row[7],
+        "user_agent": row[8],
+        "status": row[9],
+        "created_at": row[10],
+    }
+
+
+def _row_to_agent_log(row: tuple) -> dict:
+    # row: (al.id, al.agent_id, al.action, al.detail, al.created_at, a.role, a.session_id)
+    role = row[5]
+    session_id = row[6] if len(row) > 6 else None
+    agent_name = session_id or (f"Agent #{row[1]}" if row[1] is not None else None)
+    return {
+        "id": row[0],
+        "agent_id": row[1],
+        "agent_name": agent_name,
+        "role": role,
+        "action": row[2],
+        "detail": row[3],
+        "created_at": row[4],
+    }
+
+
+@app.get("/api/agent-logs")
+async def list_agent_logs(
+    user: dict = Depends(get_current_user_zero_trust),
+    agent_id: Optional[int] = Query(None, description="特定エージェントの稼働ログのみ"),
+    action: Optional[str] = Query(None, description="started/stopped/failed/message"),
+    date_from: Optional[str] = Query(None, description="YYYY-MM-DD 以降"),
+    date_to: Optional[str] = Query(None, description="YYYY-MM-DD 以前"),
+    search: Optional[str] = Query(None, description="detail を部分一致検索"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=500),
+):
+    """エージェント稼働ログ一覧（起動・停止・エラー履歴）を取得する。"""
+    if action and action not in ALLOWED_AGENT_LOG_ACTIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid action; allowed={sorted(ALLOWED_AGENT_LOG_ACTIONS)}",
+        )
+
+    where = ["1=1"]
+    params: list = []
+    if agent_id is not None:
+        where.append("al.agent_id = ?")
+        params.append(agent_id)
+    if action:
+        where.append("al.action = ?")
+        params.append(action)
+    if date_from:
+        where.append("DATE(al.created_at) >= DATE(?)")
+        params.append(date_from)
+    if date_to:
+        where.append("DATE(al.created_at) <= DATE(?)")
+        params.append(date_to)
+    if search:
+        where.append("(al.detail LIKE ? OR al.action LIKE ?)")
+        like = f"%{search}%"
+        params.extend([like, like])
+
+    where_clause = " AND ".join(where)
+    offset = (page - 1) * limit
+
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            count_cur = await db.execute(
+                f"SELECT COUNT(*) FROM agent_logs al WHERE {where_clause}",
+                params,
+            )
+            total_row = await count_cur.fetchone()
+            total = int(total_row[0]) if total_row else 0
+
+            rows_cur = await db.execute(
+                f"""
+                SELECT al.id, al.agent_id, al.action, al.detail, al.created_at,
+                       a.role, a.session_id
+                FROM agent_logs al
+                LEFT JOIN agents a ON al.agent_id = a.id
+                WHERE {where_clause}
+                ORDER BY al.created_at DESC, al.id DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, limit, offset],
+            )
+            rows = await rows_cur.fetchall()
+    except Exception as e:
+        logging.error(f"list_agent_logs failed: {e}")
+        raise HTTPException(status_code=500, detail="failed to load agent logs")
+
+    return {
+        "data": [_row_to_agent_log(r) for r in rows],
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": (total + limit - 1) // limit if total else 0,
+        },
+        "filters": {
+            "agent_id": agent_id, "action": action,
+            "date_from": date_from, "date_to": date_to, "search": search,
+        },
+    }
+
+
+@app.get("/api/audit-logs")
+async def list_audit_logs(
+    request: Request,
+    user: dict = Depends(get_current_user_zero_trust),
+    user_id: Optional[str] = Query(None),
+    action: Optional[str] = Query(None),
+    resource_type: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=500),
+):
+    """監査ログ（ユーザー操作履歴）一覧を取得する。
+
+    フィルタ:
+      - user_id: 操作者
+      - action: login/logout/create/update/delete/access/config_change/permission_change
+      - resource_type: agent/department/team/task/user/role/...
+      - status: success/failure/denied
+      - date_from, date_to: 期間絞り込み (YYYY-MM-DD)
+      - search: detail / username / resource_id を部分一致検索
+    """
+    if action and action not in ALLOWED_AUDIT_ACTIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid action; allowed={sorted(ALLOWED_AUDIT_ACTIONS)}",
+        )
+    if status_filter and status_filter not in ALLOWED_AUDIT_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid status; allowed={sorted(ALLOWED_AUDIT_STATUSES)}",
+        )
+
+    where = ["1=1"]
+    params: list = []
+    if user_id:
+        where.append("user_id = ?")
+        params.append(user_id)
+    if action:
+        where.append("action = ?")
+        params.append(action)
+    if resource_type:
+        where.append("resource_type = ?")
+        params.append(resource_type)
+    if status_filter:
+        where.append("status = ?")
+        params.append(status_filter)
+    if date_from:
+        where.append("DATE(created_at) >= DATE(?)")
+        params.append(date_from)
+    if date_to:
+        where.append("DATE(created_at) <= DATE(?)")
+        params.append(date_to)
+    if search:
+        where.append("(detail LIKE ? OR username LIKE ? OR resource_id LIKE ?)")
+        like = f"%{search}%"
+        params.extend([like, like, like])
+
+    where_clause = " AND ".join(where)
+    offset = (page - 1) * limit
+
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            count_cur = await db.execute(
+                f"SELECT COUNT(*) FROM audit_logs WHERE {where_clause}",
+                params,
+            )
+            total_row = await count_cur.fetchone()
+            total = int(total_row[0]) if total_row else 0
+
+            rows_cur = await db.execute(
+                f"""
+                SELECT id, user_id, username, action, resource_type, resource_id,
+                       detail, ip_address, user_agent, status, created_at
+                FROM audit_logs
+                WHERE {where_clause}
+                ORDER BY created_at DESC, id DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, limit, offset],
+            )
+            rows = await rows_cur.fetchall()
+    except Exception as e:
+        logging.error(f"list_audit_logs failed: {e}")
+        raise HTTPException(status_code=500, detail="failed to load audit logs")
+
+    # アクセス自体も監査ログに残す（再帰防止のため access のみ非同期fire-and-forget）
+    try:
+        await log_user_action(
+            user_id=user.get("id") if isinstance(user, dict) else None,
+            username=user.get("username") if isinstance(user, dict) else None,
+            action="access",
+            resource_type="audit_logs",
+            resource_id=None,
+            detail=f"list page={page} limit={limit}",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            status="success",
+        )
+    except Exception:
+        pass
+
+    return {
+        "data": [_row_to_audit_log(r) for r in rows],
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": (total + limit - 1) // limit if total else 0,
+        },
+        "filters": {
+            "user_id": user_id, "action": action,
+            "resource_type": resource_type, "status": status_filter,
+            "date_from": date_from, "date_to": date_to, "search": search,
+        },
+    }
+
+
+class _AuditLogEntry(BaseModel):
+    action: str
+    resource_type: Optional[str] = None
+    resource_id: Optional[str] = None
+    detail: Optional[str] = None
+    status: str = "success"
+
+
+@app.post("/api/audit-logs")
+async def create_audit_log_entry(
+    entry: _AuditLogEntry,
+    request: Request,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """フロントから明示的に監査ログを記録するエンドポイント（操作トラッキング用）。"""
+    if entry.action not in ALLOWED_AUDIT_ACTIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid action; allowed={sorted(ALLOWED_AUDIT_ACTIONS)}",
+        )
+    if entry.status not in ALLOWED_AUDIT_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid status; allowed={sorted(ALLOWED_AUDIT_STATUSES)}",
+        )
+    log_id = await log_user_action(
+        user_id=user.get("id") if isinstance(user, dict) else None,
+        username=user.get("username") if isinstance(user, dict) else None,
+        action=entry.action,
+        resource_type=entry.resource_type,
+        resource_id=entry.resource_id,
+        detail=entry.detail,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        status=entry.status,
+    )
+    if log_id is None:
+        raise HTTPException(status_code=500, detail="failed to record audit log")
+    return {"id": log_id, "status": "recorded"}
