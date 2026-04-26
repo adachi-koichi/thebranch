@@ -22,7 +22,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from dashboard import auth, models, autogen_routes, blueprints, manage_routes, scores_routes
+from dashboard import auth, models, autogen_routes, blueprints, manage_routes, scores_routes, marketplace_routes, agents_control_routes
 from workflow.repositories.template import TemplateRepository
 from workflow.services.template import TemplateService
 from workflow.validation.template import TemplateValidator
@@ -57,6 +57,9 @@ app.include_router(autogen_routes.router)
 app.include_router(blueprints.router)
 app.include_router(manage_routes.router)
 app.include_router(scores_routes.router)
+app.include_router(scores_routes.dept_router)
+app.include_router(marketplace_routes.router)
+app.include_router(agents_control_routes.router)
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +130,13 @@ async def get_current_user_zero_trust(authorization: Optional[str] = Header(None
         if not user_row:
             raise HTTPException(status_code=401, detail="User not found")
 
+        roles_cursor = await db.execute(
+            "SELECT role FROM user_roles WHERE user_id = ?",
+            (user_id,),
+        )
+        roles_rows = await roles_cursor.fetchall()
+        roles = [r["role"] for r in roles_rows] or ["member"]
+
         return {
             "id": user_row["id"],
             "username": user_row["username"],
@@ -136,6 +146,7 @@ async def get_current_user_zero_trust(authorization: Optional[str] = Header(None
             "onboarding_completed": user_row["onboarding_completed"],
             "scopes": scopes,
             "token_type": token_type,
+            "roles": roles,
         }
 
 # SLA メトリクス計算エンジン
@@ -984,7 +995,7 @@ async def get_department_template_detail(template_id: int, user: dict = Depends(
 
 
 @app.post("/api/departments")
-async def create_department(request: models.DepartmentCreateRequest, user: dict = Depends(get_current_user_zero_trust)):
+async def create_department(request: models.DepartmentCreateRequest, user: dict = Depends(get_current_user_zero_trust), _rbac: dict = Depends(auth.require_role("manager"))):
     if not THEBRANCH_DB.exists():
         raise HTTPException(status_code=500, detail="Database not found")
 
@@ -1022,7 +1033,7 @@ async def create_department(request: models.DepartmentCreateRequest, user: dict 
 
 
 @app.post("/api/customize_template")
-async def customize_template(request: models.CustomizeTemplateRequest, user: dict = Depends(get_current_user_zero_trust)):
+async def customize_template(request: models.CustomizeTemplateRequest, user: dict = Depends(get_current_user_zero_trust), _rbac: dict = Depends(auth.require_role("manager"))):
     if not THEBRANCH_DB.exists():
         raise HTTPException(status_code=500, detail="Database not found")
 
@@ -1325,7 +1336,7 @@ class DelegateRequest(BaseModel):
 
 
 @app.put("/api/agents/{agent_id}/delegate")
-async def delegate_agent(agent_id: int, req: DelegateRequest, user: dict = Depends(get_current_user_zero_trust)):
+async def delegate_agent(agent_id: int, req: DelegateRequest, user: dict = Depends(get_current_user_zero_trust), _rbac: dict = Depends(auth.require_role("manager"))):
     """エージェントのタスクを別のエージェントに委譲"""
     try:
         if not req.delegateToId:
@@ -1738,7 +1749,7 @@ async def get_self_improvement(user: dict = Depends(get_current_user_zero_trust)
 # ──────────────────────────────────────────────
 
 @app.get("/api/sessions")
-async def get_sessions(user: dict = Depends(get_current_user_zero_trust)):
+async def get_sessions(user: dict = Depends(get_current_user_zero_trust), _rbac: dict = Depends(auth.require_role("owner"))):
     """~/.claude/sessions/*.json からセッション一覧を返す"""
     sessions = []
     if not SESSIONS_DIR.exists():
@@ -2163,7 +2174,7 @@ async def list_cost_alerts(department_id: Optional[int] = None, status: str = "u
 
 
 @app.post("/api/cost-alerts/{alert_id}/resolve")
-async def resolve_cost_alert(alert_id: int, request_data: dict, user: dict = Depends(get_current_user_zero_trust)):
+async def resolve_cost_alert(alert_id: int, request_data: dict, user: dict = Depends(get_current_user_zero_trust), _rbac: dict = Depends(auth.require_role("manager"))):
     """Resolve cost alert"""
     try:
         init_workflow_services()
@@ -2177,7 +2188,7 @@ async def resolve_cost_alert(alert_id: int, request_data: dict, user: dict = Dep
 
 
 @app.post("/api/costs/record")
-async def record_cost(request: models.CostRecordRequest, user: dict = Depends(get_current_user_zero_trust)):
+async def record_cost(request: models.CostRecordRequest, user: dict = Depends(get_current_user_zero_trust), _rbac: dict = Depends(auth.require_role("manager"))):
     """Record API call cost"""
     try:
         init_workflow_services()
@@ -4556,6 +4567,94 @@ async def add_role(role_req: models.UserRoleCreate, authorization: Optional[str]
         raise HTTPException(status_code=401, detail="Invalid token")
 
     success, message = await auth.add_user_role(user_id, role_req.role)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    return {"status": "ok", "message": message}
+
+
+@app.delete("/api/auth/role", response_model=dict)
+async def delete_role(role_req: models.UserRoleCreate, authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    user_id = await auth.verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    success, message = await auth.remove_user_role(user_id, role_req.role)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    return {"status": "ok", "message": message}
+
+
+# ──────────────────────────────────────────────
+# RBAC: User Management (#2493)
+# ──────────────────────────────────────────────
+
+ROLE_HIERARCHY = {"owner": 3, "manager": 2, "member": 1}
+
+
+def get_user_highest_role(roles: list) -> str:
+    if not roles:
+        return "member"
+    role_names = [r.get("role", "member") if isinstance(r, dict) else r for r in roles]
+    return max(role_names, key=lambda r: ROLE_HIERARCHY.get(r, 0))
+
+
+@app.get("/api/rbac/users", response_model=dict)
+async def list_users_with_roles(authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
+    """ユーザー一覧とロール情報（owner/manager のみアクセス可能）"""
+    user_roles = user.get("roles", [])
+    highest = get_user_highest_role(user_roles)
+    if ROLE_HIERARCHY.get(highest, 0) < ROLE_HIERARCHY["manager"]:
+        raise HTTPException(status_code=403, detail="権限が不足しています")
+
+    async with aiosqlite.connect(str(auth.DB_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id, username, email, created_at FROM users ORDER BY created_at DESC"
+        )
+        users_rows = await cursor.fetchall()
+        users = []
+        for row in users_rows:
+            u = dict(row)
+            cursor2 = await db.execute(
+                "SELECT role FROM user_roles WHERE user_id = ?", (u["id"],)
+            )
+            role_rows = await cursor2.fetchall()
+            u["roles"] = [r[0] for r in role_rows]
+            users.append(u)
+
+    return {"users": users}
+
+
+@app.post("/api/rbac/users/{target_user_id}/roles", response_model=dict)
+async def assign_role_to_user(target_user_id: str, role_req: models.UserRoleCreate, authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
+    """指定ユーザーにロールを付与（owner のみ）"""
+    user_roles = user.get("roles", [])
+    highest = get_user_highest_role(user_roles)
+    if highest != "owner":
+        raise HTTPException(status_code=403, detail="オーナー権限が必要です")
+
+    success, message = await auth.add_user_role(target_user_id, role_req.role)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    return {"status": "ok", "message": message}
+
+
+@app.delete("/api/rbac/users/{target_user_id}/roles/{role}", response_model=dict)
+async def revoke_role_from_user(target_user_id: str, role: str, authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user_zero_trust)):
+    """指定ユーザーからロールを剥奪（owner のみ）"""
+    user_roles = user.get("roles", [])
+    highest = get_user_highest_role(user_roles)
+    if highest != "owner":
+        raise HTTPException(status_code=403, detail="オーナー権限が必要です")
+
+    success, message = await auth.remove_user_role(target_user_id, role)
     if not success:
         raise HTTPException(status_code=400, detail=message)
 
@@ -9494,4 +9593,336 @@ async def disable_2fa(req: Disable2FARequest, auth_header: Optional[str] = Heade
     except Exception as e:
         logger.error(f"Failed to disable 2FA: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Cross Department Collaboration API (Task #2486)
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def _create_collab_notification(
+    db,
+    cross_task_id: int,
+    sender_dept_id: int,
+    receiver_dept_id: int,
+    notification_type: str,
+    title: str,
+    message: str,
+    metadata: Optional[str] = None,
+):
+    await db.execute(
+        """INSERT INTO dept_collab_notifications
+           (cross_task_id, sender_dept_id, receiver_dept_id, notification_type, title, message, metadata)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (cross_task_id, sender_dept_id, receiver_dept_id, notification_type, title, message, metadata),
+    )
+
+
+@app.post("/api/departments/{dept_id}/collaborate", status_code=201)
+async def create_collaborate_request(
+    dept_id: int,
+    req: models.CrossDeptTaskCreate,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """指定部署から別部署へのコラボレーションリクエスト作成"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        cursor = await db.execute("SELECT id, name FROM departments WHERE id = ?", (dept_id,))
+        requesting_dept = await cursor.fetchone()
+        if not requesting_dept:
+            raise HTTPException(status_code=404, detail="依頼元部署が見つかりません")
+
+        cursor = await db.execute("SELECT id, name FROM departments WHERE id = ?", (req.receiving_dept_id,))
+        receiving_dept = await cursor.fetchone()
+        if not receiving_dept:
+            raise HTTPException(status_code=404, detail="依頼先部署が見つかりません")
+
+        if dept_id == req.receiving_dept_id:
+            raise HTTPException(status_code=400, detail="同一部署へのリクエストはできません")
+
+        cursor = await db.execute(
+            """INSERT INTO cross_department_tasks
+               (title, description, requesting_dept_id, receiving_dept_id, priority, deadline, created_by)
+               VALUES (?, ?, ?, ?, ?, ?, 'system')""",
+            (req.title, req.description, dept_id, req.receiving_dept_id, req.priority, req.deadline),
+        )
+        cross_task_id = cursor.lastrowid
+
+        await _create_collab_notification(
+            db,
+            cross_task_id=cross_task_id,
+            sender_dept_id=dept_id,
+            receiver_dept_id=req.receiving_dept_id,
+            notification_type="new_request",
+            title=f"新しいコラボレーションリクエスト: {req.title}",
+            message=f"{dict(requesting_dept)['name']}部署からコラボレーションを依頼されました。",
+        )
+
+        await db.commit()
+
+        cursor = await db.execute(
+            """SELECT cdt.*, d1.name as requesting_dept_name, d2.name as receiving_dept_name
+               FROM cross_department_tasks cdt
+               JOIN departments d1 ON d1.id = cdt.requesting_dept_id
+               JOIN departments d2 ON d2.id = cdt.receiving_dept_id
+               WHERE cdt.id = ?""",
+            (cross_task_id,),
+        )
+        row = await cursor.fetchone()
+
+    return dict(row)
+
+
+@app.get("/api/departments/{dept_id}/collaborate")
+async def list_collaborate_requests(
+    dept_id: int,
+    direction: str = "all",
+    status: str = "",
+    page: int = 1,
+    limit: int = 20,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """部署のコラボリクエスト一覧（sent/received/all）"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (dept_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="部署が見つかりません")
+
+        base = """
+            SELECT cdt.*, d1.name as requesting_dept_name, d2.name as receiving_dept_name
+            FROM cross_department_tasks cdt
+            JOIN departments d1 ON d1.id = cdt.requesting_dept_id
+            JOIN departments d2 ON d2.id = cdt.receiving_dept_id
+            WHERE 1=1
+        """
+        params: list = []
+
+        if direction == "sent":
+            base += " AND cdt.requesting_dept_id = ?"
+            params.append(dept_id)
+        elif direction == "received":
+            base += " AND cdt.receiving_dept_id = ?"
+            params.append(dept_id)
+        else:
+            base += " AND (cdt.requesting_dept_id = ? OR cdt.receiving_dept_id = ?)"
+            params.extend([dept_id, dept_id])
+
+        if status:
+            base += " AND cdt.status = ?"
+            params.append(status)
+
+        cursor = await db.execute(f"SELECT COUNT(*) FROM ({base})", params)
+        total = (await cursor.fetchone())[0]
+
+        base += " ORDER BY cdt.created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, (page - 1) * limit])
+        cursor = await db.execute(base, params)
+        rows = await cursor.fetchall()
+
+    return {
+        "data": [dict(r) for r in rows],
+        "pagination": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit},
+    }
+
+
+@app.patch("/api/departments/{dept_id}/collaborate/{request_id}")
+async def update_collaborate_status(
+    dept_id: int,
+    request_id: int,
+    update: models.CrossDeptTaskStatusUpdate,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """コラボリクエストのステータス更新"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        cursor = await db.execute(
+            """SELECT cdt.*, d1.name as requesting_dept_name, d2.name as receiving_dept_name
+               FROM cross_department_tasks cdt
+               JOIN departments d1 ON d1.id = cdt.requesting_dept_id
+               JOIN departments d2 ON d2.id = cdt.receiving_dept_id
+               WHERE cdt.id = ? AND (cdt.requesting_dept_id = ? OR cdt.receiving_dept_id = ?)""",
+            (request_id, dept_id, dept_id),
+        )
+        task = await cursor.fetchone()
+        if not task:
+            raise HTTPException(status_code=404, detail="コラボリクエストが見つかりません")
+
+        task = dict(task)
+        await db.execute(
+            "UPDATE cross_department_tasks SET status = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+            (update.status, request_id),
+        )
+
+        notif_type_map = {
+            "acknowledged": "status_update",
+            "in_progress": "status_update",
+            "completed": "completed",
+            "rejected": "rejected",
+        }
+        notif_type = notif_type_map.get(update.status, "status_update")
+        comment_suffix = f"\nコメント: {update.comment}" if update.comment else ""
+        receiver_id = task["requesting_dept_id"] if dept_id == task["receiving_dept_id"] else task["receiving_dept_id"]
+
+        await _create_collab_notification(
+            db,
+            cross_task_id=request_id,
+            sender_dept_id=dept_id,
+            receiver_dept_id=receiver_id,
+            notification_type=notif_type,
+            title=f"リクエスト更新: {task['title']}",
+            message=f"ステータスが '{update.status}' に変更されました。{comment_suffix}",
+        )
+
+        await db.commit()
+
+        cursor = await db.execute(
+            """SELECT cdt.*, d1.name as requesting_dept_name, d2.name as receiving_dept_name
+               FROM cross_department_tasks cdt
+               JOIN departments d1 ON d1.id = cdt.requesting_dept_id
+               JOIN departments d2 ON d2.id = cdt.receiving_dept_id
+               WHERE cdt.id = ?""",
+            (request_id,),
+        )
+        row = await cursor.fetchone()
+
+    return dict(row)
+
+
+@app.post("/api/tasks/cross-dept", status_code=201)
+async def create_cross_dept_task(
+    req: models.CrossDeptTaskCreate,
+    requesting_dept_id: int,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """クロス部署タスク作成（requesting_dept_id をクエリパラメータで指定）"""
+    return await create_collaborate_request(requesting_dept_id, req, user)
+
+
+@app.get("/api/tasks/cross-dept")
+async def list_cross_dept_tasks(
+    dept_id: Optional[int] = None,
+    status: str = "",
+    priority: str = "",
+    page: int = 1,
+    limit: int = 20,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """クロス部署タスク一覧（全体または特定部署フィルタ）"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        query = """
+            SELECT cdt.*, d1.name as requesting_dept_name, d2.name as receiving_dept_name
+            FROM cross_department_tasks cdt
+            JOIN departments d1 ON d1.id = cdt.requesting_dept_id
+            JOIN departments d2 ON d2.id = cdt.receiving_dept_id
+            WHERE 1=1
+        """
+        params: list = []
+
+        if dept_id:
+            query += " AND (cdt.requesting_dept_id = ? OR cdt.receiving_dept_id = ?)"
+            params.extend([dept_id, dept_id])
+        if status:
+            query += " AND cdt.status = ?"
+            params.append(status)
+        if priority:
+            query += " AND cdt.priority = ?"
+            params.append(priority)
+
+        cursor = await db.execute(f"SELECT COUNT(*) FROM ({query})", params)
+        total = (await cursor.fetchone())[0]
+
+        query += " ORDER BY cdt.created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, (page - 1) * limit])
+        cursor = await db.execute(query, params)
+        rows = await cursor.fetchall()
+
+    return {
+        "data": [dict(r) for r in rows],
+        "pagination": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit},
+    }
+
+
+@app.get("/api/notifications/cross-dept")
+async def list_cross_dept_notifications(
+    dept_id: Optional[int] = None,
+    unread_only: bool = False,
+    page: int = 1,
+    limit: int = 20,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """部署間コラボレーション通知一覧"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        query = """
+            SELECT n.*, d1.name as sender_dept_name, d2.name as receiver_dept_name,
+                   cdt.title as task_title, cdt.status as task_status
+            FROM dept_collab_notifications n
+            JOIN departments d1 ON d1.id = n.sender_dept_id
+            JOIN departments d2 ON d2.id = n.receiver_dept_id
+            JOIN cross_department_tasks cdt ON cdt.id = n.cross_task_id
+            WHERE 1=1
+        """
+        params: list = []
+
+        if dept_id:
+            query += " AND n.receiver_dept_id = ?"
+            params.append(dept_id)
+        if unread_only:
+            query += " AND n.is_read = 0"
+
+        cursor = await db.execute(f"SELECT COUNT(*) FROM ({query})", params)
+        total = (await cursor.fetchone())[0]
+
+        unread_q = "SELECT COUNT(*) FROM dept_collab_notifications WHERE is_read = 0"
+        unread_params: list = []
+        if dept_id:
+            unread_q += " AND receiver_dept_id = ?"
+            unread_params.append(dept_id)
+        cursor = await db.execute(unread_q, unread_params)
+        unread_count = (await cursor.fetchone())[0]
+
+        query += " ORDER BY n.created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, (page - 1) * limit])
+        cursor = await db.execute(query, params)
+        rows = await cursor.fetchall()
+
+    return {
+        "data": [dict(r) for r in rows],
+        "unread_count": unread_count,
+        "pagination": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit},
+    }
+
+
+@app.patch("/api/notifications/cross-dept/{notif_id}/read")
+async def mark_cross_dept_notification_read(
+    notif_id: int,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """部署間通知を既読にする"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        cursor = await db.execute("SELECT id FROM dept_collab_notifications WHERE id = ?", (notif_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="通知が見つかりません")
+
+        await db.execute(
+            "UPDATE dept_collab_notifications SET is_read = 1, read_at = datetime('now','localtime') WHERE id = ?",
+            (notif_id,),
+        )
+        await db.commit()
+
+    return {"id": notif_id, "is_read": True}
 
