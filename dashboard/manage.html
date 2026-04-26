@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>THEBRANCH — 管理ダッシュボード</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --surface2: #1a1a24;
+      --border: #2a2a3a;
+      --accent: #6c63ff;
+      --accent2: #00d4aa;
+      --text: #e8e8f0;
+      --text2: #888899;
+      --danger: #ff4444;
+      --warn: #ffaa00;
+      --success: #00cc88;
+      --pending: #6c63ff;
+      --radius: 12px;
+    }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+    header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; gap: 16px;
+      padding: 0 24px; height: 60px;
+      background: rgba(10,10,15,0.95); border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+    }
+    .logo { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; color: var(--text); }
+    .logo span { color: var(--accent); }
+    .header-badge { font-size: 11px; background: var(--accent); color: white; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+    .header-time { margin-left: auto; font-size: 12px; color: var(--text2); }
+    .refresh-btn {
+      margin-left: 8px; padding: 6px 14px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--surface2); color: var(--text2); cursor: pointer; font-size: 12px; transition: all 0.2s;
+    }
+    .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    main { padding-top: 60px; min-height: 100vh; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px; position: relative; overflow: hidden;
+    }
+    .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--accent); }
+    .stat-card.green::before { background: var(--accent2); }
+    .stat-card.warn::before { background: var(--warn); }
+    .stat-card.danger::before { background: var(--danger); }
+    .stat-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 700; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+    .tab {
+      padding: 10px 20px; cursor: pointer; border-radius: var(--radius) var(--radius) 0 0;
+      color: var(--text2); font-weight: 500; transition: all 0.2s; border: 1px solid transparent; border-bottom: none;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { background: var(--surface2); color: var(--accent); border-color: var(--border); border-bottom: 1px solid var(--surface2); margin-bottom: -1px; }
+
+    /* Panels */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Flow Designer */
+    .flow-designer { display: flex; gap: 16px; height: calc(100vh - 140px); }
+    .flow-palette { width: 200px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; overflow-y: auto; }
+    .flow-node-item {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px;
+      margin-bottom: 8px; cursor: grab; font-size: 12px; text-align: center; transition: all 0.2s;
+    }
+    .flow-node-item:hover { border-color: var(--accent); }
+    .flow-canvas {
+      flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      position: relative; overflow: auto; cursor: default;
+    }
+    .flow-canvas svg { position: absolute; top: 0; left: 0; }
+    .flow-canvas.dragging { cursor: grabbing; }
+    .node {
+      position: absolute; width: 120px; padding: 8px; background: var(--surface2); border: 2px solid var(--border);
+      border-radius: 8px; text-align: center; font-size: 12px; cursor: move; user-select: none;
+      transition: all 0.2s;
+    }
+    .node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,99,255,0.2); }
+    .node-delete {
+      position: absolute; top: -8px; right: -8px; width: 16px; height: 16px;
+      background: var(--danger); border-radius: 50%; border: none; cursor: pointer; color: white;
+      font-size: 10px; line-height: 1.4; display: none;
+    }
+    .node:hover .node-delete { display: block; }
+    .flow-toolbar { padding: 12px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+    .flow-status { padding: 12px; background: var(--surface); border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); }
+
+    /* Table */
+    .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .table-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .table-header h3 { font-size: 15px; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; }
+    th { padding: 10px 16px; text-align: left; font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.6px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+    td { padding: 12px 16px; border-bottom: 1px solid rgba(42,42,58,0.5); font-size: 13px; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+
+    /* Status badges */
+    .badge {
+      display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    }
+    .badge-pending { background: rgba(108,99,255,0.15); color: #9b93ff; }
+    .badge-in_progress { background: rgba(0,212,170,0.15); color: #00d4aa; }
+    .badge-completed, .badge-done { background: rgba(0,204,136,0.15); color: #00cc88; }
+    .badge-blocked { background: rgba(255,68,68,0.15); color: #ff6666; }
+    .badge-cancelled, .badge-cancel { background: rgba(100,100,120,0.15); color: #888; }
+    .badge-active { background: rgba(0,212,170,0.15); color: #00d4aa; }
+    .badge-archived { background: rgba(100,100,120,0.15); color: #888; }
+
+    /* Buttons */
+    .btn {
+      padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;
+    }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: #5a52dd; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text2); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { background: rgba(255,68,68,0.15); color: var(--danger); border: 1px solid rgba(255,68,68,0.3); }
+
+    /* Filter bar */
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface);
+      color: var(--text2); cursor: pointer; font-size: 12px; transition: all 0.2s;
+    }
+    .filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(108,99,255,0.1); }
+    .search-input {
+      padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--text); font-size: 13px; outline: none;
+      transition: border-color 0.2s; margin-left: auto;
+    }
+    .search-input:focus { border-color: var(--accent); }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200;
+      display: none; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 28px; width: 480px; max-width: 90vw;
+    }
+    .modal h2 { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
+    .form-control {
+      width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--text); font-size: 13px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-control:focus { border-color: var(--accent); }
+    textarea.form-control { resize: vertical; min-height: 80px; }
+    select.form-control { cursor: pointer; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 48px 20px; color: var(--text2); }
+    .empty-icon { font-size: 36px; margin-bottom: 12px; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 32px; color: var(--text2); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; }
+
+    /* Truncate */
+    .truncate { max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .text-sm { font-size: 12px; color: var(--text2); }
+    .flex { display: flex; gap: 8px; align-items: center; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">THE<span>BRANCH</span></div>
+  <span class="header-badge">管理ダッシュボード</span>
+  <span class="header-time" id="clock"></span>
+  <button class="refresh-btn" onclick="loadAll()">↺ 更新</button>
+</header>
+
+<main>
+  <div class="container">
+    <!-- Stats -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card"><div class="stat-label">部署</div><div class="stat-value" id="stat-depts">—</div></div>
+      <div class="stat-card green"><div class="stat-label">進行中タスク</div><div class="stat-value" id="stat-inprogress">—</div></div>
+      <div class="stat-card"><div class="stat-label">待機中タスク</div><div class="stat-value" id="stat-pending">—</div></div>
+      <div class="stat-card warn"><div class="stat-label">ブロック中</div><div class="stat-value" id="stat-blocked">—</div></div>
+      <div class="stat-card"><div class="stat-label">プロジェクト</div><div class="stat-value" id="stat-projects">—</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('dept', this)">🏢 部署</div>
+      <div class="tab" onclick="switchTab('proj', this)">📁 プロジェクト</div>
+      <div class="tab" onclick="switchTab('task', this)">✅ タスク</div>
+      <div class="tab" onclick="switchTab('flow', this)">🔄 フロー設計</div>
+    </div>
+
+    <!-- Departments Panel -->
+    <div class="panel active" id="panel-dept">
+      <div class="table-wrap">
+        <div class="table-header">
+          <h3>部署一覧</h3>
+        </div>
+        <div id="dept-body"><div class="loading"><span class="spinner"></span>読み込み中...</div></div>
+      </div>
+    </div>
+
+    <!-- Projects Panel -->
+    <div class="panel" id="panel-proj">
+      <div class="filter-bar">
+        <button class="filter-btn active" onclick="filterProjects('all', this)">全て</button>
+        <button class="filter-btn" onclick="filterProjects('active', this)">進行中</button>
+        <button class="filter-btn" onclick="filterProjects('completed', this)">完了</button>
+        <button class="filter-btn" onclick="filterProjects('archived', this)">アーカイブ</button>
+        <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openProjectModal()">+ 追加</button>
+      </div>
+      <div class="table-wrap">
+        <div id="proj-body"><div class="loading"><span class="spinner"></span>読み込み中...</div></div>
+      </div>
+    </div>
+
+    <!-- Tasks Panel -->
+    <div class="panel" id="panel-task">
+      <div class="filter-bar">
+        <button class="filter-btn active" onclick="filterTasks('all', this)">全て</button>
+        <button class="filter-btn" onclick="filterTasks('pending', this)">待機中</button>
+        <button class="filter-btn" onclick="filterTasks('in_progress', this)">進行中</button>
+        <button class="filter-btn" onclick="filterTasks('blocked', this)">ブロック</button>
+        <button class="filter-btn" onclick="filterTasks('completed', this)">完了</button>
+        <input class="search-input" id="task-search" placeholder="タスクを検索..." oninput="renderTasks()">
+      </div>
+      <div class="table-wrap">
+        <div id="task-body"><div class="loading"><span class="spinner"></span>読み込み中...</div></div>
+      </div>
+    </div>
+
+    <!-- Flow Designer Panel -->
+    <div class="panel" id="panel-flow">
+      <div class="flow-toolbar">
+        <select id="flow-template" class="form-control" style="width: 300px;">
+          <option value="">— テンプレートを選択 —</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="createWorkflow()" style="margin-left: 12px;">新規作成</button>
+        <button class="btn btn-ghost btn-sm" onclick="saveWorkflow()" style="margin-left: 8px;">💾 保存</button>
+        <button class="btn btn-ghost btn-sm" onclick="resetFlow()" style="margin-left: 8px;">🔄 リセット</button>
+      </div>
+      <div class="flow-designer" id="flow-designer">
+        <div class="flow-palette">
+          <div style="font-size: 12px; font-weight: 600; margin-bottom: 12px; color: var(--text2); text-transform: uppercase;">ノードテンプレート</div>
+          <div class="flow-node-item" draggable="true" ondragstart="dragStartPalette(event, 'research')">🔍 リサーチ</div>
+          <div class="flow-node-item" draggable="true" ondragstart="dragStartPalette(event, 'design')">✏️ デザイン</div>
+          <div class="flow-node-item" draggable="true" ondragstart="dragStartPalette(event, 'prototype')">🎨 プロトタイプ</div>
+          <div class="flow-node-item" draggable="true" ondragstart="dragStartPalette(event, 'review')">👁️ レビュー</div>
+          <div class="flow-node-item" draggable="true" ondragstart="dragStartPalette(event, 'implement')">⚙️ 実装</div>
+          <div class="flow-node-item" draggable="true" ondragstart="dragStartPalette(event, 'test')">🧪 テスト</div>
+        </div>
+        <div class="flow-canvas" id="flow-canvas" ondrop="dropNode(event)" ondragover="dragOver(event)">
+          <svg id="flow-connections"></svg>
+        </div>
+      </div>
+      <div class="flow-status" id="flow-status">ノード数: 0 | エッジ数: 0</div>
+    </div>
+  </div>
+</main>
+
+<!-- Project Modal -->
+<div class="modal-overlay" id="proj-modal">
+  <div class="modal">
+    <h2 id="modal-title">プロジェクト追加</h2>
+    <div class="form-group">
+      <label>プロジェクト名</label>
+      <input class="form-control" id="proj-name" placeholder="例: THEBRANCH UI改善">
+    </div>
+    <div class="form-group">
+      <label>説明</label>
+      <textarea class="form-control" id="proj-desc" placeholder="プロジェクトの詳細..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>ステータス</label>
+      <select class="form-control" id="proj-status">
+        <option value="active">進行中</option>
+        <option value="completed">完了</option>
+        <option value="archived">アーカイブ</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeProjectModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveProject()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── State ───────────────────────────────────────────────────────────────
+  let depts = [];
+  let projects = [];
+  let tasks = [];
+  let taskFilter = 'all';
+  let projFilter = 'all';
+  let editingProjectId = null;
+
+  // ─── Clock ───────────────────────────────────────────────────────────────
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) + ' JST';
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // ─── Tabs ─────────────────────────────────────────────────────────────────
+  function switchTab(name, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+  }
+
+  // ─── API ──────────────────────────────────────────────────────────────────
+  async function api(path) {
+    const r = await fetch(path);
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }
+
+  async function loadStats() {
+    try {
+      const s = await api('/api/manage/stats');
+      document.getElementById('stat-depts').textContent = s.departments ?? '—';
+      document.getElementById('stat-inprogress').textContent = s.tasks?.in_progress ?? 0;
+      document.getElementById('stat-pending').textContent = s.tasks?.pending ?? 0;
+      document.getElementById('stat-blocked').textContent = s.tasks?.blocked ?? 0;
+      document.getElementById('stat-projects').textContent = s.projects ?? '—';
+    } catch(e) { console.error('stats', e); }
+  }
+
+  async function loadDepartments() {
+    document.getElementById('dept-body').innerHTML = '<div class="loading"><span class="spinner"></span>読み込み中...</div>';
+    try {
+      depts = await api('/api/manage/departments');
+      renderDepartments();
+    } catch(e) {
+      document.getElementById('dept-body').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>読み込み失敗</div>';
+    }
+  }
+
+  async function loadProjects() {
+    document.getElementById('proj-body').innerHTML = '<div class="loading"><span class="spinner"></span>読み込み中...</div>';
+    try {
+      projects = await api('/api/manage/projects');
+      renderProjects();
+    } catch(e) {
+      document.getElementById('proj-body').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>読み込み失敗</div>';
+    }
+  }
+
+  async function loadTasks() {
+    document.getElementById('task-body').innerHTML = '<div class="loading"><span class="spinner"></span>読み込み中...</div>';
+    try {
+      tasks = await api('/api/manage/tasks?limit=500');
+      renderTasks();
+    } catch(e) {
+      document.getElementById('task-body').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>読み込み失敗</div>';
+    }
+  }
+
+  async function loadAll() {
+    await Promise.all([loadStats(), loadDepartments(), loadProjects(), loadTasks()]);
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+  function badge(status) {
+    return `<span class="badge badge-${status}">${statusLabel(status)}</span>`;
+  }
+  function statusLabel(s) {
+    const m = { pending: '待機中', in_progress: '進行中', completed: '完了', done: '完了', blocked: 'ブロック', cancelled: 'キャンセル', cancel: 'キャンセル', active: '進行中', archived: 'アーカイブ' };
+    return m[s] || s;
+  }
+
+  function renderDepartments() {
+    if (!depts.length) {
+      document.getElementById('dept-body').innerHTML = '<div class="empty"><div class="empty-icon">🏢</div><p>部署がまだありません</p></div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>ID</th><th>部署名</th><th>説明</th><th>作成日</th></tr></thead><tbody>';
+    for (const d of depts) {
+      html += `<tr>
+        <td class="text-sm">${d.id.substring(0,8)}…</td>
+        <td><strong>${esc(d.name)}</strong></td>
+        <td class="truncate text-sm">${esc(d.description || '—')}</td>
+        <td class="text-sm">${d.created_at ? d.created_at.substring(0,10) : '—'}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('dept-body').innerHTML = html;
+  }
+
+  function filterProjects(f, el) {
+    projFilter = f;
+    document.querySelectorAll('#panel-proj .filter-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    renderProjects();
+  }
+
+  function renderProjects() {
+    let list = projFilter === 'all' ? projects : projects.filter(p => p.status === projFilter);
+    if (!list.length) {
+      document.getElementById('proj-body').innerHTML = '<div class="empty"><div class="empty-icon">📁</div><p>プロジェクトがありません</p></div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>ID</th><th>プロジェクト名</th><th>説明</th><th>ステータス</th><th>作成日</th><th>操作</th></tr></thead><tbody>';
+    for (const p of list) {
+      html += `<tr>
+        <td class="text-sm">${p.id}</td>
+        <td><strong>${esc(p.name)}</strong></td>
+        <td class="truncate text-sm">${esc(p.description || '—')}</td>
+        <td>${badge(p.status)}</td>
+        <td class="text-sm">${(p.created_at || '').substring(0,10)}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="editProject(${p.id})">編集</button></td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('proj-body').innerHTML = html;
+  }
+
+  function filterTasks(f, el) {
+    taskFilter = f;
+    document.querySelectorAll('#panel-task .filter-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    renderTasks();
+  }
+
+  function renderTasks() {
+    const q = (document.getElementById('task-search')?.value || '').toLowerCase();
+    let list = tasks;
+    if (taskFilter !== 'all') list = list.filter(t => t.status === taskFilter || (taskFilter === 'completed' && t.status === 'done'));
+    if (q) list = list.filter(t => (t.title || '').toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q));
+    if (!list.length) {
+      document.getElementById('task-body').innerHTML = '<div class="empty"><div class="empty-icon">✅</div><p>タスクがありません</p></div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>ID</th><th>タイトル</th><th>ステータス</th><th>カテゴリ</th><th>優先度</th><th>更新日</th></tr></thead><tbody>';
+    for (const t of list) {
+      const pri = t.priority === 1 ? '🔴 高' : t.priority === 2 ? '🟡 中' : t.priority === 3 ? '🟢 低' : '—';
+      html += `<tr>
+        <td class="text-sm">#${t.id}</td>
+        <td class="truncate">${esc(t.title || '')}</td>
+        <td>${badge(t.status)}</td>
+        <td class="text-sm">${esc(t.category || '—')}</td>
+        <td class="text-sm">${pri}</td>
+        <td class="text-sm">${(t.updated_at || '').substring(0,16)}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('task-body').innerHTML = html;
+  }
+
+  // ─── Project Modal ────────────────────────────────────────────────────────
+  function openProjectModal(proj = null) {
+    editingProjectId = proj ? proj.id : null;
+    document.getElementById('modal-title').textContent = proj ? 'プロジェクト編集' : 'プロジェクト追加';
+    document.getElementById('proj-name').value = proj ? proj.name : '';
+    document.getElementById('proj-desc').value = proj ? (proj.description || '') : '';
+    document.getElementById('proj-status').value = proj ? proj.status : 'active';
+    document.getElementById('proj-modal').classList.add('open');
+    setTimeout(() => document.getElementById('proj-name').focus(), 50);
+  }
+
+  function closeProjectModal() {
+    document.getElementById('proj-modal').classList.remove('open');
+    editingProjectId = null;
+  }
+
+  function editProject(id) {
+    const p = projects.find(p => p.id === id);
+    if (p) openProjectModal(p);
+  }
+
+  async function saveProject() {
+    const name = document.getElementById('proj-name').value.trim();
+    if (!name) { alert('プロジェクト名を入力してください'); return; }
+    const body = {
+      name,
+      description: document.getElementById('proj-desc').value.trim(),
+      status: document.getElementById('proj-status').value,
+    };
+    try {
+      if (editingProjectId) {
+        await fetch(`/api/manage/projects/${editingProjectId}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      } else {
+        await fetch('/api/manage/projects', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      }
+      closeProjectModal();
+      await Promise.all([loadStats(), loadProjects()]);
+    } catch(e) { alert('保存に失敗しました: ' + e.message); }
+  }
+
+  // Close modal on overlay click
+  document.getElementById('proj-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeProjectModal();
+  });
+
+  // ─── Escape ───────────────────────────────────────────────────────────────
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ─── Auto-refresh every 60s ───────────────────────────────────────────────
+  setInterval(loadAll, 60000);
+
+  // ─── Flow Designer ────────────────────────────────────────────────────────
+  let flowNodes = [];
+  let flowEdges = [];
+  let selectedNode = null;
+  let draggedNode = null;
+  let nodeIdCounter = 0;
+
+  const nodeTypeLabels = {
+    research: '🔍 リサーチ',
+    design: '✏️ デザイン',
+    prototype: '🎨 プロトタイプ',
+    review: '👁️ レビュー',
+    implement: '⚙️ 実装',
+    test: '🧪 テスト',
+  };
+
+  function dragStartPalette(e, nodeType) {
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('nodeType', nodeType);
+  }
+
+  function dragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    document.getElementById('flow-canvas').classList.add('dragging');
+  }
+
+  function dropNode(e) {
+    e.preventDefault();
+    document.getElementById('flow-canvas').classList.remove('dragging');
+    const nodeType = e.dataTransfer.getData('nodeType');
+    if (!nodeType) return;
+
+    const canvas = document.getElementById('flow-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left + canvas.scrollLeft;
+    const y = e.clientY - rect.top + canvas.scrollTop;
+
+    addNodeToCanvas(nodeType, x, y);
+  }
+
+  function addNodeToCanvas(nodeType, x, y) {
+    const nodeId = ++nodeIdCounter;
+    const node = {
+      id: nodeId,
+      type: nodeType,
+      label: nodeTypeLabels[nodeType] || nodeType,
+      x: Math.max(10, x - 60),
+      y: Math.max(10, y - 25),
+    };
+    flowNodes.push(node);
+    renderFlowCanvas();
+    updateFlowStatus();
+  }
+
+  function renderFlowCanvas() {
+    const canvas = document.getElementById('flow-canvas');
+    const svg = document.getElementById('flow-connections');
+    svg.innerHTML = '';
+
+    // Draw edges
+    for (const edge of flowEdges) {
+      const fromNode = flowNodes.find(n => n.id === edge.from);
+      const toNode = flowNodes.find(n => n.id === edge.to);
+      if (!fromNode || !toNode) continue;
+
+      const x1 = fromNode.x + 60;
+      const y1 = fromNode.y + 25;
+      const x2 = toNode.x;
+      const y2 = toNode.y + 25;
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', x1);
+      line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2);
+      line.setAttribute('y2', y2);
+      line.setAttribute('stroke', 'var(--accent)');
+      line.setAttribute('stroke-width', '2');
+      line.style.cursor = 'pointer';
+      line.onclick = (e) => { e.stopPropagation(); deleteEdge(edge.from, edge.to); };
+      svg.appendChild(line);
+    }
+
+    // Draw nodes
+    flowNodes.forEach(node => {
+      const el = document.getElementById(`node-${node.id}`);
+      if (!el) {
+        const div = document.createElement('div');
+        div.className = 'node';
+        div.id = `node-${node.id}`;
+        div.innerHTML = `<div>${node.label}</div><button class="node-delete" onclick="deleteNode(${node.id}); event.stopPropagation();">✕</button>`;
+        div.style.left = node.x + 'px';
+        div.style.top = node.y + 'px';
+        div.draggable = true;
+        div.ondragstart = () => { draggedNode = node.id; };
+        div.ondragend = () => { draggedNode = null; };
+        div.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'link'; };
+        div.ondrop = (e) => { e.preventDefault(); e.stopPropagation(); addEdge(draggedNode, node.id); };
+        div.onclick = () => { selectNode(node.id); };
+        document.getElementById('flow-canvas').appendChild(div);
+      } else {
+        el.style.left = node.x + 'px';
+        el.style.top = node.y + 'px';
+        el.classList.toggle('selected', node.id === selectedNode);
+      }
+    });
+  }
+
+  function selectNode(nodeId) {
+    selectedNode = selectedNode === nodeId ? null : nodeId;
+    renderFlowCanvas();
+  }
+
+  function deleteNode(nodeId) {
+    flowNodes = flowNodes.filter(n => n.id !== nodeId);
+    flowEdges = flowEdges.filter(e => e.from !== nodeId && e.to !== nodeId);
+    const el = document.getElementById(`node-${nodeId}`);
+    if (el) el.remove();
+    if (selectedNode === nodeId) selectedNode = null;
+    renderFlowCanvas();
+    updateFlowStatus();
+  }
+
+  function addEdge(fromId, toId) {
+    if (fromId === toId || !fromId || !toId) return;
+    if (flowEdges.some(e => e.from === fromId && e.to === toId)) return;
+    flowEdges.push({ from: fromId, to: toId });
+    renderFlowCanvas();
+    updateFlowStatus();
+  }
+
+  function deleteEdge(fromId, toId) {
+    flowEdges = flowEdges.filter(e => !(e.from === fromId && e.to === toId));
+    renderFlowCanvas();
+    updateFlowStatus();
+  }
+
+  function resetFlow() {
+    flowNodes = [];
+    flowEdges = [];
+    selectedNode = null;
+    nodeIdCounter = 0;
+    document.getElementById('flow-canvas').innerHTML = '<svg id="flow-connections"></svg>';
+    updateFlowStatus();
+  }
+
+  function updateFlowStatus() {
+    document.getElementById('flow-status').textContent = `ノード数: ${flowNodes.length} | エッジ数: ${flowEdges.length}`;
+  }
+
+  function createWorkflow() {
+    const name = prompt('ワークフロー名を入力してください:');
+    if (!name) return;
+    // Save workflow to backend
+    saveWorkflowToBackend(name);
+  }
+
+  async function saveWorkflow() {
+    if (!flowNodes.length) {
+      alert('ノードを追加してください');
+      return;
+    }
+    const name = document.getElementById('flow-template').value || prompt('ワークフロー名:');
+    if (!name) return;
+    await saveWorkflowToBackend(name);
+  }
+
+  async function saveWorkflowToBackend(name) {
+    try {
+      const payload = {
+        name,
+        nodes: flowNodes.map(n => ({ key: `node-${n.id}`, type: n.type, label: n.label })),
+        edges: flowEdges.map(e => ({ from: `node-${e.from}`, to: `node-${e.to}` })),
+      };
+      const res = await fetch('/api/manage/workflows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(res.status);
+      alert('ワークフローを保存しました');
+      loadWorkflowTemplates();
+    } catch (e) {
+      alert('保存に失敗しました: ' + e.message);
+    }
+  }
+
+  async function loadWorkflowTemplates() {
+    try {
+      const templates = await api('/api/manage/workflows');
+      const sel = document.getElementById('flow-template');
+      sel.innerHTML = '<option value="">— テンプレートを選択 —</option>';
+      for (const t of templates) {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        sel.appendChild(opt);
+      }
+    } catch (e) {
+      console.error('Failed to load workflows', e);
+    }
+  }
+
+  // ─── Init ─────────────────────────────────────────────────────────────────
+  loadAll();
+  loadWorkflowTemplates();
+</script>
+</body>
+</html>
