@@ -11,6 +11,7 @@ from typing import Optional, Tuple
 import aiosqlite
 import pyotp
 import qrcode
+from fastapi import Header, HTTPException, Depends
 
 DB_PATH = Path.home() / ".claude" / "dashboard_auth.sqlite"
 
@@ -542,3 +543,64 @@ async def disable_2fa(user_id: str, password: str) -> Tuple[bool, str]:
             return True, "2FA disabled successfully"
     except Exception as e:
         return False, f"Failed to disable 2FA: {str(e)}"
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# RBAC - Role-Based Access Control (Task #2493)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ROLE_HIERARCHY: dict[str, int] = {
+    "owner": 3,
+    "manager": 2,
+    "member": 1,
+}
+
+
+async def get_user_primary_role(user_id: str) -> str:
+    """ユーザーの最上位ロールを返す。ロールなしの場合は 'member' を返す。"""
+    roles = await get_user_roles(user_id)
+    if not roles:
+        return "member"
+    return max(roles, key=lambda r: ROLE_HIERARCHY.get(r, 0))
+
+
+def require_role(required_role: str):
+    """
+    FastAPI dependency factory for RBAC.
+    権限階層: owner > manager > member
+    必要なロール未満の場合は 403 Forbidden を返す。
+
+    Usage:
+        @app.post("/api/admin")
+        async def admin(user=Depends(require_role("owner"))):
+            ...
+    """
+    async def dependency(authorization: Optional[str] = Header(None)) -> dict:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        token = authorization[7:]
+        result = await verify_token(token)
+        user_id, org_id = result if isinstance(result, tuple) else (result, None)
+
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        await update_last_activity(token)
+
+        roles = await get_user_roles(user_id)
+        if not roles:
+            roles = ["member"]
+
+        user_max_level = max((ROLE_HIERARCHY.get(r, 0) for r in roles), default=0)
+        required_level = ROLE_HIERARCHY.get(required_role, 0)
+
+        if user_max_level < required_level:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Forbidden: '{required_role}' role or higher required",
+            )
+
+        return {"user_id": user_id, "org_id": org_id, "roles": roles}
+
+    return dependency

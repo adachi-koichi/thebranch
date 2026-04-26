@@ -1228,6 +1228,184 @@
     .score-mid  { color: var(--accent); }
     .score-low  { color: #f97316; }
 
+    /* ── スコアダッシュボード (#2485) ── */
+    .scores-sub-heading {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 32px 0 16px;
+      color: var(--text-primary);
+    }
+
+    .table-scroll-wrap {
+      overflow-x: auto;
+    }
+
+    /* KPI カード */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .kpi-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px 16px;
+      text-align: center;
+    }
+
+    .kpi-card.kpi-top {
+      border-color: #22c55e;
+      grid-column: span 2;
+    }
+
+    .kpi-skeleton {
+      height: 100px;
+      animation: pulse 1.5s ease-in-out infinite;
+      background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
+      background-size: 200% 100%;
+    }
+
+    @keyframes pulse {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .kpi-icon  { font-size: 1.8rem; margin-bottom: 8px; }
+    .kpi-value { font-size: 1.6rem; font-weight: 700; line-height: 1; margin-bottom: 6px; }
+    .kpi-label { font-size: 0.75rem; color: var(--text-secondary); }
+
+    /* プログレスバー */
+    .progress-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 120px;
+    }
+
+    .progress-bar-inner {
+      height: 8px;
+      border-radius: 4px;
+      flex: 1;
+      background: currentColor;
+      opacity: 0.8;
+    }
+
+    .progress-label {
+      font-size: 0.8rem;
+      white-space: nowrap;
+      min-width: 42px;
+      text-align: right;
+    }
+
+    /* スコアバッジ */
+    .score-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      background: var(--bg-tertiary);
+    }
+
+    .dept-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      background: var(--bg-tertiary);
+      white-space: nowrap;
+    }
+
+    .task-count { font-weight: 600; }
+    .task-total { color: var(--text-secondary); font-size: 0.85rem; }
+
+    /* 部署カード */
+    .dept-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .dept-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .dept-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .dept-card-icon { font-size: 1.8rem; }
+
+    .dept-card-title h3 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .dept-agent-count {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .dept-rank {
+      margin-left: auto;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 8px;
+    }
+
+    .rank-1 { background: #fef3c7; color: #92400e; }
+    .rank-2 { background: #e2e8f0; color: #374151; }
+    .rank-3 { background: #fed7aa; color: #9a3412; }
+    .rank-other { background: var(--bg-tertiary); color: var(--text-secondary); }
+
+    .dept-score-main {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .dept-score-value { font-size: 2rem; font-weight: 700; }
+    .dept-score-sub   { font-size: 0.8rem; color: var(--text-secondary); }
+
+    .dept-metrics { display: flex; flex-direction: column; gap: 8px; }
+
+    .dept-metric {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .dept-metric-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      min-width: 90px;
+    }
+
+    .dept-footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      border-top: 1px solid var(--border-color);
+      padding-top: 10px;
+    }
+
     /* Print Styles */
     @media print {
       header,
@@ -1242,8 +1420,216 @@
         color: black;
       }
     }
+
+    /* ── RBAC (#2493) ── */
+    .admin-only,
+    .manager-only { display: none; }
+
+    .role-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .role-badge--owner   { background: #fef3c7; color: #92400e; }
+    .role-badge--manager { background: #dbeafe; color: #1e40af; }
+    .role-badge--member  { background: #f3f4f6; color: #374151; }
+
+    .rbac-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9000;
+      align-items: center;
+      justify-content: center;
+    }
+    .rbac-modal {
+      background: var(--bg-primary, #fff);
+      border-radius: 12px;
+      padding: 32px;
+      width: min(640px, 90vw);
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .rbac-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .rbac-modal-title { font-size: 1.25rem; font-weight: 700; margin: 0; }
+    .rbac-modal-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--text-secondary, #666);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .rbac-modal-close:hover { background: var(--bg-secondary, #f5f5f5); }
+    .rbac-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .rbac-table th,
+    .rbac-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color, #e5e7eb);
+    }
+    .rbac-table th { font-weight: 600; color: var(--text-secondary, #666); }
+    .rbac-table tbody tr:hover { background: var(--bg-secondary, #f9f9f9); }
+
+    /* ── 部署間コラボレーション (Task #2486) ────────────────────── */
+    .collab-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 18px; height: 18px; border-radius: 9px;
+      background: #ef4444; color: #fff; font-size: 11px; font-weight: 700;
+      padding: 0 4px; margin-left: 4px; vertical-align: middle;
+    }
+    .collab-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding-top: 60px; z-index: 1100; overflow-y: auto;
+    }
+    .collab-modal {
+      background: var(--bg-primary, #fff); border-radius: 16px;
+      width: min(900px, 96vw); max-height: calc(100vh - 80px);
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    }
+    .collab-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px; border-bottom: 1px solid var(--border-color, #e5e7eb);
+    }
+    .collab-modal-title { font-size: 1.25rem; font-weight: 700; margin: 0; }
+    .collab-modal-close {
+      background: none; border: none; font-size: 1.5rem; cursor: pointer;
+      color: var(--text-secondary, #666); line-height: 1; padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .collab-modal-close:hover { background: var(--bg-secondary, #f5f5f5); }
+    .collab-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid var(--border-color, #e5e7eb);
+      padding: 0 16px; background: var(--bg-secondary, #f9fafb);
+    }
+    .collab-tab-btn {
+      padding: 12px 20px; background: none; border: none; cursor: pointer;
+      font-size: 0.9rem; font-weight: 500; color: var(--text-secondary, #6b7280);
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .collab-tab-btn.active {
+      color: var(--color-primary, #3b82f6);
+      border-bottom-color: var(--color-primary, #3b82f6);
+    }
+    .collab-tab-content { display: none; padding: 20px 24px; overflow-y: auto; flex: 1; }
+    .collab-tab-content.active { display: block; }
+    .collab-filter-bar {
+      display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .collab-filter-bar select {
+      padding: 6px 10px; border: 1px solid var(--border-color, #d1d5db);
+      border-radius: 8px; font-size: 0.85rem; background: var(--bg-primary, #fff);
+    }
+    .collab-list { display: flex; flex-direction: column; gap: 12px; }
+    .collab-card {
+      border: 1px solid var(--border-color, #e5e7eb); border-radius: 10px;
+      padding: 16px; background: var(--bg-primary, #fff);
+    }
+    .collab-card-header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      margin-bottom: 8px;
+    }
+    .collab-card-title { font-weight: 600; font-size: 0.95rem; margin: 0; }
+    .collab-card-meta { font-size: 0.8rem; color: var(--text-secondary, #6b7280); margin-top: 4px; }
+    .collab-status-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 12px;
+      font-size: 0.75rem; font-weight: 600; white-space: nowrap;
+    }
+    .collab-status-pending { background: #fef3c7; color: #92400e; }
+    .collab-status-acknowledged { background: #dbeafe; color: #1e40af; }
+    .collab-status-in_progress { background: #d1fae5; color: #065f46; }
+    .collab-status-completed { background: #dcfce7; color: #166534; }
+    .collab-status-rejected { background: #fee2e2; color: #991b1b; }
+    .collab-priority-low { color: #6b7280; }
+    .collab-priority-medium { color: #d97706; }
+    .collab-priority-high { color: #dc2626; }
+    .collab-priority-urgent { color: #7c3aed; font-weight: 700; }
+    .collab-card-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .collab-btn {
+      padding: 7px 16px; border-radius: 8px; border: none; cursor: pointer;
+      font-size: 0.85rem; font-weight: 500; transition: opacity 0.15s;
+    }
+    .collab-btn:hover { opacity: 0.85; }
+    .collab-btn-primary { background: var(--color-primary, #3b82f6); color: #fff; }
+    .collab-btn-sm { padding: 4px 10px; font-size: 0.8rem; }
+    .collab-btn-outline {
+      background: none; border: 1px solid var(--border-color, #d1d5db);
+      color: var(--text-primary, #111);
+    }
+    .collab-btn-success { background: #10b981; color: #fff; }
+    .collab-btn-danger { background: #ef4444; color: #fff; }
+    .collab-form-group { margin-bottom: 16px; }
+    .collab-form-group label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 6px; }
+    .collab-form-group input, .collab-form-group select, .collab-form-group textarea {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border-color, #d1d5db);
+      border-radius: 8px; font-size: 0.9rem; background: var(--bg-primary, #fff);
+      box-sizing: border-box;
+    }
+    .collab-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .collab-alert { padding: 10px 14px; border-radius: 8px; font-size: 0.875rem; margin-bottom: 12px; }
+    .collab-alert-error { background: #fee2e2; color: #991b1b; }
+    .collab-alert-success { background: #d1fae5; color: #065f46; }
+    .collab-loading { color: var(--text-secondary, #6b7280); text-align: center; padding: 24px 0; }
+    .collab-empty { color: var(--text-secondary, #6b7280); text-align: center; padding: 32px 0; font-size: 0.9rem; }
+    .required { color: #ef4444; }
+    .collab-notif-card {
+      display: flex; gap: 12px; padding: 14px;
+      border: 1px solid var(--border-color, #e5e7eb); border-radius: 10px;
+    }
+    .collab-notif-card.unread { border-left: 3px solid var(--color-primary, #3b82f6); }
+    .collab-notif-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary, #3b82f6);
+      flex-shrink: 0; margin-top: 6px;
+    }
+    .collab-notif-body { flex: 1; }
+    .collab-notif-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; }
+    .collab-notif-message { font-size: 0.85rem; color: var(--text-secondary, #6b7280); }
+    .collab-notif-time { font-size: 0.75rem; color: var(--text-tertiary, #9ca3af); margin-top: 4px; }
+    .collab-pagination {
+      display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap;
+    }
+    .collab-page-btn {
+      padding: 4px 12px; border: 1px solid var(--border-color, #d1d5db);
+      border-radius: 6px; background: var(--bg-primary, #fff); cursor: pointer; font-size: 0.85rem;
+    }
+    .collab-page-btn.active { background: var(--color-primary, #3b82f6); color: #fff; border-color: transparent; }
+
+    .role-select {
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color, #d1d5db);
+      font-size: 0.85rem;
+      margin-right: 8px;
+    }
+    .btn-role-assign {
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: none;
+      background: var(--color-primary, #0f172a);
+      color: #fff;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .btn-role-assign:disabled { opacity: 0.5; cursor: not-allowed; }
+    #user-role-badge { margin-left: 8px; vertical-align: middle; }
   </style>
   <link rel="stylesheet" href="/styles/onboarding.css">
+  <link rel="stylesheet" href="/styles/marketplace.css">
 </head>
 <body>
   <a href="#main" class="skip-to-main">メインコンテンツへスキップ</a>
@@ -1259,8 +1645,18 @@
             <li><a href="#agent-scores">エージェントスコア</a></li>
             <li><a href="#cta">始める</a></li>
             <li><a href="#support">サポート</a></li>
+            <li class="manager-only"><a href="/manage.html">管理</a></li>
+            <li class="admin-only">
+              <a href="#" onclick="openRoleManager(); return false;">ロール管理</a>
+            </li>
+            <li>
+              <a href="#" onclick="openCollabModal(); return false;" id="collab-nav-link">
+                部署間コラボ <span id="collab-unread-badge" class="collab-badge" style="display:none">0</span>
+              </a>
+            </li>
           </ul>
           <div class="header-actions">
+            <span id="user-role-badge" class="role-badge role-badge--member" style="display:none"></span>
             <button class="theme-toggle" id="themeToggle" aria-label="ダークテーマの切り替え">
               <span id="themeIcon">🌙</span>
             </button>
@@ -1688,33 +2084,97 @@
     </section>
 
     <!-- Agent Scores Section (#2485) -->
+    <!-- Agent Scores Section (#2485) -->
     <section id="agent-scores" class="workflow-section" aria-labelledby="agent-scores-heading">
       <div class="container">
         <div class="section-title">AIエージェント評価</div>
-        <h2 id="agent-scores-heading" class="section-heading">エージェントスコア一覧</h2>
+        <h2 id="agent-scores-heading" class="section-heading">エージェントスコア & 部署ダッシュボード</h2>
+        <p class="scores-meta" id="scores-status">読み込み中...</p>
 
-        <div class="scores-container">
-          <h2>AIエージェント評価スコア</h2>
-          <p class="scores-meta" id="scores-status">読み込み中...</p>
-
-          <table id="scoresTable" class="scores-table">
-            <thead>
-              <tr>
-                <th>エージェント名</th>
-                <th>完了率</th>
-                <th>品質スコア</th>
-                <th>パフォーマンス</th>
-                <th>総合スコア</th>
-                <th>更新日時</th>
-              </tr>
-            </thead>
-            <tbody id="scoresTableBody">
-              <tr><td colspan="6" style="text-align: center; padding: 24px; color: var(--text-secondary);">読み込み中...</td></tr>
-            </tbody>
-          </table>
-
-          <div id="scoresChart" style="margin-top: 8px; min-height: 240px;"></div>
+        <!-- KPI カード -->
+        <div id="scores-kpi" class="kpi-grid">
+          <div class="kpi-card kpi-skeleton"></div>
+          <div class="kpi-card kpi-skeleton"></div>
+          <div class="kpi-card kpi-skeleton"></div>
+          <div class="kpi-card kpi-skeleton"></div>
         </div>
+
+        <!-- 部署別ダッシュボード -->
+        <h3 class="scores-sub-heading">部署別パフォーマンス</h3>
+        <div id="dept-cards" class="dept-cards-grid">
+          <p style="color:var(--text-secondary)">読み込み中...</p>
+        </div>
+
+        <!-- エージェント詳細テーブル -->
+        <h3 class="scores-sub-heading" style="margin-top:40px">エージェント詳細スコア</h3>
+        <div class="scores-container">
+          <div class="table-scroll-wrap">
+            <table id="scoresTable" class="scores-table">
+              <thead>
+                <tr>
+                  <th>エージェント名</th>
+                  <th>部署</th>
+                  <th>タスク完了率</th>
+                  <th>品質スコア</th>
+                  <th>パフォーマンス</th>
+                  <th>総合スコア</th>
+                  <th>タスク数</th>
+                </tr>
+              </thead>
+              <tbody id="scoresTableBody">
+                <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-secondary)">読み込み中...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Marketplace Section -->
+    <section id="marketplace" class="marketplace-section" aria-labelledby="marketplace-heading">
+      <div class="marketplace-container">
+        <!-- Header -->
+        <div class="marketplace-header">
+          <h2 id="marketplace-heading">エージェントマーケットプレイス</h2>
+          <p>様々なスキルを持つAIエージェントを検索・インストールできます</p>
+        </div>
+
+        <!-- Controls -->
+        <div class="marketplace-controls">
+          <div class="marketplace-search">
+            <input
+              type="text"
+              id="marketplace-search"
+              placeholder="エージェント名、説明で検索..."
+              aria-label="エージェント検索"
+            >
+          </div>
+          <div class="marketplace-filters">
+            <select id="marketplace-category" aria-label="カテゴリで絞込">
+              <option value="">全カテゴリ</option>
+            </select>
+            <select id="marketplace-sort" aria-label="ソート順">
+              <option value="installation_count:desc">インストール数が多い</option>
+              <option value="rating:desc">評価が高い</option>
+              <option value="created_at:desc">最新</option>
+              <option value="name:asc">名前順（A→Z）</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Results count -->
+        <div class="marketplace-results-count" id="marketplace-results-count">0 件見つかりました</div>
+
+        <!-- Loader -->
+        <div class="marketplace-loader" id="marketplace-loader">
+          <div class="spinner"></div>
+        </div>
+
+        <!-- Agents list -->
+        <div class="marketplace-list" id="marketplace-list"></div>
+
+        <!-- Pagination -->
+        <div class="marketplace-pagination" id="marketplace-pagination"></div>
       </div>
     </section>
 
@@ -1863,6 +2323,136 @@
       </div>
     </section>
   </main>
+
+  <!-- RBAC ロール管理モーダル (#2493) -->
+  <div id="rbac-modal" class="rbac-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="rbac-modal-title">
+    <div class="rbac-modal">
+      <div class="rbac-modal-header">
+        <h2 id="rbac-modal-title" class="rbac-modal-title">ロール管理</h2>
+        <button class="rbac-modal-close" onclick="closeRoleManager()" aria-label="閉じる">&times;</button>
+      </div>
+      <p style="margin-bottom:16px; color: var(--text-secondary, #666); font-size: 0.9rem;">
+        ユーザーにロールを割り当てます。ロール変更はオーナーのみ実行できます。
+      </p>
+      <table class="rbac-table">
+        <thead>
+          <tr>
+            <th>ユーザー</th>
+            <th>現在のロール</th>
+            <th class="admin-only">操作</th>
+          </tr>
+        </thead>
+        <tbody id="rbac-users-tbody">
+          <tr><td colspan="3">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 部署間コラボレーションモーダル (Task #2486) -->
+  <div id="collab-modal" class="collab-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="collab-modal-title" style="display:none">
+    <div class="collab-modal">
+      <div class="collab-modal-header">
+        <h2 id="collab-modal-title" class="collab-modal-title">部署間コラボレーション</h2>
+        <button class="collab-modal-close" onclick="closeCollabModal()" aria-label="閉じる">&times;</button>
+      </div>
+
+      <!-- タブ -->
+      <div class="collab-tabs">
+        <button class="collab-tab-btn active" data-collab-tab="requests" onclick="switchCollabTab('requests')">リクエスト一覧</button>
+        <button class="collab-tab-btn" data-collab-tab="new-request" onclick="switchCollabTab('new-request')">新規リクエスト</button>
+        <button class="collab-tab-btn" data-collab-tab="notifications" onclick="switchCollabTab('notifications')">
+          通知 <span id="collab-notif-count" class="collab-badge" style="display:none">0</span>
+        </button>
+      </div>
+
+      <!-- リクエスト一覧 -->
+      <div id="collab-tab-requests" class="collab-tab-content active">
+        <div class="collab-filter-bar">
+          <select id="collab-filter-dept" onchange="loadCollabRequests()">
+            <option value="">全部署</option>
+          </select>
+          <select id="collab-filter-direction" onchange="loadCollabRequests()">
+            <option value="all">全て</option>
+            <option value="sent">送信済み</option>
+            <option value="received">受信済み</option>
+          </select>
+          <select id="collab-filter-status" onchange="loadCollabRequests()">
+            <option value="">全ステータス</option>
+            <option value="pending">保留中</option>
+            <option value="acknowledged">確認済み</option>
+            <option value="in_progress">進行中</option>
+            <option value="completed">完了</option>
+            <option value="rejected">却下</option>
+          </select>
+        </div>
+        <div id="collab-requests-list" class="collab-list">
+          <p class="collab-loading">読み込み中...</p>
+        </div>
+        <div id="collab-requests-pagination" class="collab-pagination"></div>
+      </div>
+
+      <!-- 新規リクエスト -->
+      <div id="collab-tab-new-request" class="collab-tab-content">
+        <form id="collab-new-form" onsubmit="submitCollabRequest(event)">
+          <div class="collab-form-group">
+            <label for="collab-from-dept">依頼元部署 <span class="required">*</span></label>
+            <select id="collab-from-dept" required>
+              <option value="">部署を選択</option>
+            </select>
+          </div>
+          <div class="collab-form-group">
+            <label for="collab-to-dept">依頼先部署 <span class="required">*</span></label>
+            <select id="collab-to-dept" required>
+              <option value="">部署を選択</option>
+            </select>
+          </div>
+          <div class="collab-form-group">
+            <label for="collab-title">タイトル <span class="required">*</span></label>
+            <input type="text" id="collab-title" placeholder="コラボレーション内容を入力" required maxlength="200" />
+          </div>
+          <div class="collab-form-group">
+            <label for="collab-description">詳細説明</label>
+            <textarea id="collab-description" rows="4" placeholder="依頼内容の詳細"></textarea>
+          </div>
+          <div class="collab-form-row">
+            <div class="collab-form-group">
+              <label for="collab-priority">優先度</label>
+              <select id="collab-priority">
+                <option value="low">低</option>
+                <option value="medium" selected>中</option>
+                <option value="high">高</option>
+                <option value="urgent">緊急</option>
+              </select>
+            </div>
+            <div class="collab-form-group">
+              <label for="collab-deadline">期限</label>
+              <input type="date" id="collab-deadline" />
+            </div>
+          </div>
+          <div id="collab-form-error" class="collab-alert collab-alert-error" style="display:none"></div>
+          <div id="collab-form-success" class="collab-alert collab-alert-success" style="display:none"></div>
+          <button type="submit" class="collab-btn collab-btn-primary">リクエストを送信</button>
+        </form>
+      </div>
+
+      <!-- 通知 -->
+      <div id="collab-tab-notifications" class="collab-tab-content">
+        <div class="collab-filter-bar">
+          <select id="collab-notif-filter-dept" onchange="loadCollabNotifications()">
+            <option value="">全部署</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem">
+            <input type="checkbox" id="collab-notif-unread-only" onchange="loadCollabNotifications()" />
+            未読のみ
+          </label>
+        </div>
+        <div id="collab-notifications-list" class="collab-list">
+          <p class="collab-loading">読み込み中...</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Footer -->
   <footer role="contentinfo">
@@ -2368,5 +2958,316 @@
     }
   </script>
   <script src="/js/scores.js"></script>
+  <script src="/js/rbac.js"></script>
+  <script>
+  // ── 部署間コラボレーション (Task #2486) ────────────────────────────────
+
+  const collabState = {
+    departments: [],
+    currentPage: 1,
+    token: null,
+  };
+
+  function collabGetToken() {
+    return localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+  }
+
+  async function collabFetchDepartments() {
+    if (collabState.departments.length > 0) return collabState.departments;
+    try {
+      const r = await fetch('/api/departments?limit=100', {
+        headers: { 'Authorization': `Bearer ${collabGetToken()}` },
+      });
+      if (!r.ok) return [];
+      const data = await r.json();
+      collabState.departments = data.data || [];
+      return collabState.departments;
+    } catch { return []; }
+  }
+
+  function collabPopulateSelect(selectId, depts, includeAll = false) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = includeAll ? '<option value="">全部署</option>' : '<option value="">部署を選択</option>';
+    depts.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.name;
+      sel.appendChild(opt);
+    });
+    if (current) sel.value = current;
+  }
+
+  async function openCollabModal() {
+    document.getElementById('collab-modal').style.display = 'flex';
+    const depts = await collabFetchDepartments();
+    collabPopulateSelect('collab-filter-dept', depts, true);
+    collabPopulateSelect('collab-notif-filter-dept', depts, true);
+    collabPopulateSelect('collab-from-dept', depts, false);
+    collabPopulateSelect('collab-to-dept', depts, false);
+    switchCollabTab('requests');
+    refreshCollabUnreadBadge();
+  }
+
+  function closeCollabModal() {
+    document.getElementById('collab-modal').style.display = 'none';
+  }
+
+  function switchCollabTab(tab) {
+    document.querySelectorAll('.collab-tab-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.collabTab === tab);
+    });
+    document.querySelectorAll('.collab-tab-content').forEach(c => {
+      c.classList.toggle('active', c.id === `collab-tab-${tab}`);
+    });
+    if (tab === 'requests') loadCollabRequests();
+    else if (tab === 'notifications') loadCollabNotifications();
+  }
+
+  async function loadCollabRequests(page = 1) {
+    collabState.currentPage = page;
+    const deptId = document.getElementById('collab-filter-dept')?.value || '';
+    const direction = document.getElementById('collab-filter-direction')?.value || 'all';
+    const status = document.getElementById('collab-filter-status')?.value || '';
+
+    const list = document.getElementById('collab-requests-list');
+    list.innerHTML = '<p class="collab-loading">読み込み中...</p>';
+
+    let url;
+    if (deptId) {
+      url = `/api/departments/${deptId}/collaborate?direction=${direction}&page=${page}&limit=10`;
+      if (status) url += `&status=${status}`;
+    } else {
+      url = `/api/tasks/cross-dept?page=${page}&limit=10`;
+      if (status) url += `&status=${status}`;
+    }
+
+    try {
+      const r = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${collabGetToken()}` },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const items = data.data || [];
+
+      if (items.length === 0) {
+        list.innerHTML = '<p class="collab-empty">リクエストがありません</p>';
+        document.getElementById('collab-requests-pagination').innerHTML = '';
+        return;
+      }
+
+      list.innerHTML = items.map(item => {
+        const statusClass = `collab-status-${item.status}`;
+        const priorityClass = `collab-priority-${item.priority}`;
+        const priorityLabel = { low: '低', medium: '中', high: '高', urgent: '緊急' }[item.priority] || item.priority;
+        const statusLabel = { pending: '保留中', acknowledged: '確認済み', in_progress: '進行中', completed: '完了', rejected: '却下' }[item.status] || item.status;
+        return `
+          <div class="collab-card" id="collab-card-${item.id}">
+            <div class="collab-card-header">
+              <div>
+                <p class="collab-card-title">${escapeHtml(item.title)}</p>
+                <p class="collab-card-meta">
+                  <span class="${priorityClass}">●</span> 優先度: ${priorityLabel} &nbsp;|&nbsp;
+                  ${escapeHtml(item.requesting_dept_name)} → ${escapeHtml(item.receiving_dept_name)}
+                  ${item.deadline ? ' &nbsp;|&nbsp; 期限: ' + item.deadline : ''}
+                </p>
+              </div>
+              <span class="collab-status-badge ${statusClass}">${statusLabel}</span>
+            </div>
+            ${item.description ? `<p style="font-size:0.875rem;color:var(--text-secondary,#6b7280);margin:0 0 8px">${escapeHtml(item.description)}</p>` : ''}
+            <div class="collab-card-actions">
+              ${item.status === 'pending' ? `<button class="collab-btn collab-btn-sm collab-btn-success" onclick="updateCollabStatus(${item.receiving_dept_id}, ${item.id}, 'acknowledged')">確認済みにする</button>` : ''}
+              ${item.status === 'acknowledged' ? `<button class="collab-btn collab-btn-sm collab-btn-primary" onclick="updateCollabStatus(${item.receiving_dept_id}, ${item.id}, 'in_progress')">進行中にする</button>` : ''}
+              ${item.status === 'in_progress' ? `<button class="collab-btn collab-btn-sm collab-btn-success" onclick="updateCollabStatus(${item.receiving_dept_id}, ${item.id}, 'completed')">完了にする</button>` : ''}
+              ${['pending','acknowledged','in_progress'].includes(item.status) ? `<button class="collab-btn collab-btn-sm collab-btn-danger" onclick="updateCollabStatus(${item.receiving_dept_id}, ${item.id}, 'rejected')">却下</button>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+
+      renderCollabPagination(data.pagination);
+    } catch (e) {
+      list.innerHTML = `<p class="collab-empty" style="color:#ef4444">読み込みエラー: ${e.message}</p>`;
+    }
+  }
+
+  function renderCollabPagination(pagination) {
+    const el = document.getElementById('collab-requests-pagination');
+    if (!el || !pagination || pagination.pages <= 1) { if (el) el.innerHTML = ''; return; }
+    let html = '';
+    for (let i = 1; i <= pagination.pages; i++) {
+      html += `<button class="collab-page-btn${i === pagination.page ? ' active' : ''}" onclick="loadCollabRequests(${i})">${i}</button>`;
+    }
+    el.innerHTML = html;
+  }
+
+  async function updateCollabStatus(deptId, requestId, status) {
+    const labels = { acknowledged: '確認済み', in_progress: '進行中', completed: '完了', rejected: '却下' };
+    if (!confirm(`ステータスを「${labels[status]}」に変更しますか？`)) return;
+    try {
+      const r = await fetch(`/api/departments/${deptId}/collaborate/${requestId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${collabGetToken()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      loadCollabRequests(collabState.currentPage);
+    } catch (e) {
+      alert(`更新エラー: ${e.message}`);
+    }
+  }
+
+  async function submitCollabRequest(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('collab-form-error');
+    const okEl = document.getElementById('collab-form-success');
+    errEl.style.display = 'none';
+    okEl.style.display = 'none';
+
+    const fromDept = document.getElementById('collab-from-dept').value;
+    const toDept = document.getElementById('collab-to-dept').value;
+    const title = document.getElementById('collab-title').value.trim();
+    const description = document.getElementById('collab-description').value.trim();
+    const priority = document.getElementById('collab-priority').value;
+    const deadline = document.getElementById('collab-deadline').value;
+
+    if (!fromDept || !toDept || !title) {
+      errEl.textContent = '依頼元部署・依頼先部署・タイトルは必須です。';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (fromDept === toDept) {
+      errEl.textContent = '依頼元と依頼先に同じ部署は指定できません。';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    try {
+      const body = { receiving_dept_id: parseInt(toDept), title, priority };
+      if (description) body.description = description;
+      if (deadline) body.deadline = deadline;
+
+      const r = await fetch(`/api/departments/${fromDept}/collaborate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${collabGetToken()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const err = await r.json();
+        throw new Error(err.detail || `HTTP ${r.status}`);
+      }
+
+      okEl.textContent = 'コラボレーションリクエストを送信しました。';
+      okEl.style.display = 'block';
+      document.getElementById('collab-new-form').reset();
+      setTimeout(() => { switchCollabTab('requests'); }, 1200);
+    } catch (err) {
+      errEl.textContent = `送信エラー: ${err.message}`;
+      errEl.style.display = 'block';
+    }
+  }
+
+  async function loadCollabNotifications() {
+    const deptId = document.getElementById('collab-notif-filter-dept')?.value || '';
+    const unreadOnly = document.getElementById('collab-notif-unread-only')?.checked || false;
+    const list = document.getElementById('collab-notifications-list');
+    list.innerHTML = '<p class="collab-loading">読み込み中...</p>';
+
+    let url = `/api/notifications/cross-dept?limit=20`;
+    if (deptId) url += `&dept_id=${deptId}`;
+    if (unreadOnly) url += `&unread_only=true`;
+
+    try {
+      const r = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${collabGetToken()}` },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const items = data.data || [];
+
+      const countEl = document.getElementById('collab-notif-count');
+      if (countEl && data.unread_count > 0) {
+        countEl.textContent = data.unread_count;
+        countEl.style.display = 'inline-flex';
+      } else if (countEl) {
+        countEl.style.display = 'none';
+      }
+
+      if (items.length === 0) {
+        list.innerHTML = '<p class="collab-empty">通知がありません</p>';
+        return;
+      }
+
+      list.innerHTML = items.map(n => {
+        const unreadClass = n.is_read ? '' : 'unread';
+        const timeStr = n.created_at ? new Date(n.created_at).toLocaleString('ja-JP') : '';
+        return `
+          <div class="collab-notif-card ${unreadClass}" id="collab-notif-${n.id}">
+            ${!n.is_read ? '<div class="collab-notif-dot"></div>' : '<div style="width:8px"></div>'}
+            <div class="collab-notif-body">
+              <p class="collab-notif-title">${escapeHtml(n.title)}</p>
+              <p class="collab-notif-message">${escapeHtml(n.message)}</p>
+              <p class="collab-notif-time">${escapeHtml(n.sender_dept_name)} → ${escapeHtml(n.receiver_dept_name)} &nbsp;|&nbsp; ${timeStr}</p>
+              ${!n.is_read ? `<button class="collab-btn collab-btn-sm collab-btn-outline" style="margin-top:8px" onclick="markCollabNotifRead(${n.id})">既読にする</button>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+    } catch (err) {
+      list.innerHTML = `<p class="collab-empty" style="color:#ef4444">読み込みエラー: ${err.message}</p>`;
+    }
+  }
+
+  async function markCollabNotifRead(notifId) {
+    try {
+      await fetch(`/api/notifications/cross-dept/${notifId}/read`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${collabGetToken()}` },
+      });
+      const card = document.getElementById(`collab-notif-${notifId}`);
+      if (card) {
+        card.classList.remove('unread');
+        const dot = card.querySelector('.collab-notif-dot');
+        if (dot) dot.style.visibility = 'hidden';
+        const btn = card.querySelector('.collab-btn-outline');
+        if (btn) btn.remove();
+      }
+      refreshCollabUnreadBadge();
+    } catch (e) { console.error(e); }
+  }
+
+  async function refreshCollabUnreadBadge() {
+    try {
+      const r = await fetch('/api/notifications/cross-dept?limit=1', {
+        headers: { 'Authorization': `Bearer ${collabGetToken()}` },
+      });
+      if (!r.ok) return;
+      const data = await r.json();
+      const badge = document.getElementById('collab-unread-badge');
+      if (badge) {
+        badge.textContent = data.unread_count || 0;
+        badge.style.display = data.unread_count > 0 ? 'inline-flex' : 'none';
+      }
+    } catch {}
+  }
+
+  // Esc キーで閉じる
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('collab-modal')?.style.display !== 'none') {
+      closeCollabModal();
+    }
+  });
+
+  // ページ読み込み時にバッジ更新
+  window.addEventListener('load', () => {
+    if (collabGetToken()) refreshCollabUnreadBadge();
+  });
+  </script>
+  <script src="/js/marketplace.js"></script>
 </body>
 </html>

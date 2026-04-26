@@ -1,0 +1,60 @@
+<!-- Add this section to dashboard/index.html after the agent-scores section -->
+<!-- Marketplace Section -->
+<section id="marketplace" class="marketplace-section" aria-labelledby="marketplace-heading">
+  <div class="marketplace-container">
+    <!-- Header -->
+    <div class="marketplace-header">
+      <h2 id="marketplace-heading">エージェントマーケットプレイス</h2>
+      <p>様々なスキルを持つAIエージェントを検索・インストールできます</p>
+    </div>
+
+    <!-- Controls -->
+    <div class="marketplace-controls">
+      <div class="marketplace-search">
+        <input
+          type="text"
+          id="marketplace-search"
+          placeholder="エージェント名、説明で検索..."
+          aria-label="エージェント検索"
+        >
+      </div>
+      <div class="marketplace-filters">
+        <select id="marketplace-category" aria-label="カテゴリで絞込">
+          <option value="">全カテゴリ</option>
+        </select>
+        <select id="marketplace-sort" aria-label="ソート順">
+          <option value="installation_count:desc">インストール数が多い</option>
+          <option value="rating:desc">評価が高い</option>
+          <option value="created_at:desc">最新</option>
+          <option value="name:asc">名前順（A→Z）</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Results count -->
+    <div class="marketplace-results-count" id="marketplace-results-count">0 件見つかりました</div>
+
+    <!-- Loader -->
+    <div class="marketplace-loader" id="marketplace-loader">
+      <div class="spinner"></div>
+    </div>
+
+    <!-- Agents list -->
+    <div class="marketplace-list" id="marketplace-list"></div>
+
+    <!-- Pagination -->
+    <div class="marketplace-pagination" id="marketplace-pagination"></div>
+  </div>
+</section>
+
+<!-- Add these lines to the <head> section of dashboard/index.html -->
+<!-- In the <head>, after other stylesheet links, add: -->
+<!--
+<link rel="stylesheet" href="/styles/marketplace.css">
+-->
+
+<!-- Add these lines before the closing </body> tag in dashboard/index.html -->
+<!-- Before closing </body>, add: -->
+<!--
+<script src="/js/marketplace.js"></script>
+-->

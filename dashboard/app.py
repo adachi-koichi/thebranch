@@ -9926,3 +9926,325 @@ async def mark_cross_dept_notification_read(
 
     return {"id": notif_id, "is_read": True}
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Cross-Department Tasks (Task #2486)
+# 部署間タスク依頼: cross_dept_tasks テーブル用エンドポイント
+#   - POST   /api/departments/{dept_id}/cross-dept-tasks       (新規依頼作成)
+#   - GET    /api/departments/{dept_id}/incoming-requests       (受信タスク一覧)
+#   - PUT    /api/cross-dept-tasks/{task_id}/accept             (受け入れ)
+#   - PUT    /api/cross-dept-tasks/{task_id}/reject             (拒否)
+#
+# 認証: get_current_user_zero_trust（ゼロトラスト）
+# 権限: ユーザは依頼元（POST）または依頼先（GET/accept/reject）部署に所属している必要がある
+# Note: POST /api/departments/{dept_id}/collaborate は既に
+#       cross_department_tasks 用に使用されているため、新エンドポイントは
+#       /cross-dept-tasks サブパスを使用
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def check_user_in_department(user_id: str, dept_id: int) -> bool:
+    """ユーザが指定部署に所属しているかを確認する。
+
+    判定: users → team_members(active) → teams.department_id == dept_id
+
+    Args:
+        user_id: 確認対象ユーザID
+        dept_id: 部署ID
+
+    Returns:
+        True: 所属している（active な team_members がある）
+        False: 所属していない、または DB アクセス失敗
+    """
+    if not user_id or not dept_id:
+        return False
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            cursor = await db.execute(
+                """
+                SELECT COUNT(*)
+                FROM team_members tm
+                JOIN teams t ON tm.team_id = t.id
+                WHERE tm.user_id = ?
+                  AND tm.status = 'active'
+                  AND t.department_id = ?
+                """,
+                (user_id, dept_id),
+            )
+            row = await cursor.fetchone()
+            return bool(row and row[0] > 0)
+    except Exception as e:
+        logging.error(f"check_user_in_department failed: {e}")
+        return False
+
+
+def _row_to_cross_dept_task(row) -> dict:
+    """sqlite Row を cross_dept_tasks レスポンス dict に変換"""
+    return {
+        "id": row["id"],
+        "from_dept_id": row["from_dept_id"],
+        "to_dept_id": row["to_dept_id"],
+        "task_name": row["task_name"],
+        "task_description": row["task_description"],
+        "status": row["status"],
+        "created_by": row["created_by"],
+        "reject_reason": row["reject_reason"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+@app.post("/api/departments/{dept_id}/cross-dept-tasks", status_code=201)
+async def create_cross_dept_task_request(
+    dept_id: int,
+    req: models.CrossDeptTaskRequestCreate,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """部署間タスク依頼を作成する（依頼元 dept_id → 依頼先 to_dept_id）。
+
+    - 401/403/404 を返す
+    - 同一部署への依頼は 400
+    - 成功時は 201 で CrossDeptTaskRequestResponse を返す
+    """
+    await ensure_db_initialized()
+
+    if dept_id == req.to_dept_id:
+        raise HTTPException(status_code=400, detail="同一部署への依頼はできません")
+
+    user_id = user.get("id") if isinstance(user, dict) else None
+    if not user_id:
+        raise HTTPException(status_code=401, detail="認証情報が無効です")
+
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        # 依頼元部署の存在確認
+        cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (dept_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="依頼元部署が見つかりません")
+
+        # 依頼先部署の存在確認
+        cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (req.to_dept_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="依頼先部署が見つかりません")
+
+        # 権限: 依頼元部署のメンバーであること
+        if not await check_user_in_department(user_id, dept_id):
+            raise HTTPException(status_code=403, detail="依頼元部署のメンバーではありません")
+
+        cursor = await db.execute(
+            """
+            INSERT INTO cross_dept_tasks
+              (from_dept_id, to_dept_id, task_name, task_description, status, created_by)
+            VALUES (?, ?, ?, ?, 'pending', ?)
+            """,
+            (dept_id, req.to_dept_id, req.task_name, req.task_description, user_id),
+        )
+        new_id = cursor.lastrowid
+        await db.commit()
+
+        cursor = await db.execute(
+            "SELECT * FROM cross_dept_tasks WHERE id = ?", (new_id,)
+        )
+        row = await cursor.fetchone()
+
+    return _row_to_cross_dept_task(row)
+
+
+@app.get("/api/departments/{dept_id}/incoming-requests")
+async def list_incoming_cross_dept_requests(
+    dept_id: int,
+    status: Optional[str] = None,
+    limit: int = 50,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """指定部署が受信した部署間タスク依頼一覧を取得する。
+
+    - status フィルタ: pending / accepted / rejected
+    - 権限: 受信側 dept_id のメンバーであること
+    """
+    await ensure_db_initialized()
+
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=422, detail="limit は 1〜500 の範囲で指定してください")
+    if status and status not in {"pending", "accepted", "rejected"}:
+        raise HTTPException(status_code=422, detail="status は pending/accepted/rejected のいずれか")
+
+    user_id = user.get("id") if isinstance(user, dict) else None
+    if not user_id:
+        raise HTTPException(status_code=401, detail="認証情報が無効です")
+
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        cursor = await db.execute("SELECT id FROM departments WHERE id = ?", (dept_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="部署が見つかりません")
+
+        if not await check_user_in_department(user_id, dept_id):
+            raise HTTPException(status_code=403, detail="この部署の受信タスクを閲覧する権限がありません")
+
+        query = "SELECT * FROM cross_dept_tasks WHERE to_dept_id = ?"
+        params: list = [dept_id]
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        cursor = await db.execute(query, params)
+        rows = await cursor.fetchall()
+
+        count_query = "SELECT COUNT(*) FROM cross_dept_tasks WHERE to_dept_id = ?"
+        count_params: list = [dept_id]
+        if status:
+            count_query += " AND status = ?"
+            count_params.append(status)
+        cursor = await db.execute(count_query, count_params)
+        total = (await cursor.fetchone())[0]
+
+    return {
+        "requests": [_row_to_cross_dept_task(r) for r in rows],
+        "total": total,
+    }
+
+
+async def _transition_cross_dept_task(
+    task_id: int,
+    new_status: str,
+    user: dict,
+    reject_reason: Optional[str] = None,
+) -> dict:
+    """cross_dept_tasks のステータスを pending から accepted/rejected に遷移する共通処理。
+
+    - 404: タスクが存在しない
+    - 403: 受信側部署のメンバーでない
+    - 409: 既に pending でない（accepted/rejected 済み）
+    - 通知: create_notification_log でブロードキャスト
+    """
+    await ensure_db_initialized()
+
+    user_id = user.get("id") if isinstance(user, dict) else None
+    if not user_id:
+        raise HTTPException(status_code=401, detail="認証情報が無効です")
+
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+
+        cursor = await db.execute(
+            "SELECT * FROM cross_dept_tasks WHERE id = ?", (task_id,)
+        )
+        task = await cursor.fetchone()
+        if not task:
+            raise HTTPException(status_code=404, detail="部署間タスク依頼が見つかりません")
+        task = dict(task)
+
+        # 権限: 受信側部署のメンバーのみが accept/reject 可能
+        if not await check_user_in_department(user_id, task["to_dept_id"]):
+            raise HTTPException(
+                status_code=403,
+                detail="受信側部署のメンバーのみが受け入れ/拒否できます",
+            )
+
+        # 状態遷移チェック: pending → accepted/rejected のみ
+        if task["status"] != "pending":
+            raise HTTPException(
+                status_code=409,
+                detail=f"既に '{task['status']}' のため変更できません",
+            )
+
+        if new_status == "rejected":
+            await db.execute(
+                """
+                UPDATE cross_dept_tasks
+                SET status = 'rejected',
+                    reject_reason = ?,
+                    updated_at = datetime('now','localtime')
+                WHERE id = ?
+                """,
+                (reject_reason, task_id),
+            )
+        else:
+            await db.execute(
+                """
+                UPDATE cross_dept_tasks
+                SET status = ?,
+                    updated_at = datetime('now','localtime')
+                WHERE id = ?
+                """,
+                (new_status, task_id),
+            )
+        await db.commit()
+
+        cursor = await db.execute(
+            "SELECT * FROM cross_dept_tasks WHERE id = ?", (task_id,)
+        )
+        updated = await cursor.fetchone()
+
+    # WebSocket 通知（Task #4: notification_logs 経由）
+    try:
+        notif_type = (
+            "collaboration_request_accepted"
+            if new_status == "accepted"
+            else "collaboration_request_rejected"
+        )
+        title = (
+            f"部署間タスク依頼が受理されました: {task['task_name']}"
+            if new_status == "accepted"
+            else f"部署間タスク依頼が拒否されました: {task['task_name']}"
+        )
+        message_body = (
+            f"to_dept_id={task['to_dept_id']} がタスク '{task['task_name']}' を受理しました"
+            if new_status == "accepted"
+            else f"to_dept_id={task['to_dept_id']} がタスク '{task['task_name']}' を拒否しました"
+            + (f"（理由: {reject_reason}）" if reject_reason else "")
+        )
+        await create_notification_log(
+            notification_type=notif_type,
+            title=title,
+            message=message_body,
+            severity="info",
+            recipient_id=task["created_by"],
+            recipient_type="user",
+            source_table="cross_dept_tasks",
+            source_id=task_id,
+            metadata={
+                "from_dept_id": task["from_dept_id"],
+                "to_dept_id": task["to_dept_id"],
+                "status": new_status,
+                "reject_reason": reject_reason,
+            },
+            action_url=f"/dashboard/collab/requests/{task_id}",
+        )
+    except Exception as e:
+        logging.error(f"create_notification_log failed for cross_dept_tasks#{task_id}: {e}")
+
+    return _row_to_cross_dept_task(updated)
+
+
+@app.put("/api/cross-dept-tasks/{task_id}/accept")
+async def accept_cross_dept_task(
+    task_id: int,
+    req: models.CrossDeptTaskRequestAccept,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """部署間タスク依頼を受理する（pending → accepted）。
+
+    - 受信側部署のメンバーのみが実行可能
+    - 既に accepted/rejected の場合は 409
+    """
+    return await _transition_cross_dept_task(task_id, "accepted", user)
+
+
+@app.put("/api/cross-dept-tasks/{task_id}/reject")
+async def reject_cross_dept_task(
+    task_id: int,
+    req: models.CrossDeptTaskRequestReject,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """部署間タスク依頼を拒否する（pending → rejected）。
+
+    - 受信側部署のメンバーのみが実行可能
+    - 既に accepted/rejected の場合は 409
+    - 拒否理由は req.reason に格納（任意）
+    """
+    return await _transition_cross_dept_task(task_id, "rejected", user, reject_reason=req.reason)

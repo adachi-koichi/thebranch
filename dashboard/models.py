@@ -1,6 +1,13 @@
 from datetime import datetime
+from enum import Enum
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, field_validator
+
+
+class UserRole(str, Enum):
+    owner = "owner"
+    manager = "manager"
+    member = "member"
 
 
 class UserBase(BaseModel):
@@ -14,6 +21,7 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: str
+    role: UserRole = UserRole.member
     created_at: datetime
     updated_at: datetime
 
@@ -1235,3 +1243,93 @@ class ScoreModel(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Cross Department Collaboration Models (Task #2486)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class CrossDeptTaskCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    receiving_dept_id: int
+    priority: str = "medium"
+    deadline: Optional[str] = None
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v: str) -> str:
+        allowed = {"low", "medium", "high", "urgent"}
+        if v not in allowed:
+            raise ValueError(f"priority must be one of {allowed}")
+        return v
+
+
+class CrossDeptTaskStatusUpdate(BaseModel):
+    status: str
+    comment: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        allowed = {"pending", "acknowledged", "in_progress", "completed", "rejected"}
+        if v not in allowed:
+            raise ValueError(f"status must be one of {allowed}")
+        return v
+
+
+class DeptCollabNotificationReadRequest(BaseModel):
+    pass
+
+
+# ─────────────────────────────────────────────────────────
+# Cross-Department Tasks (Task #2486)
+# 部署間タスク依頼: cross_dept_tasks テーブル用 Pydantic モデル
+# Note: 既存の CrossDeptTaskCreate (cross_department_tasks 用) と
+#       命名衝突を避けるため Request 接尾辞を付与
+# ─────────────────────────────────────────────────────────
+
+class CrossDeptTaskRequestCreate(BaseModel):
+    """部署間タスク依頼作成リクエスト"""
+    to_dept_id: int
+    task_name: str
+    task_description: Optional[str] = None
+
+    @field_validator("task_name")
+    @classmethod
+    def validate_task_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("task_name must not be empty")
+        if len(v) > 500:
+            raise ValueError("task_name must be 500 characters or less")
+        return v.strip()
+
+
+class CrossDeptTaskRequestResponse(BaseModel):
+    """部署間タスク依頼レスポンス"""
+    id: int
+    from_dept_id: int
+    to_dept_id: int
+    task_name: str
+    task_description: Optional[str] = None
+    status: str
+    created_by: Optional[str] = None
+    reject_reason: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class CrossDeptTaskRequestAccept(BaseModel):
+    """部署間タスク受け入れリクエスト（任意コメント）"""
+    comment: Optional[str] = None
+
+
+class CrossDeptTaskRequestReject(BaseModel):
+    """部署間タスク拒否リクエスト（任意理由）"""
+    reason: Optional[str] = None
+
+
+class CrossDeptTaskRequestListResponse(BaseModel):
+    """部署間タスク依頼一覧レスポンス"""
+    requests: List[CrossDeptTaskRequestResponse]
+    total: int
