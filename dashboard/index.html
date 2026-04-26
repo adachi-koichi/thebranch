@@ -1666,6 +1666,9 @@
             <li>
               <a href="/workflow-templates" onclick="openTemplatesModal(); history.replaceState(null, '', '/workflow-templates'); return false;" id="templates-nav-link">テンプレート</a>
             </li>
+            <li>
+              <a href="/agent-chat" onclick="openChatModal(); history.replaceState(null, '', '/agent-chat'); return false;" id="chat-nav-link">AIチャット</a>
+            </li>
           </ul>
           <div class="header-actions">
             <span id="user-role-badge" class="role-badge role-badge--member" style="display:none"></span>
@@ -2714,6 +2717,70 @@
       </div>
       <div id="templates-list">
         <div style="padding:24px;text-align:center;color:var(--text-secondary,#6b7280);">読み込み中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task #2509: AIエージェントチャットモーダル -->
+  <style>
+    #chat-modal .chat-layout { display:grid; grid-template-columns: 240px 1fr; gap:12px; height: 70vh; min-height:480px; }
+    #chat-modal .chat-side { border:1px solid var(--border-color,#e5e7eb); border-radius:10px; padding:8px; background:var(--bg-secondary,#f9fafb); overflow-y:auto; }
+    #chat-modal .chat-main { display:flex; flex-direction:column; border:1px solid var(--border-color,#e5e7eb); border-radius:10px; overflow:hidden; }
+    #chat-modal .chat-toolbar { display:flex; gap:6px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--border-color,#e5e7eb); background:var(--bg-secondary,#f9fafb); flex-wrap:wrap; }
+    #chat-modal .chat-messages { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; scroll-behavior:smooth; background:var(--bg-primary,#fff); }
+    #chat-modal .chat-bubble { max-width: 78%; padding:9px 12px; border-radius:12px; font-size:0.88rem; line-height:1.45; white-space:pre-wrap; word-break:break-word; }
+    #chat-modal .chat-bubble.user { align-self:flex-end; background:#3b82f6; color:#fff; border-bottom-right-radius:4px; }
+    #chat-modal .chat-bubble.assistant { align-self:flex-start; background:#f3f4f6; color:#111827; border:1px solid #e5e7eb; border-bottom-left-radius:4px; }
+    #chat-modal .chat-bubble.system { align-self:center; background:#fef3c7; color:#92400e; font-size:0.78rem; padding:4px 10px; border-radius:8px; }
+    #chat-modal .chat-meta { font-size:0.7rem; color:var(--text-secondary,#6b7280); margin-top:4px; opacity:0.85; }
+    #chat-modal .chat-input-row { display:flex; gap:6px; padding:10px; border-top:1px solid var(--border-color,#e5e7eb); background:var(--bg-secondary,#f9fafb); align-items:flex-end; }
+    #chat-modal .chat-input-row textarea { flex:1; min-height:48px; max-height:160px; padding:8px 10px; border:1px solid var(--border-color,#d1d5db); border-radius:8px; font-size:0.88rem; resize:vertical; font-family:inherit; }
+    #chat-modal .chat-sending { display:inline-flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text-secondary,#6b7280); }
+    #chat-modal .chat-spinner { width:14px; height:14px; border:2px solid #d1d5db; border-top-color:#3b82f6; border-radius:50%; animation: chat-spin 0.8s linear infinite; }
+    @keyframes chat-spin { to { transform: rotate(360deg); } }
+    #chat-modal .chat-agent-item { display:block; width:100%; text-align:left; padding:8px 10px; border-radius:8px; background:transparent; border:1px solid transparent; cursor:pointer; font-size:0.82rem; margin-bottom:4px; color:var(--text-primary,#111827); }
+    #chat-modal .chat-agent-item:hover { background:#eef2ff; }
+    #chat-modal .chat-agent-item.active { background:#3b82f6; color:#fff; border-color:#2563eb; }
+    #chat-modal .chat-agent-meta { font-size:0.7rem; opacity:0.8; }
+    #chat-modal .chat-empty { color:var(--text-secondary,#6b7280); padding:32px 12px; text-align:center; font-size:0.85rem; }
+  </style>
+  <div id="chat-modal" class="collab-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="chat-modal-title" style="display:none">
+    <div class="collab-modal" style="width: min(1200px, 96vw);">
+      <div class="collab-modal-header">
+        <h2 id="chat-modal-title" class="collab-modal-title">AIエージェントチャット</h2>
+        <button class="collab-modal-close" onclick="closeChatModal()" aria-label="閉じる">&times;</button>
+      </div>
+
+      <div class="chat-layout">
+        <!-- 左: エージェント選択 -->
+        <aside class="chat-side" id="chat-agent-list" aria-label="エージェント一覧">
+          <div style="font-size:0.78rem;font-weight:600;margin:6px 6px 8px 6px;color:var(--text-secondary,#6b7280);">エージェント</div>
+          <div id="chat-agents-tbody"><div class="chat-empty">読み込み中...</div></div>
+        </aside>
+
+        <!-- 右: チャット本体 -->
+        <section class="chat-main" aria-label="チャット本体">
+          <div class="chat-toolbar">
+            <span id="chat-current-agent" style="font-weight:600;font-size:0.9rem;">エージェント未選択</span>
+            <span id="chat-session-id" style="font-size:0.72rem;color:var(--text-secondary,#6b7280);"></span>
+            <span style="margin-left:auto;"></span>
+            <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="reloadChatHistory()">再読込</button>
+            <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="newChatSession()">新規セッション</button>
+            <button class="collab-btn collab-btn-outline collab-btn-sm" onclick="clearChatSession()" style="color:#b91c1c;">履歴クリア</button>
+          </div>
+
+          <div class="chat-messages" id="chat-messages" aria-live="polite">
+            <div class="chat-empty">左のリストからエージェントを選択するとチャットが始まります。</div>
+          </div>
+
+          <div class="chat-input-row">
+            <textarea id="chat-input" placeholder="メッセージを入力（Enter で送信、Shift+Enter で改行）" disabled></textarea>
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;">
+              <button class="collab-btn collab-btn-primary collab-btn-sm" id="chat-send-btn" onclick="sendChatMessage()" disabled>送信</button>
+              <span class="chat-sending" id="chat-sending" style="display:none;"><span class="chat-spinner"></span>送信中...</span>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -4061,10 +4128,11 @@
     if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
   }
 
-  // Esc キーで Task#2793 モーダルを閉じる
+  // Esc キーで Task#2793 / #2509 モーダルを閉じる
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (document.getElementById('projects-modal')?.style.display !== 'none') closeProjectsModal();
+    if (document.getElementById('chat-modal')?.style.display !== 'none') closeChatModal();
+    else if (document.getElementById('projects-modal')?.style.display !== 'none') closeProjectsModal();
     else if (document.getElementById('workflows-modal')?.style.display !== 'none') closeWorkflowsModal();
     else if (document.getElementById('templates-modal')?.style.display !== 'none') closeTemplatesModal();
   });
@@ -4075,6 +4143,312 @@
     if (path === '/projects') openProjectsModal();
     else if (path === '/workflows') openWorkflowsModal();
     else if (path === '/workflow-templates') openTemplatesModal();
+    else if (path === '/agent-chat') openChatModal();
+  });
+
+  // ==========================================================================
+  // Task #2509: AIエージェントチャットUI改善
+  //   - localStorage によるメッセージ履歴の永続化
+  //   - 送信中インジケーター
+  //   - 会話履歴を API 送信に含める（コンテキスト維持）
+  //   - メッセージ時刻表示・自動スクロール
+  // ==========================================================================
+  const TB_CHAT_LS_PREFIX = 'tb_chat_v1';
+  const TB_CHAT_SESSION_KEY = 'tb_chat_v1_active';
+  const TB_CHAT_HISTORY_LIMIT = 20; // API送信時に直近何件をコンテキストに含めるか
+
+  function tbChatLsKey(agentId, sessionId) {
+    return `${TB_CHAT_LS_PREFIX}:${agentId}:${sessionId}`;
+  }
+
+  function tbChatLoadLocal(agentId, sessionId) {
+    try {
+      const raw = localStorage.getItem(tbChatLsKey(agentId, sessionId));
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) { return []; }
+  }
+
+  function tbChatSaveLocal(agentId, sessionId, messages) {
+    try {
+      localStorage.setItem(tbChatLsKey(agentId, sessionId), JSON.stringify(messages.slice(-200)));
+    } catch (_) { /* quota or disabled */ }
+  }
+
+  function tbChatLoadActive() {
+    try {
+      const raw = localStorage.getItem(TB_CHAT_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) { return null; }
+  }
+  function tbChatSaveActive(state) {
+    try { localStorage.setItem(TB_CHAT_SESSION_KEY, JSON.stringify(state || {})); } catch (_) {}
+  }
+
+  function tbChatGenSessionId() {
+    return 'sess-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  }
+
+  function tbChatFormatTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T'));
+    if (isNaN(d.getTime())) return iso;
+    const pad = n => String(n).padStart(2, '0');
+    const today = new Date();
+    const sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+    if (sameDay) return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  let tbChatState = {
+    agentId: null,
+    agentRole: null,
+    sessionId: null,
+    messages: [],
+    sending: false,
+  };
+
+  async function openChatModal() {
+    const modal = document.getElementById('chat-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    await loadChatAgents();
+    // 前回のアクティブな会話を復元
+    const active = tbChatLoadActive();
+    if (active && active.agentId) {
+      await selectChatAgent(active.agentId, active.sessionId || null);
+    }
+  }
+
+  function closeChatModal() {
+    const modal = document.getElementById('chat-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+    if (location.pathname === '/agent-chat') history.replaceState(null, '', '/');
+  }
+
+  async function loadChatAgents() {
+    const tbody = document.getElementById('chat-agents-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<div class="chat-empty">読み込み中...</div>';
+    try {
+      const res = await tbAuthFetch('/api/agents');
+      if (!res.ok) throw new Error('agents fetch ' + res.status);
+      const data = await res.json();
+      const agents = Array.isArray(data) ? data : (data.data || data.agents || []);
+      if (!agents.length) {
+        tbody.innerHTML = '<div class="chat-empty">エージェントがまだ存在しません。<br>部署管理から作成してください。</div>';
+        return;
+      }
+      const html = agents.map(a => {
+        const id = a.id;
+        const role = tbEscapeHtml(a.role || '(役割なし)');
+        const status = tbEscapeHtml(a.status || '');
+        const dept = a.department_id ? `dept #${a.department_id}` : '';
+        return `<button class="chat-agent-item" data-agent-id="${id}" onclick="selectChatAgent(${id})">
+          <div>#${id} ${role}</div>
+          <div class="chat-agent-meta">${status}${dept ? ' / ' + dept : ''}</div>
+        </button>`;
+      }).join('');
+      tbody.innerHTML = html;
+      // 選択中のハイライトを反映
+      if (tbChatState.agentId) {
+        const btn = tbody.querySelector(`[data-agent-id="${tbChatState.agentId}"]`);
+        if (btn) btn.classList.add('active');
+      }
+    } catch (e) {
+      tbody.innerHTML = `<div class="chat-empty">エージェント取得失敗: ${tbEscapeHtml(String(e))}</div>`;
+    }
+  }
+
+  async function selectChatAgent(agentId, sessionId) {
+    tbChatState.agentId = Number(agentId);
+    if (!sessionId) {
+      const active = tbChatLoadActive();
+      sessionId = (active && Number(active.agentId) === tbChatState.agentId && active.sessionId) ? active.sessionId : tbChatGenSessionId();
+    }
+    tbChatState.sessionId = sessionId;
+    tbChatState.messages = tbChatLoadLocal(tbChatState.agentId, tbChatState.sessionId);
+    tbChatSaveActive({ agentId: tbChatState.agentId, sessionId: tbChatState.sessionId });
+
+    // ハイライト
+    document.querySelectorAll('#chat-agents-tbody .chat-agent-item').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`#chat-agents-tbody [data-agent-id="${tbChatState.agentId}"]`);
+    if (btn) {
+      btn.classList.add('active');
+      const role = btn.querySelector('div')?.textContent || `Agent #${agentId}`;
+      tbChatState.agentRole = role;
+      document.getElementById('chat-current-agent').textContent = role;
+    } else {
+      document.getElementById('chat-current-agent').textContent = `Agent #${agentId}`;
+    }
+    document.getElementById('chat-session-id').textContent = `session: ${tbChatState.sessionId}`;
+    const inputEl = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('chat-send-btn');
+    if (inputEl) { inputEl.disabled = false; inputEl.focus(); }
+    if (sendBtn) sendBtn.disabled = false;
+
+    renderChatMessages();
+    // サーバーから永続化済み履歴をマージ取得
+    try {
+      const res = await tbAuthFetch(`/api/agents/${agentId}/chat?session_id=${encodeURIComponent(tbChatState.sessionId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const serverMsgs = (data.messages || []).map(m => ({
+          id: m.id, role: m.role, content: m.content, created_at: m.created_at,
+        }));
+        if (serverMsgs.length) {
+          // サーバー履歴を優先（信頼源）。localStorageは新規送信のオプティミスティックUI用に使う。
+          tbChatState.messages = serverMsgs;
+          tbChatSaveLocal(tbChatState.agentId, tbChatState.sessionId, tbChatState.messages);
+          renderChatMessages();
+        }
+      }
+    } catch (_) { /* offline OK */ }
+  }
+
+  function renderChatMessages() {
+    const box = document.getElementById('chat-messages');
+    if (!box) return;
+    if (!tbChatState.messages.length) {
+      box.innerHTML = '<div class="chat-empty">まだメッセージはありません。下の入力欄から会話を始めてください。</div>';
+      return;
+    }
+    const html = tbChatState.messages.map(m => {
+      const role = m.role || 'assistant';
+      const content = tbEscapeHtml(m.content || '');
+      const time = tbChatFormatTime(m.created_at || m.ts || '');
+      const label = role === 'user' ? 'あなた' : (role === 'assistant' ? (tbChatState.agentRole || 'エージェント') : 'system');
+      return `<div class="chat-bubble ${role}">
+        ${content}
+        <div class="chat-meta">${tbEscapeHtml(label)} ・ ${tbEscapeHtml(time)}</div>
+      </div>`;
+    }).join('');
+    box.innerHTML = html;
+    // 自動スクロール
+    box.scrollTop = box.scrollHeight;
+  }
+
+  async function sendChatMessage() {
+    if (tbChatState.sending) return;
+    if (!tbChatState.agentId) return;
+    const inputEl = document.getElementById('chat-input');
+    if (!inputEl) return;
+    const message = (inputEl.value || '').trim();
+    if (!message) return;
+
+    const sendBtn = document.getElementById('chat-send-btn');
+    const sendingEl = document.getElementById('chat-sending');
+    tbChatState.sending = true;
+    if (sendBtn) sendBtn.disabled = true;
+    if (sendingEl) sendingEl.style.display = 'inline-flex';
+
+    // オプティミスティック追加
+    const optimisticUser = {
+      id: 'local-' + Date.now(),
+      role: 'user',
+      content: message,
+      created_at: new Date().toISOString(),
+    };
+    tbChatState.messages.push(optimisticUser);
+    inputEl.value = '';
+    renderChatMessages();
+
+    // コンテキスト: 直近 N 件（system 除く）
+    const history = tbChatState.messages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .slice(-TB_CHAT_HISTORY_LIMIT - 1, -1) // 直前のオプティミスティックは除外
+      .map(m => ({ role: m.role, content: m.content }));
+
+    try {
+      const res = await tbAuthFetch(`/api/agents/${tbChatState.agentId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          session_id: tbChatState.sessionId,
+          history,
+        }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
+      }
+      const data = await res.json();
+      // サーバーが返した正式な行（user + assistant）でオプティミスティックを置換
+      const serverMessages = data.messages || [];
+      // 末尾のオプティミスティックを取り除いてからマージ
+      tbChatState.messages = tbChatState.messages.filter(m => !(typeof m.id === 'string' && m.id.startsWith('local-')));
+      serverMessages.forEach(m => {
+        if (!tbChatState.messages.find(x => x.id === m.id)) tbChatState.messages.push(m);
+      });
+      tbChatSaveLocal(tbChatState.agentId, tbChatState.sessionId, tbChatState.messages);
+      renderChatMessages();
+    } catch (e) {
+      tbChatState.messages.push({
+        id: 'local-err-' + Date.now(),
+        role: 'system',
+        content: '送信失敗: ' + (e?.message || String(e)),
+        created_at: new Date().toISOString(),
+      });
+      renderChatMessages();
+    } finally {
+      tbChatState.sending = false;
+      if (sendBtn) sendBtn.disabled = false;
+      if (sendingEl) sendingEl.style.display = 'none';
+      inputEl.focus();
+    }
+  }
+
+  async function reloadChatHistory() {
+    if (!tbChatState.agentId) return;
+    try {
+      const res = await tbAuthFetch(`/api/agents/${tbChatState.agentId}/chat?session_id=${encodeURIComponent(tbChatState.sessionId)}`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      tbChatState.messages = (data.messages || []).map(m => ({
+        id: m.id, role: m.role, content: m.content, created_at: m.created_at,
+      }));
+      tbChatSaveLocal(tbChatState.agentId, tbChatState.sessionId, tbChatState.messages);
+      renderChatMessages();
+    } catch (e) {
+      alert('再読込失敗: ' + (e?.message || e));
+    }
+  }
+
+  function newChatSession() {
+    if (!tbChatState.agentId) return;
+    tbChatState.sessionId = tbChatGenSessionId();
+    tbChatState.messages = [];
+    tbChatSaveActive({ agentId: tbChatState.agentId, sessionId: tbChatState.sessionId });
+    document.getElementById('chat-session-id').textContent = `session: ${tbChatState.sessionId}`;
+    renderChatMessages();
+  }
+
+  async function clearChatSession() {
+    if (!tbChatState.agentId || !tbChatState.sessionId) return;
+    if (!confirm('現在のセッションのチャット履歴を削除します。よろしいですか？')) return;
+    try {
+      await tbAuthFetch(`/api/agents/${tbChatState.agentId}/chat?session_id=${encodeURIComponent(tbChatState.sessionId)}`, { method: 'DELETE' });
+    } catch (_) {}
+    try { localStorage.removeItem(tbChatLsKey(tbChatState.agentId, tbChatState.sessionId)); } catch (_) {}
+    tbChatState.messages = [];
+    renderChatMessages();
+  }
+
+  // Enter キー送信（Shift+Enter で改行）
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    const target = e.target;
+    if (target && target.id === 'chat-input') {
+      const modal = document.getElementById('chat-modal');
+      if (!modal || modal.style.display === 'none') return;
+      e.preventDefault();
+      sendChatMessage();
+    }
   });
   </script>
   <script src="/js/marketplace.js"></script>

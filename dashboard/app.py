@@ -12,7 +12,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from datetime import datetime
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, List, Optional
 
 import aiosqlite
 import yaml
@@ -70,6 +70,13 @@ async def page_workflows_spa():
 
 @app.get("/workflow-templates", response_class=HTMLResponse)
 async def page_workflow_templates_spa():
+    html_path = DASHBOARD_DIR / "index.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
+# ── Task #2509: AIエージェントチャット SPA ルート
+@app.get("/agent-chat", response_class=HTMLResponse)
+async def page_agent_chat_spa():
     html_path = DASHBOARD_DIR / "index.html"
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
@@ -5382,6 +5389,236 @@ async def stop_agent(agent_id: int, user: dict = Depends(get_current_user_zero_t
     if row:
         await log_agent_activity(agent_id, "stopped", "エージェント停止")
     return dict(row) if row else {"error": "Failed to stop"}
+
+
+# ============================================================================
+# Task #2509: エージェントチャットUI改善 — chat persistence & context
+# ============================================================================
+
+async def _ensure_agent_chats_table(db) -> None:
+    """agent_chats テーブルを必要に応じて作成（マイグレーション未適用環境への保険）。"""
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS agent_chats (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id        INTEGER NOT NULL,
+            session_id      TEXT NOT NULL,
+            role            TEXT NOT NULL
+                CHECK(role IN ('user', 'assistant', 'system')),
+            content         TEXT NOT NULL,
+            context_meta    TEXT,
+            user_id         TEXT,
+            username        TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )
+        """
+    )
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_chats_agent_id ON agent_chats(agent_id)"
+    )
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_chats_session ON agent_chats(agent_id, session_id)"
+    )
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_chats_created_at ON agent_chats(created_at DESC)"
+    )
+
+
+class AgentChatHistoryItem(BaseModel):
+    role: str
+    content: str
+
+
+class AgentChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+    history: Optional[List[AgentChatHistoryItem]] = None
+    model_hint: Optional[str] = None
+
+
+def _build_assistant_reply(role_name: str, message: str, history: list) -> str:
+    """簡易応答ジェネレーター。
+
+    将来的にはここを LLM/エージェント実体への呼び出しに差し替える。
+    当面は会話履歴を踏まえた決定的な応答を返し、UI改善（Task #2509）の
+    動作確認とコンテキスト維持の検証に使う。
+    """
+    msg = (message or "").strip()
+    history_count = len([h for h in (history or []) if (h.get("role") if isinstance(h, dict) else getattr(h, "role", None)) in ("user", "assistant")])
+    role_label = role_name or "AIエージェント"
+
+    lower = msg.lower()
+    if not msg:
+        return f"[{role_label}] メッセージが空です。質問内容を入力してください。"
+    if any(k in msg for k in ("こんにちは", "おはよう", "はじめまして")) or "hello" in lower or "hi" in lower:
+        return f"[{role_label}] こんにちは。これまでに {history_count} 件のやりとりをしています。どのようにお手伝いしましょうか？"
+    if msg.endswith("?") or msg.endswith("？") or any(k in msg for k in ("教えて", "とは", "ですか", "what", "why", "how")):
+        return (
+            f"[{role_label}] ご質問ありがとうございます。\n"
+            f"これまで {history_count} 件の文脈を踏まえてお答えします:\n"
+            f"「{msg}」については、関連情報を整理しています。"
+        )
+    if any(k in msg for k in ("お願い", "やって", "実装", "作って", "please")):
+        return (
+            f"[{role_label}] 了解しました。会話履歴 {history_count} 件をコンテキストとして踏まえ、"
+            f"以下の方針で進めます: 『{msg[:80]}』"
+        )
+    return (
+        f"[{role_label}] メッセージを受け取りました（履歴 {history_count} 件）。\n"
+        f"内容: {msg[:200]}"
+    )
+
+
+@app.post("/api/agents/{agent_id}/chat", status_code=200)
+async def post_agent_chat(
+    agent_id: int,
+    payload: AgentChatRequest,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """エージェントへチャットメッセージを送信し、ユーザー/アシスタントの両ロウを永続化して返す。"""
+    await ensure_db_initialized()
+    if not payload.message or not payload.message.strip():
+        raise HTTPException(status_code=400, detail="メッセージが空です")
+
+    session_id = (payload.session_id or "").strip() or f"sess-{uuid.uuid4().hex[:12]}"
+    history_payload = []
+    for h in (payload.history or []):
+        if isinstance(h, AgentChatHistoryItem):
+            history_payload.append({"role": h.role, "content": h.content})
+        elif isinstance(h, dict):
+            history_payload.append({"role": h.get("role", ""), "content": h.get("content", "")})
+    user_id = str(user.get("id") or user.get("user_id") or "") if isinstance(user, dict) else ""
+    username = str(user.get("username") or user.get("name") or "") if isinstance(user, dict) else ""
+
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        await _ensure_agent_chats_table(db)
+
+        cursor = await db.execute(
+            "SELECT id, role, status, session_id FROM agents WHERE id = ?", (agent_id,)
+        )
+        agent = await cursor.fetchone()
+        if not agent:
+            raise HTTPException(status_code=404, detail="エージェントが見つかりません")
+
+        meta = json.dumps({
+            "history_count": len(history_payload),
+            "agent_session": agent["session_id"],
+        }, ensure_ascii=False)
+
+        await db.execute(
+            """INSERT INTO agent_chats (agent_id, session_id, role, content, context_meta, user_id, username)
+               VALUES (?, ?, 'user', ?, ?, ?, ?)""",
+            (agent_id, session_id, payload.message, meta, user_id, username),
+        )
+
+        reply_text = _build_assistant_reply(agent["role"] or "", payload.message, history_payload)
+
+        await db.execute(
+            """INSERT INTO agent_chats (agent_id, session_id, role, content, context_meta, user_id, username)
+               VALUES (?, ?, 'assistant', ?, ?, ?, ?)""",
+            (agent_id, session_id, reply_text, meta, user_id, username),
+        )
+        await db.commit()
+
+        cursor = await db.execute(
+            """SELECT id, agent_id, session_id, role, content, created_at
+               FROM agent_chats
+               WHERE agent_id = ? AND session_id = ?
+               ORDER BY id DESC LIMIT 2""",
+            (agent_id, session_id),
+        )
+        rows = await cursor.fetchall()
+
+    items = [dict(r) for r in rows]
+    items.sort(key=lambda r: r["id"])
+    try:
+        await log_agent_activity(agent_id, "chat", f"chat: {payload.message[:80]}")
+    except Exception:
+        pass
+
+    return {
+        "agent_id": agent_id,
+        "session_id": session_id,
+        "messages": items,
+        "reply": reply_text,
+        "history_count": len(history_payload),
+    }
+
+
+@app.get("/api/agents/{agent_id}/chat")
+async def list_agent_chat(
+    agent_id: int,
+    session_id: Optional[str] = None,
+    limit: int = 200,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """指定エージェントの永続化済みチャット履歴を取得。session_id 未指定時は最新セッションのみ。"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        db.row_factory = aiosqlite.Row
+        await _ensure_agent_chats_table(db)
+
+        cursor = await db.execute("SELECT id, role FROM agents WHERE id = ?", (agent_id,))
+        agent = await cursor.fetchone()
+        if not agent:
+            raise HTTPException(status_code=404, detail="エージェントが見つかりません")
+
+        if session_id:
+            cursor = await db.execute(
+                """SELECT id, agent_id, session_id, role, content, created_at
+                   FROM agent_chats
+                   WHERE agent_id = ? AND session_id = ?
+                   ORDER BY id ASC LIMIT ?""",
+                (agent_id, session_id, max(1, min(limit, 1000))),
+            )
+        else:
+            cursor = await db.execute(
+                """SELECT id, agent_id, session_id, role, content, created_at
+                   FROM agent_chats
+                   WHERE agent_id = ?
+                   ORDER BY id ASC LIMIT ?""",
+                (agent_id, max(1, min(limit, 1000))),
+            )
+        rows = await cursor.fetchall()
+
+        cursor = await db.execute(
+            """SELECT session_id, COUNT(*) AS cnt, MAX(created_at) AS last_at
+               FROM agent_chats WHERE agent_id = ?
+               GROUP BY session_id ORDER BY last_at DESC LIMIT 50""",
+            (agent_id,),
+        )
+        sess_rows = await cursor.fetchall()
+
+    return {
+        "agent_id": agent_id,
+        "agent_role": agent["role"],
+        "session_id": session_id,
+        "messages": [dict(r) for r in rows],
+        "sessions": [dict(s) for s in sess_rows],
+        "total": len(rows),
+    }
+
+
+@app.delete("/api/agents/{agent_id}/chat")
+async def delete_agent_chat(
+    agent_id: int,
+    session_id: Optional[str] = None,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """チャット履歴を削除（session_id 指定時はそのセッションのみ）。"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await _ensure_agent_chats_table(db)
+        if session_id:
+            await db.execute(
+                "DELETE FROM agent_chats WHERE agent_id = ? AND session_id = ?",
+                (agent_id, session_id),
+            )
+        else:
+            await db.execute("DELETE FROM agent_chats WHERE agent_id = ?", (agent_id,))
+        await db.commit()
+    return {"ok": True, "agent_id": agent_id, "session_id": session_id}
 
 
 async def activity_event_generator(dept_id: int) -> AsyncGenerator[str, None]:
