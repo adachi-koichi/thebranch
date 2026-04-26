@@ -1171,6 +1171,63 @@
       animation: fadeInUp 0.6s ease-out;
     }
 
+    /* Agent Scores Section */
+    .scores-container {
+      padding: 32px 24px;
+      background-color: var(--bg-secondary);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+    }
+
+    .scores-container h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .scores-meta {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+
+    .scores-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 32px;
+      font-size: 0.9rem;
+    }
+
+    .scores-table thead {
+      background-color: var(--bg-tertiary);
+    }
+
+    .scores-table th {
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid var(--border-color);
+      white-space: nowrap;
+    }
+
+    .scores-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .scores-table tr:hover td {
+      background-color: var(--bg-tertiary);
+    }
+
+    .scores-table strong {
+      font-weight: 700;
+    }
+
+    .score-high { color: #22c55e; }
+    .score-mid  { color: var(--accent); }
+    .score-low  { color: #f97316; }
+
     /* Print Styles */
     @media print {
       header,
@@ -1199,6 +1256,7 @@
         <nav class="header-nav" aria-label="メインナビゲーション">
           <ul class="nav-links">
             <li><a href="#features">機能</a></li>
+            <li><a href="#agent-scores">エージェントスコア</a></li>
             <li><a href="#cta">始める</a></li>
             <li><a href="#support">サポート</a></li>
           </ul>
@@ -1625,6 +1683,37 @@
         <div id="template-empty" class="empty-state" style="display: none;">
           <div class="empty-icon">📚</div>
           <p>利用可能なテンプレートがまだありません</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Agent Scores Section (#2485) -->
+    <section id="agent-scores" class="workflow-section" aria-labelledby="agent-scores-heading">
+      <div class="container">
+        <div class="section-title">AIエージェント評価</div>
+        <h2 id="agent-scores-heading" class="section-heading">エージェントスコア一覧</h2>
+
+        <div class="scores-container">
+          <h2>AIエージェント評価スコア</h2>
+          <p class="scores-meta" id="scores-status">読み込み中...</p>
+
+          <table id="scoresTable" class="scores-table">
+            <thead>
+              <tr>
+                <th>エージェント名</th>
+                <th>完了率</th>
+                <th>品質スコア</th>
+                <th>パフォーマンス</th>
+                <th>総合スコア</th>
+                <th>更新日時</th>
+              </tr>
+            </thead>
+            <tbody id="scoresTableBody">
+              <tr><td colspan="6" style="text-align: center; padding: 24px; color: var(--text-secondary);">読み込み中...</td></tr>
+            </tbody>
+          </table>
+
+          <div id="scoresChart" style="margin-top: 8px; min-height: 240px;"></div>
         </div>
       </div>
     </section>
@@ -2278,5 +2367,6 @@
       return div.innerHTML;
     }
   </script>
+  <script src="/js/scores.js"></script>
 </body>
 </html>

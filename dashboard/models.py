@@ -1215,3 +1215,23 @@ class WebhookEventResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Agent Score Models (Task #2485)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class ScoreModel(BaseModel):
+    id: int
+    agent_id: str
+    agent_name: str
+    completion_rate: float
+    quality_score: float
+    performance_score: float
+    overall_score: float
+    total_tasks: int
+    completed_tasks: int
+    last_updated: str
+
+    class Config:
+        from_attributes = True

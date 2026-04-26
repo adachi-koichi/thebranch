@@ -22,7 +22,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from dashboard import auth, models, autogen_routes, blueprints, manage_routes
+from dashboard import auth, models, autogen_routes, blueprints, manage_routes, scores_routes
 from workflow.repositories.template import TemplateRepository
 from workflow.services.template import TemplateService
 from workflow.validation.template import TemplateValidator
@@ -56,6 +56,7 @@ if static_js.exists():
 app.include_router(autogen_routes.router)
 app.include_router(blueprints.router)
 app.include_router(manage_routes.router)
+app.include_router(scores_routes.router)
 
 logger = logging.getLogger(__name__)
 
