@@ -24,6 +24,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from dashboard import auth, models, autogen_routes, blueprints, manage_routes, scores_routes, marketplace_routes, agents_control_routes, project_routes, search_routes
+from dashboard.websocket_manager import ConnectionManager
+from dashboard.routes.webhooks import router as webhooks_router
 from workflow.repositories.template import TemplateRepository
 from workflow.services.template import TemplateService
 from workflow.validation.template import TemplateValidator
@@ -114,6 +116,7 @@ app.include_router(marketplace_routes.router)
 app.include_router(agents_control_routes.router)
 app.include_router(project_routes.router)
 app.include_router(search_routes.router)
+app.include_router(webhooks_router)
 
 logger = logging.getLogger(__name__)
 
@@ -1873,6 +1876,95 @@ class ConnectionManager:
 _manager = ConnectionManager()
 
 
+async def emit_task_completion_event(event: models.TaskCompletionEvent, user_id: str) -> None:
+    """task.completed イベントを発行（DB記録 + WebSocket配信 + Webhook配信）"""
+    try:
+        async with aiosqlite.connect(str(TASKS_DB)) as db:
+            # task_completion_events テーブルに記録
+            cursor = await db.execute(
+                """
+                INSERT INTO task_completion_events (
+                    task_id, workflow_id, team_name,
+                    executor_user_id, executor_username, executor_role,
+                    status, priority, completion_time_ms,
+                    tag_ids, category, phase,
+                    event_status, triggered_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.task_id,
+                    event.workflow_id,
+                    event.team_name,
+                    event.executor.user_id,
+                    event.executor.username,
+                    event.executor.role,
+                    event.status,
+                    event.priority,
+                    event.completion_time_ms,
+                    json.dumps(event.metadata.tag_ids) if event.metadata.tag_ids else None,
+                    event.metadata.category,
+                    event.metadata.phase,
+                    "triggered",
+                    event.timestamp,
+                ),
+            )
+            event_id = cursor.lastrowid
+            await db.commit()
+            logger.info(f"Task completion event recorded: event_id={event_id}, task_id={event.task_id}")
+
+            # webhook_subscriptions から user_id のアクティブな webhook を取得
+            cursor = await db.execute(
+                """
+                SELECT webhook_id FROM webhook_subscriptions
+                WHERE user_id = ? AND is_active = 1 AND event_type = ?
+                """,
+                (user_id, "task.completed"),
+            )
+            webhooks = await cursor.fetchall()
+
+            # webhook_delivery_logs に pending を作成
+            for webhook_row in webhooks:
+                webhook_id = webhook_row[0]
+                await db.execute(
+                    """
+                    INSERT INTO webhook_delivery_logs (webhook_id, event_id, delivery_status)
+                    VALUES (?, ?, ?)
+                    """,
+                    (webhook_id, event_id, "pending"),
+                )
+            await db.commit()
+            if webhooks:
+                logger.info(f"Created {len(webhooks)} webhook delivery tasks: event_id={event_id}")
+
+        # WebSocket で user_id に配信
+        event_payload = {
+            "type": event.type,
+            "timestamp": event.timestamp,
+            "task_id": event.task_id,
+            "task_title": event.task_title,
+            "workflow_id": event.workflow_id,
+            "team_name": event.team_name,
+            "executor": {
+                "user_id": event.executor.user_id,
+                "username": event.executor.username,
+                "role": event.executor.role,
+            },
+            "status": event.status,
+            "priority": event.priority,
+            "completion_time_ms": event.completion_time_ms,
+            "metadata": {
+                "tag_ids": event.metadata.tag_ids,
+                "category": event.metadata.category,
+                "phase": event.metadata.phase,
+            },
+        }
+        await _manager.broadcast_to_user(user_id, event_payload)
+        logger.info(f"Task completion event broadcasted: user_id={user_id}, task_id={event.task_id}")
+
+    except Exception as e:
+        logger.error(f"Failed to emit task completion event: {e}")
+
+
 async def _get_task_stats() -> dict:
     counts: dict[str, int] = {"pending": 0, "in_progress": 0, "completed": 0, "done": 0}
     if TASKS_DB.exists():
@@ -1920,14 +2012,39 @@ async def startup_broadcast():
 
 
 @app.websocket("/ws")
-async def websocket_main(websocket: WebSocket):
-    """タスク統計＋ペイン状態を3秒ごとにブロードキャストするメインWebSocket"""
-    await _manager.connect(websocket)
+async def websocket_main(websocket: WebSocket, token: Optional[str] = Query(None)):
+    """Task.completed イベント配信用 WebSocket エンドポイント（user_id ベースのルーティング）"""
     try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        _manager.disconnect(websocket)
+        # 認証処理：クエリパラメータまたはヘッダから token を取得
+        auth_header = websocket.headers.get("authorization")
+        bearer_token = token or (auth_header.replace("Bearer ", "") if auth_header else None)
+
+        if not bearer_token:
+            await websocket.close(code=1008, reason="Missing authentication token")
+            return
+
+        # Token を検証して user_id を取得
+        user_id, _, _ = await verify_token_with_scope(f"Bearer {bearer_token}")
+        if not user_id:
+            await websocket.close(code=1008, reason="Invalid or expired token")
+            return
+
+        # WebSocket 接続を確立（user_id ベースのルーティング）
+        await _manager.connect(websocket, user_id)
+        logger.info(f"WebSocket connected: user_id={user_id}")
+
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            _manager.disconnect(websocket, user_id)
+            logger.info(f"WebSocket disconnected: user_id={user_id}")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        try:
+            await websocket.close(code=1011, reason="Internal server error")
+        except Exception:
+            pass
 
 
 # ──────────────────────────────────────────────
@@ -11890,3 +12007,17 @@ async def page_settings():
     """設定 - APIキー管理・外部サービス連携"""
     template = jinja_env.get_template("pages/api-keys.html")
     return template.render()
+
+
+@app.post("/api/events/task-completed", status_code=202)
+async def emit_task_completed(
+    event: models.TaskCompletionEvent,
+    user: dict = Depends(get_current_user_zero_trust),
+) -> dict:
+    """Task completion event を発行（WebSocket + Webhook 配信）"""
+    try:
+        await emit_task_completion_event(event, user["id"])
+        return {"ok": True, "message": "Task completion event emitted"}
+    except Exception as e:
+        logger.error(f"Failed to emit task completed event: {e}")
+        raise HTTPException(status_code=500, detail="Failed to emit event")
