@@ -4560,7 +4560,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="Missing token")
 
     token = authorization[7:]
-    user_id = await auth.verify_token(token)
+    user_id, _ = await auth.verify_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -4591,7 +4591,7 @@ async def add_role(role_req: models.UserRoleCreate, authorization: Optional[str]
         raise HTTPException(status_code=401, detail="Missing token")
 
     token = authorization[7:]
-    user_id = await auth.verify_token(token)
+    user_id, _ = await auth.verify_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -4608,7 +4608,7 @@ async def delete_role(role_req: models.UserRoleCreate, authorization: Optional[s
         raise HTTPException(status_code=401, detail="Missing token")
 
     token = authorization[7:]
-    user_id = await auth.verify_token(token)
+    user_id, _ = await auth.verify_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -6361,7 +6361,7 @@ user: dict = Depends(get_current_user_zero_trust)):
         raise HTTPException(status_code=401, detail="Missing token")
 
     token = authorization[7:]
-    user_id = await auth.verify_token(token)
+    user_id, _ = await auth.verify_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -6399,7 +6399,7 @@ user: dict = Depends(get_current_user_zero_trust)):
         raise HTTPException(status_code=401, detail="Missing token")
 
     token = authorization[7:]
-    user_id = await auth.verify_token(token)
+    user_id, _ = await auth.verify_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -6459,7 +6459,7 @@ user: dict = Depends(get_current_user_zero_trust)):
         raise HTTPException(status_code=401, detail="Missing token")
 
     token = authorization[7:]
-    user_id = await auth.verify_token(token)
+    user_id, _ = await auth.verify_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -6532,7 +6532,7 @@ user: dict = Depends(get_current_user_zero_trust)):
         raise HTTPException(status_code=401, detail="Missing token")
 
     token = authorization[7:]
-    user_id = await auth.verify_token(token)
+    user_id, _ = await auth.verify_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -6654,7 +6654,7 @@ user: dict = Depends(get_current_user_zero_trust)):
         raise HTTPException(status_code=401, detail="Missing token")
 
     token = authorization[7:]
-    user_id = await auth.verify_token(token)
+    user_id, _ = await auth.verify_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
