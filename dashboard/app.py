@@ -81,6 +81,13 @@ async def page_agent_chat_spa():
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
+# ── Task #2507: ランディングページ（公開・認証不要）
+@app.get("/landing", response_class=HTMLResponse)
+async def page_landing():
+    html_path = DASHBOARD_DIR / "templates" / "landing_page.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
 app.include_router(autogen_routes.router)
 app.include_router(blueprints.router)
 app.include_router(manage_routes.router)
@@ -10832,6 +10839,611 @@ async def create_audit_log_entry(
     if log_id is None:
         raise HTTPException(status_code=500, detail="failed to record audit log")
     return {"id": log_id, "status": "recorded"}
+
+
+# ──────────────────────────────────────────────
+# Task #2511: A/B テスト・フィーチャーフラグ・実験管理
+# ──────────────────────────────────────────────
+
+_EXPERIMENTS_DDL = """
+CREATE TABLE IF NOT EXISTS experiments (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    hypothesis TEXT,
+    metric_key TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    traffic_allocation REAL NOT NULL DEFAULT 1.0,
+    start_at TEXT,
+    end_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS experiment_variants (
+    id TEXT PRIMARY KEY,
+    experiment_id TEXT NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    weight REAL NOT NULL DEFAULT 0.5,
+    config TEXT,
+    is_control INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS experiment_assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    experiment_id TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    variant_id TEXT NOT NULL,
+    assigned_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(experiment_id, subject_id)
+);
+CREATE TABLE IF NOT EXISTS experiment_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    experiment_id TEXT NOT NULL,
+    variant_id TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    metric_key TEXT NOT NULL,
+    value REAL NOT NULL DEFAULT 1.0,
+    metadata TEXT,
+    recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS feature_flags (
+    key TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    rollout_pct REAL NOT NULL DEFAULT 100.0,
+    targeting_rules TEXT,
+    value TEXT,
+    experiment_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"""
+
+
+async def _init_experiments_db():
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        for stmt in _EXPERIMENTS_DDL.strip().split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                await db.execute(stmt)
+        await db.commit()
+
+
+@app.on_event("startup")
+async def _startup_experiments():
+    await _init_experiments_db()
+
+
+# ── Pydantic モデル ──────────────────────────────
+
+class _VariantIn(BaseModel):
+    name: str
+    description: Optional[str] = None
+    weight: float = 0.5
+    config: Optional[dict] = None
+    is_control: bool = False
+
+
+class _ExperimentCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    hypothesis: Optional[str] = None
+    metric_key: Optional[str] = None
+    traffic_allocation: float = 1.0
+    variants: List[_VariantIn] = []
+
+
+class _ExperimentUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    hypothesis: Optional[str] = None
+    metric_key: Optional[str] = None
+    status: Optional[str] = None
+    traffic_allocation: Optional[float] = None
+    start_at: Optional[str] = None
+    end_at: Optional[str] = None
+
+
+class _AssignRequest(BaseModel):
+    subject_id: str
+
+
+class _MetricEvent(BaseModel):
+    subject_id: str
+    metric_key: str
+    value: float = 1.0
+    metadata: Optional[dict] = None
+
+
+class _FeatureFlagUpsert(BaseModel):
+    name: str
+    description: Optional[str] = None
+    enabled: bool = False
+    rollout_pct: float = 100.0
+    targeting_rules: Optional[dict] = None
+    value: Optional[dict] = None
+    experiment_id: Optional[str] = None
+
+
+_VALID_EXP_STATUSES = {"draft", "running", "paused", "completed"}
+
+
+def _exp_row(row) -> dict:
+    keys = ["id", "name", "description", "hypothesis", "metric_key",
+            "status", "traffic_allocation", "start_at", "end_at",
+            "created_at", "updated_at"]
+    return dict(zip(keys, row))
+
+
+def _variant_row(row) -> dict:
+    keys = ["id", "experiment_id", "name", "description", "weight",
+            "config", "is_control", "created_at"]
+    d = dict(zip(keys, row))
+    if d.get("config"):
+        try:
+            d["config"] = json.loads(d["config"])
+        except Exception:
+            pass
+    d["is_control"] = bool(d["is_control"])
+    return d
+
+
+def _flag_row(row) -> dict:
+    keys = ["key", "name", "description", "enabled", "rollout_pct",
+            "targeting_rules", "value", "experiment_id", "created_at", "updated_at"]
+    d = dict(zip(keys, row))
+    d["enabled"] = bool(d["enabled"])
+    for field in ("targeting_rules", "value"):
+        if d.get(field):
+            try:
+                d[field] = json.loads(d[field])
+            except Exception:
+                pass
+    return d
+
+
+# ── 実験 CRUD ────────────────────────────────────
+
+@app.get("/api/experiments")
+async def list_experiments(status: Optional[str] = None):
+    """実験一覧を取得する。"""
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        if status:
+            cur = await db.execute(
+                "SELECT id,name,description,hypothesis,metric_key,status,traffic_allocation,start_at,end_at,created_at,updated_at FROM experiments WHERE status=? ORDER BY created_at DESC",
+                (status,),
+            )
+        else:
+            cur = await db.execute(
+                "SELECT id,name,description,hypothesis,metric_key,status,traffic_allocation,start_at,end_at,created_at,updated_at FROM experiments ORDER BY created_at DESC"
+            )
+        rows = await cur.fetchall()
+        experiments = [_exp_row(r) for r in rows]
+
+        for exp in experiments:
+            vcur = await db.execute(
+                "SELECT id,experiment_id,name,description,weight,config,is_control,created_at FROM experiment_variants WHERE experiment_id=?",
+                (exp["id"],),
+            )
+            exp["variants"] = [_variant_row(r) for r in await vcur.fetchall()]
+
+    return {"data": experiments, "total": len(experiments)}
+
+
+@app.post("/api/experiments", status_code=201)
+async def create_experiment(body: _ExperimentCreate):
+    """新しい実験を作成する。"""
+    exp_id = str(uuid.uuid4())
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await db.execute(
+            """INSERT INTO experiments (id,name,description,hypothesis,metric_key,traffic_allocation,status,created_at,updated_at)
+               VALUES (?,?,?,?,?,?,'draft',?,?)""",
+            (exp_id, body.name, body.description, body.hypothesis,
+             body.metric_key, body.traffic_allocation, now, now),
+        )
+        variants_out = []
+        for v in body.variants:
+            vid = str(uuid.uuid4())
+            await db.execute(
+                """INSERT INTO experiment_variants (id,experiment_id,name,description,weight,config,is_control,created_at)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (vid, exp_id, v.name, v.description, v.weight,
+                 json.dumps(v.config) if v.config else None,
+                 int(v.is_control), now),
+            )
+            variants_out.append({"id": vid, "name": v.name, "weight": v.weight, "is_control": v.is_control})
+        await db.commit()
+
+    return {"id": exp_id, "status": "draft", "variants": variants_out}
+
+
+@app.get("/api/experiments/{experiment_id}")
+async def get_experiment(experiment_id: str):
+    """実験詳細を取得する（バリアント込み）。"""
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cur = await db.execute(
+            "SELECT id,name,description,hypothesis,metric_key,status,traffic_allocation,start_at,end_at,created_at,updated_at FROM experiments WHERE id=?",
+            (experiment_id,),
+        )
+        row = await cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="experiment not found")
+        exp = _exp_row(row)
+
+        vcur = await db.execute(
+            "SELECT id,experiment_id,name,description,weight,config,is_control,created_at FROM experiment_variants WHERE experiment_id=?",
+            (experiment_id,),
+        )
+        exp["variants"] = [_variant_row(r) for r in await vcur.fetchall()]
+
+        acur = await db.execute(
+            "SELECT COUNT(*) FROM experiment_assignments WHERE experiment_id=?",
+            (experiment_id,),
+        )
+        arow = await acur.fetchone()
+        exp["assignment_count"] = int(arow[0]) if arow else 0
+
+    return exp
+
+
+@app.patch("/api/experiments/{experiment_id}")
+async def update_experiment(experiment_id: str, body: _ExperimentUpdate):
+    """実験を更新する（ステータス変更含む）。"""
+    if body.status and body.status not in _VALID_EXP_STATUSES:
+        raise HTTPException(status_code=422, detail=f"status must be one of {_VALID_EXP_STATUSES}")
+
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cur = await db.execute("SELECT id FROM experiments WHERE id=?", (experiment_id,))
+        if not await cur.fetchone():
+            raise HTTPException(status_code=404, detail="experiment not found")
+
+        fields = []
+        params = []
+        for field in ("name", "description", "hypothesis", "metric_key",
+                      "status", "traffic_allocation", "start_at", "end_at"):
+            val = getattr(body, field)
+            if val is not None:
+                fields.append(f"{field}=?")
+                params.append(val)
+        if not fields:
+            return {"id": experiment_id, "updated": False}
+
+        fields.append("updated_at=?")
+        params.append(datetime.utcnow().isoformat())
+        params.append(experiment_id)
+        await db.execute(f"UPDATE experiments SET {','.join(fields)} WHERE id=?", params)
+        await db.commit()
+
+    return {"id": experiment_id, "updated": True}
+
+
+@app.delete("/api/experiments/{experiment_id}")
+async def delete_experiment(experiment_id: str):
+    """実験を削除する（アサインメント・メトリクスも削除）。"""
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cur = await db.execute("SELECT id FROM experiments WHERE id=?", (experiment_id,))
+        if not await cur.fetchone():
+            raise HTTPException(status_code=404, detail="experiment not found")
+        await db.execute("DELETE FROM experiment_metrics WHERE experiment_id=?", (experiment_id,))
+        await db.execute("DELETE FROM experiment_assignments WHERE experiment_id=?", (experiment_id,))
+        await db.execute("DELETE FROM experiment_variants WHERE experiment_id=?", (experiment_id,))
+        await db.execute("DELETE FROM experiments WHERE id=?", (experiment_id,))
+        await db.commit()
+    return {"id": experiment_id, "deleted": True}
+
+
+# ── バリアント割り当て ────────────────────────────
+
+@app.post("/api/experiments/{experiment_id}/assign")
+async def assign_variant(experiment_id: str, body: _AssignRequest):
+    """subject_id をバリアントに割り当てる（既存割当は変更しない）。"""
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cur = await db.execute(
+            "SELECT id,status,traffic_allocation FROM experiments WHERE id=?",
+            (experiment_id,),
+        )
+        exp_row_data = await cur.fetchone()
+        if not exp_row_data:
+            raise HTTPException(status_code=404, detail="experiment not found")
+        exp_status = exp_row_data[1]
+        traffic = exp_row_data[2] if exp_row_data[2] is not None else 1.0
+
+        acur = await db.execute(
+            "SELECT variant_id FROM experiment_assignments WHERE experiment_id=? AND subject_id=?",
+            (experiment_id, body.subject_id),
+        )
+        existing = await acur.fetchone()
+        if existing:
+            return {"subject_id": body.subject_id, "variant_id": existing[0], "assigned": False, "reason": "already_assigned"}
+
+        if exp_status != "running":
+            raise HTTPException(status_code=409, detail="experiment is not running")
+
+        hash_val = int(hashlib.md5(f"{experiment_id}:{body.subject_id}".encode()).hexdigest(), 16)
+        bucket = (hash_val % 10000) / 10000.0
+        if bucket >= traffic:
+            return {"subject_id": body.subject_id, "variant_id": None, "assigned": False, "reason": "outside_traffic_allocation"}
+
+        vcur = await db.execute(
+            "SELECT id,weight FROM experiment_variants WHERE experiment_id=? ORDER BY is_control DESC",
+            (experiment_id,),
+        )
+        variants = await vcur.fetchall()
+        if not variants:
+            raise HTTPException(status_code=409, detail="no variants defined")
+
+        total_weight = sum(v[1] for v in variants)
+        cumulative = 0.0
+        var_bucket = (int(hashlib.md5(f"var:{experiment_id}:{body.subject_id}".encode()).hexdigest(), 16) % 10000) / 10000.0
+        selected_variant_id = variants[-1][0]
+        for vid, weight in variants:
+            cumulative += weight / total_weight
+            if var_bucket <= cumulative:
+                selected_variant_id = vid
+                break
+
+        await db.execute(
+            "INSERT OR IGNORE INTO experiment_assignments (experiment_id,subject_id,variant_id,assigned_at) VALUES (?,?,?,?)",
+            (experiment_id, body.subject_id, selected_variant_id, datetime.utcnow().isoformat()),
+        )
+        await db.commit()
+
+    return {"subject_id": body.subject_id, "variant_id": selected_variant_id, "assigned": True}
+
+
+# ── メトリクス記録 ────────────────────────────────
+
+@app.post("/api/experiments/{experiment_id}/metrics", status_code=201)
+async def record_metric(experiment_id: str, body: _MetricEvent):
+    """実験メトリクスイベントを記録する。"""
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cur = await db.execute("SELECT id FROM experiments WHERE id=?", (experiment_id,))
+        if not await cur.fetchone():
+            raise HTTPException(status_code=404, detail="experiment not found")
+
+        acur = await db.execute(
+            "SELECT variant_id FROM experiment_assignments WHERE experiment_id=? AND subject_id=?",
+            (experiment_id, body.subject_id),
+        )
+        arow = await acur.fetchone()
+        if not arow:
+            raise HTTPException(status_code=409, detail="subject not assigned to this experiment")
+
+        variant_id = arow[0]
+        await db.execute(
+            """INSERT INTO experiment_metrics (experiment_id,variant_id,subject_id,metric_key,value,metadata,recorded_at)
+               VALUES (?,?,?,?,?,?,?)""",
+            (experiment_id, variant_id, body.subject_id, body.metric_key,
+             body.value, json.dumps(body.metadata) if body.metadata else None,
+             datetime.utcnow().isoformat()),
+        )
+        await db.commit()
+
+    return {"recorded": True, "experiment_id": experiment_id, "variant_id": variant_id, "metric_key": body.metric_key}
+
+
+# ── 実験結果集計 ──────────────────────────────────
+
+@app.get("/api/experiments/{experiment_id}/results")
+async def get_experiment_results(experiment_id: str, metric_key: Optional[str] = None):
+    """実験ごとのバリアント別メトリクス集計を返す。"""
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cur = await db.execute(
+            "SELECT id,name,status,metric_key FROM experiments WHERE id=?",
+            (experiment_id,),
+        )
+        row = await cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="experiment not found")
+        exp_metric_key = metric_key or row[3]
+
+        vcur = await db.execute(
+            "SELECT id,name,is_control FROM experiment_variants WHERE experiment_id=?",
+            (experiment_id,),
+        )
+        variants = {r[0]: {"id": r[0], "name": r[1], "is_control": bool(r[2])} for r in await vcur.fetchall()}
+
+        where_metric = "AND metric_key=?" if exp_metric_key else ""
+        metric_params: list = [experiment_id]
+        if exp_metric_key:
+            metric_params.append(exp_metric_key)
+
+        mcur = await db.execute(
+            f"""SELECT variant_id, metric_key,
+                       COUNT(*) as event_count,
+                       COUNT(DISTINCT subject_id) as subject_count,
+                       SUM(value) as total_value,
+                       AVG(value) as avg_value,
+                       MIN(value) as min_value,
+                       MAX(value) as max_value
+                FROM experiment_metrics
+                WHERE experiment_id=? {where_metric}
+                GROUP BY variant_id, metric_key""",
+            metric_params,
+        )
+        metric_rows = await mcur.fetchall()
+
+        acur = await db.execute(
+            "SELECT variant_id, COUNT(*) FROM experiment_assignments WHERE experiment_id=? GROUP BY variant_id",
+            (experiment_id,),
+        )
+        assignment_counts = {r[0]: r[1] for r in await acur.fetchall()}
+
+    results = {}
+    for mr in metric_rows:
+        vid, mkey, event_count, subject_count, total_val, avg_val, min_val, max_val = mr
+        if vid not in results:
+            results[vid] = {
+                **variants.get(vid, {"id": vid, "name": "unknown", "is_control": False}),
+                "assignment_count": assignment_counts.get(vid, 0),
+                "metrics": {},
+            }
+        results[vid]["metrics"][mkey] = {
+            "event_count": event_count,
+            "subject_count": subject_count,
+            "total_value": total_val,
+            "avg_value": avg_val,
+            "min_value": min_val,
+            "max_value": max_val,
+            "conversion_rate": subject_count / assignment_counts.get(vid, 1) if assignment_counts.get(vid) else 0,
+        }
+
+    for vid, vdata in variants.items():
+        if vid not in results:
+            results[vid] = {
+                **vdata,
+                "assignment_count": assignment_counts.get(vid, 0),
+                "metrics": {},
+            }
+
+    return {
+        "experiment_id": experiment_id,
+        "metric_key": exp_metric_key,
+        "variants": list(results.values()),
+    }
+
+
+# ── フィーチャーフラグ CRUD ───────────────────────
+
+@app.get("/api/feature-flags")
+async def list_feature_flags(enabled: Optional[bool] = None):
+    """フィーチャーフラグ一覧を取得する。"""
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        if enabled is not None:
+            cur = await db.execute(
+                "SELECT key,name,description,enabled,rollout_pct,targeting_rules,value,experiment_id,created_at,updated_at FROM feature_flags WHERE enabled=? ORDER BY key",
+                (int(enabled),),
+            )
+        else:
+            cur = await db.execute(
+                "SELECT key,name,description,enabled,rollout_pct,targeting_rules,value,experiment_id,created_at,updated_at FROM feature_flags ORDER BY key"
+            )
+        rows = await cur.fetchall()
+    return {"data": [_flag_row(r) for r in rows], "total": len(rows)}
+
+
+@app.post("/api/feature-flags", status_code=201)
+async def create_feature_flag(key: str, body: _FeatureFlagUpsert):
+    """新しいフィーチャーフラグを作成する。"""
+    if not key.replace("-", "").replace("_", "").isalnum():
+        raise HTTPException(status_code=422, detail="key must be alphanumeric with hyphens/underscores")
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        try:
+            await db.execute(
+                """INSERT INTO feature_flags (key,name,description,enabled,rollout_pct,targeting_rules,value,experiment_id,created_at,updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (key, body.name, body.description, int(body.enabled), body.rollout_pct,
+                 json.dumps(body.targeting_rules) if body.targeting_rules else None,
+                 json.dumps(body.value) if body.value else None,
+                 body.experiment_id, now, now),
+            )
+            await db.commit()
+        except Exception as e:
+            if "UNIQUE" in str(e):
+                raise HTTPException(status_code=409, detail="feature flag key already exists")
+            raise HTTPException(status_code=500, detail=str(e))
+    return {"key": key, "created": True}
+
+
+@app.get("/api/feature-flags/{flag_key}")
+async def get_feature_flag(flag_key: str, subject_id: Optional[str] = None):
+    """フィーチャーフラグを取得し、subject_id があれば評価済みの enabled 値を返す。"""
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cur = await db.execute(
+            "SELECT key,name,description,enabled,rollout_pct,targeting_rules,value,experiment_id,created_at,updated_at FROM feature_flags WHERE key=?",
+            (flag_key,),
+        )
+        row = await cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="feature flag not found")
+        flag = _flag_row(row)
+
+    if subject_id and flag["enabled"]:
+        rollout = flag["rollout_pct"] / 100.0
+        hash_val = int(hashlib.md5(f"{flag_key}:{subject_id}".encode()).hexdigest(), 16)
+        bucket = (hash_val % 10000) / 10000.0
+        flag["evaluated_enabled"] = bucket < rollout
+    else:
+        flag["evaluated_enabled"] = flag["enabled"]
+
+    return flag
+
+
+@app.patch("/api/feature-flags/{flag_key}")
+async def update_feature_flag(flag_key: str, body: _FeatureFlagUpsert):
+    """フィーチャーフラグを更新する。"""
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cur = await db.execute("SELECT key FROM feature_flags WHERE key=?", (flag_key,))
+        if not await cur.fetchone():
+            raise HTTPException(status_code=404, detail="feature flag not found")
+        await db.execute(
+            """UPDATE feature_flags SET name=?,description=?,enabled=?,rollout_pct=?,
+               targeting_rules=?,value=?,experiment_id=?,updated_at=? WHERE key=?""",
+            (body.name, body.description, int(body.enabled), body.rollout_pct,
+             json.dumps(body.targeting_rules) if body.targeting_rules else None,
+             json.dumps(body.value) if body.value else None,
+             body.experiment_id, now, flag_key),
+        )
+        await db.commit()
+    return {"key": flag_key, "updated": True}
+
+
+@app.delete("/api/feature-flags/{flag_key}")
+async def delete_feature_flag(flag_key: str):
+    """フィーチャーフラグを削除する。"""
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cur = await db.execute("SELECT key FROM feature_flags WHERE key=?", (flag_key,))
+        if not await cur.fetchone():
+            raise HTTPException(status_code=404, detail="feature flag not found")
+        await db.execute("DELETE FROM feature_flags WHERE key=?", (flag_key,))
+        await db.commit()
+    return {"key": flag_key, "deleted": True}
+
+
+# ── フィーチャーフラグ一括評価 ────────────────────
+
+class _FlagEvalRequest(BaseModel):
+    subject_id: str
+    keys: List[str]
+
+
+@app.post("/api/feature-flags/evaluate")
+async def evaluate_feature_flags(body: _FlagEvalRequest):
+    """複数フィーチャーフラグを subject_id に対して一括評価する。"""
+    if not body.keys:
+        return {"subject_id": body.subject_id, "flags": {}}
+
+    placeholders = ",".join("?" * len(body.keys))
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        cur = await db.execute(
+            f"SELECT key,enabled,rollout_pct,value FROM feature_flags WHERE key IN ({placeholders})",
+            body.keys,
+        )
+        rows = await cur.fetchall()
+
+    result = {}
+    for key, enabled, rollout_pct, value_json in rows:
+        if not enabled:
+            result[key] = {"enabled": False, "value": None}
+            continue
+        rollout = rollout_pct / 100.0
+        hash_val = int(hashlib.md5(f"{key}:{body.subject_id}".encode()).hexdigest(), 16)
+        bucket = (hash_val % 10000) / 10000.0
+        is_on = bucket < rollout
+        parsed_value = None
+        if value_json:
+            try:
+                parsed_value = json.loads(value_json)
+            except Exception:
+                parsed_value = value_json
+        result[key] = {"enabled": is_on, "value": parsed_value if is_on else None}
+
+    return {"subject_id": body.subject_id, "flags": result}
 
 
 # ──────────────────────────────────────────────

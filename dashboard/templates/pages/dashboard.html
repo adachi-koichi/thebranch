@@ -1,46 +1,46 @@
 {% extends 'layouts/base.html' %}
 
-{% block title %}ダッシュボード - THEBRANCH{% endblock %}
+{% block title %}<span data-i18n="page.dashboard.title">ダッシュボード</span> - THEBRANCH{% endblock %}
 
 {% block content %}
 <div class="py-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>ダッシュボード</h1>
+        <h1 data-i18n="page.dashboard.title">ダッシュボード</h1>
         <div>
-            <button class="btn btn-outline-secondary btn-sm me-2">週間</button>
-            <button class="btn btn-outline-secondary btn-sm me-2">月間</button>
-            <button class="btn btn-outline-secondary btn-sm">年間</button>
+            <button class="btn btn-outline-secondary btn-sm me-2" data-i18n="page.dashboard.period.weekly">週間</button>
+            <button class="btn btn-outline-secondary btn-sm me-2" data-i18n="page.dashboard.period.monthly">月間</button>
+            <button class="btn btn-outline-secondary btn-sm" data-i18n="page.dashboard.period.yearly">年間</button>
         </div>
     </div>
 
     <!-- KPI Cards Row -->
     <div class="row mb-4">
         <div class="col-md-4 mb-3">
-            {% include 'components/kpi_card.html' with {
-                'title': 'エージェント稼働率',
-                'value': '94.2%',
-                'subtitle': '過去7日間',
-                'icon': 'fa-check-circle',
-                'trend': 5
-            } %}
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted" data-i18n="page.dashboard.kpi.agent_uptime">エージェント稼働率</h6>
+                    <h2>94.2%</h2>
+                    <small class="text-muted" data-i18n="page.dashboard.kpi.agent_uptime_sub">過去7日間</small>
+                </div>
+            </div>
         </div>
         <div class="col-md-4 mb-3">
-            {% include 'components/kpi_card.html' with {
-                'title': 'タスク完了数',
-                'value': '1,240',
-                'subtitle': '今月',
-                'icon': 'fa-tasks',
-                'trend': 12
-            } %}
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted" data-i18n="page.dashboard.kpi.tasks_done">タスク完了数</h6>
+                    <h2>1,240</h2>
+                    <small class="text-muted" data-i18n="page.dashboard.kpi.tasks_done_sub">今月</small>
+                </div>
+            </div>
         </div>
         <div class="col-md-4 mb-3">
-            {% include 'components/kpi_card.html' with {
-                'title': '月次コスト',
-                'value': '¥28,450',
-                'subtitle': '使用額',
-                'icon': 'fa-dollar-sign',
-                'trend': -3
-            } %}
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted" data-i18n="page.dashboard.kpi.monthly_cost">月次コスト</h6>
+                    <h2>¥28,450</h2>
+                    <small class="text-muted" data-i18n="page.dashboard.kpi.monthly_cost_sub">使用額</small>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -49,7 +49,7 @@
         <div class="col-lg-8 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h5>過去7日間のエージェント稼働率</h5>
+                    <h5 data-i18n="page.dashboard.chart.uptime">過去7日間のエージェント稼働率</h5>
                 </div>
                 <div class="card-body">
                     <canvas id="uptimeChart" height="80"></canvas>
@@ -59,7 +59,7 @@
         <div class="col-lg-4 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h5>コスト内訳</h5>
+                    <h5 data-i18n="page.dashboard.chart.cost">コスト内訳</h5>
                 </div>
                 <div class="card-body">
                     <canvas id="costChart" height="200"></canvas>
@@ -73,7 +73,7 @@
         <div class="col-lg-12">
             <div class="card">
                 <div class="card-header">
-                    <h5>日別タスク完了数（12ヶ月）</h5>
+                    <h5 data-i18n="page.dashboard.chart.tasks">日別タスク完了数（12ヶ月）</h5>
                 </div>
                 <div class="card-body">
                     <canvas id="tasksChart" height="80"></canvas>
@@ -87,72 +87,91 @@
 
 {% block extra_js %}
 <script>
-    // 7-day uptime chart
-    const uptimeCtx = document.getElementById('uptimeChart').getContext('2d');
-    new Chart(uptimeCtx, {
-        type: 'line',
-        data: {
-            labels: ['月', '火', '水', '木', '金', '土', '日'],
-            datasets: [{
-                label: '稼働率 (%)',
-                data: [92, 94, 95, 93, 96, 94, 94],
-                borderColor: '#007bff',
-                backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: { beginAtZero: true, max: 100 }
-            }
-        }
-    });
+(function() {
+    function buildCharts() {
+        const t = window.i18n ? window.i18n.t.bind(window.i18n) : (k) => k;
 
-    // Cost breakdown pie chart
-    const costCtx = document.getElementById('costChart').getContext('2d');
-    new Chart(costCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['API実行', 'ストレージ', '通信', 'その他'],
-            datasets: [{
-                data: [55, 20, 15, 10],
-                backgroundColor: ['#007bff', '#28a745', '#ffc107', '#6c757d']
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true
-        }
-    });
+        const days = [
+            t('chart.days.mon'), t('chart.days.tue'), t('chart.days.wed'),
+            t('chart.days.thu'), t('chart.days.fri'), t('chart.days.sat'), t('chart.days.sun')
+        ];
+        const months = t('chart.months').split(',');
+        const costLabels = [
+            t('chart.cost.api'), t('chart.cost.storage'),
+            t('chart.cost.network'), t('chart.cost.other')
+        ];
 
-    // Monthly tasks bar chart
-    const tasksCtx = document.getElementById('tasksChart').getContext('2d');
-    new Chart(tasksCtx, {
-        type: 'bar',
-        data: {
-            labels: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
-            datasets: [{
-                label: 'タスク完了数',
-                data: [850, 920, 1050, 1100, 980, 1200, 1240, 1150, 900, 1080, 1010, 950],
-                backgroundColor: '#007bff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { display: false }
+        // 7-day uptime chart
+        const uptimeCtx = document.getElementById('uptimeChart').getContext('2d');
+        const uptimeChart = new Chart(uptimeCtx, {
+            type: 'line',
+            data: {
+                labels: days,
+                datasets: [{
+                    label: t('page.dashboard.chart.uptime_label'),
+                    data: [92, 94, 95, 93, 96, 94, 94],
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
             },
-            scales: {
-                y: { beginAtZero: true }
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, max: 100 } }
             }
-        }
-    });
+        });
+
+        // Cost breakdown pie chart
+        const costCtx = document.getElementById('costChart').getContext('2d');
+        const costChart = new Chart(costCtx, {
+            type: 'doughnut',
+            data: {
+                labels: costLabels,
+                datasets: [{
+                    data: [55, 20, 15, 10],
+                    backgroundColor: ['#007bff', '#28a745', '#ffc107', '#6c757d']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: true }
+        });
+
+        // Monthly tasks bar chart
+        const tasksCtx = document.getElementById('tasksChart').getContext('2d');
+        const tasksChart = new Chart(tasksCtx, {
+            type: 'bar',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: t('page.dashboard.chart.tasks_label'),
+                    data: [850, 920, 1050, 1100, 980, 1200, 1240, 1150, 900, 1080, 1010, 950],
+                    backgroundColor: '#007bff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+
+        // Re-build charts when language changes
+        document.addEventListener('i18n:changed', function() {
+            uptimeChart.destroy();
+            costChart.destroy();
+            tasksChart.destroy();
+            buildCharts();
+        }, { once: true });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', buildCharts);
+    } else {
+        buildCharts();
+    }
+})();
 </script>
 {% endblock %}
