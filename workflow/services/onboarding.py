@@ -105,7 +105,7 @@ JSON形式で回答してください:
             return suggestions[:3]  # 최대 3개 반환
 
         except Exception as e:
-            logger.error(f"Vision 분석 실패: {str(e)}")
+            logger.error(f"ビジョン分析失敗: {str(e)}")
             # 기본 제안 반환
             return self._get_default_suggestions()
 
@@ -191,7 +191,7 @@ JSON形式で回答してください:
             return tasks[:5]  # 최대 5개 반환
 
         except Exception as e:
-            logger.error(f"초기 작업 생성 실패: {str(e)}")
+            logger.error(f"初期タスク生成失敗: {str(e)}")
             # 기본 작업 반환
             return self._get_default_tasks(dept_name, budget, members_count)
 
@@ -233,13 +233,13 @@ JSON形式で回答してください:
         # 상태 결정
         if monthly_per_person >= market_benchmark:
             status = "ok"
-            message = f"예산이 적절합니다. 인당 ${monthly_per_person:.0f}/월 (벤치마크: ${market_benchmark}/월)"
+            message = f"予算は適切です。1人あたり${monthly_per_person:.0f}/月（ベンチマーク: ${market_benchmark}/月）"
         elif monthly_per_person >= market_benchmark * 0.8:
             status = "warning"
-            message = f"예산이 약간 낮습니다. 인당 ${monthly_per_person:.0f}/월 (권장: ${market_benchmark}/월)"
+            message = f"予算がやや低めです。1人あたり${monthly_per_person:.0f}/月（推奨: ${market_benchmark}/月）"
         else:
             status = "error"
-            message = f"예산이 부족합니다. 인당 ${monthly_per_person:.0f}/월 (최소: ${market_benchmark * 0.8:.0f}/월)"
+            message = f"予算が不足しています。1人あたり${monthly_per_person:.0f}/月（最低: ${market_benchmark * 0.8:.0f}/月）"
 
         return {
             "status": status,
@@ -253,20 +253,20 @@ JSON形式で回答してください:
         return [
             {
                 "template_id": 1,
-                "name": "마케팅",
+                "name": "マーケティング",
                 "category": "Marketing",
                 "total_roles": 4,
                 "total_processes": 6,
-                "reason": "일반적인 부서 구조로 추천됩니다.",
+                "reason": "汎用的な部署構造として推奨されます。",
                 "rank": 1
             },
             {
                 "template_id": 2,
-                "name": "영업",
+                "name": "営業",
                 "category": "Sales",
                 "total_roles": 5,
                 "total_processes": 7,
-                "reason": "매출 중심 조직에 적합합니다.",
+                "reason": "売上重視の組織に適しています。",
                 "rank": 2
             }
         ]
@@ -288,27 +288,27 @@ JSON形式で回答してください:
         return [
             {
                 "task_id": "task_001",
-                "title": f"{dept_name} 팀 온보딩 완료",
-                "description": "팀원들의 시스템 접근권 설정 및 기본 교육",
+                "title": f"{dept_name} チームオンボーディング",
+                "description": "チームメンバーのシステムアクセス設定と基礎研修の実施",
                 "budget": round(task_budget, 2),
                 "deadline": deadline_1,
-                "assigned_to": "Manager"
+                "assigned_to": "マネージャー"
             },
             {
                 "task_id": "task_002",
-                "title": "부서 프로세스 수립",
-                "description": "일일/주간/월간 업무 프로세스 정의 및 문서화",
+                "title": "部署業務プロセス策定",
+                "description": "日次・週次・月次の業務プロセスを定義し文書化する",
                 "budget": round(task_budget, 2),
                 "deadline": deadline_2,
-                "assigned_to": "Lead"
+                "assigned_to": "リード"
             },
             {
                 "task_id": "task_003",
-                "title": "성과 지표(KPI) 수립",
-                "description": "부서의 핵심 성과지표를 정의하고 대시보드 구성",
+                "title": "KPI・成果指標の設定",
+                "description": "部署の主要成果指標を定義しダッシュボードを構成する",
                 "budget": round(task_budget, 2),
                 "deadline": deadline_3,
-                "assigned_to": "Analyst"
+                "assigned_to": "アナリスト"
             }
         ]
 
