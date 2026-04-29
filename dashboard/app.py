@@ -31,6 +31,8 @@ from workflow.repositories.graph_repository_departments import GraphRepositoryDe
 from workflow.repositories.kuzu_connection import KuzuConnection
 from workflow.repositories.cost_repository import CostRepository
 from workflow.services.cost_service import CostTrackingService
+from workflow.repositories.learning_repository import LearningPatternsRepository
+from workflow.services.learning_service import LearningService
 from workflow.repositories.accounting_repository import AccountingRepository
 from workflow.services.accounting_service import AccountingService
 
@@ -358,6 +360,8 @@ kuzu_conn = None
 graph_repo_dept = None
 cost_repo = None
 cost_service = None
+learning_repo = None
+learning_service = None
 accounting_repo = None
 accounting_service = None
 
@@ -382,7 +386,7 @@ def run_migrations():
     conn.close()
 
 def init_workflow_services():
-    global template_repo, template_service, kuzu_conn, graph_repo_dept, cost_repo, cost_service, accounting_repo, accounting_service
+    global template_repo, template_service, kuzu_conn, graph_repo_dept, cost_repo, cost_service, learning_repo, learning_service, accounting_repo, accounting_service
     if template_repo is None:
         THEBRANCH_DB.parent.mkdir(parents=True, exist_ok=True)
         run_migrations()
@@ -394,6 +398,9 @@ def init_workflow_services():
     if cost_repo is None:
         cost_repo = CostRepository(str(THEBRANCH_DB))
         cost_service = CostTrackingService(cost_repo)
+    if learning_repo is None:
+        learning_repo = LearningPatternsRepository(str(THEBRANCH_DB))
+        learning_service = LearningService(learning_repo)
     if accounting_repo is None:
         accounting_repo = AccountingRepository(str(THEBRANCH_DB))
         accounting_service = AccountingService(accounting_repo)
@@ -11801,6 +11808,67 @@ async def page_cost_dashboard():
     """コスト追跡ダッシュボード - API利用コスト可視化"""
     template = jinja_env.get_template("pages/cost-dashboard.html")
     return template.render()
+
+
+@app.get("/feedback-dashboard", response_class=HTMLResponse)
+async def page_feedback_dashboard():
+    """AIエージェント学習・改善フィードバックダッシュボード"""
+    template = jinja_env.get_template("pages/feedback-dashboard.html")
+    return template.render()
+
+
+@app.get("/api/learning-dashboard")
+async def get_learning_dashboard_data():
+    """学習ダッシュボード統計データ取得"""
+    init_workflow_services()
+    data = learning_service.get_learning_dashboard_data()
+    return data
+
+
+@app.post("/api/learning-patterns/record")
+async def record_learning_pattern(
+    workflow_id: str = Query(...),
+    workflow_name: str = Query(...),
+    input_text: str = Query(...),
+    output_text: str = Query(...),
+    success: bool = Query(...),
+    confidence: float = Query(1.0),
+):
+    """ワークフロー実行パターンを記録"""
+    init_workflow_services()
+    pattern_id = learning_service.record_workflow_execution(
+        workflow_id=workflow_id,
+        workflow_name=workflow_name,
+        input_text=input_text,
+        output_text=output_text,
+        success=success,
+        confidence=confidence,
+    )
+    return {"ok": True, "pattern_id": pattern_id}
+
+
+@app.get("/api/learning-patterns/{workflow_id}/insights")
+async def get_workflow_insights(workflow_id: str):
+    """ワークフローの学習インサイト取得"""
+    init_workflow_services()
+    insights = learning_service.get_workflow_insights(workflow_id)
+    return insights
+
+
+@app.get("/api/learning-patterns/{workflow_id}/recommendations")
+async def get_improvement_recommendations(workflow_id: str):
+    """改善推奨事項を取得"""
+    init_workflow_services()
+    recommendations = learning_service.generate_improvement_recommendations(workflow_id)
+    return {"recommendations": recommendations}
+
+
+@app.get("/api/learning-patterns/{workflow_id}/failure-analysis")
+async def get_failure_analysis(workflow_id: str):
+    """失敗パターン分析を取得"""
+    init_workflow_services()
+    analysis = learning_service.get_failure_analysis(workflow_id)
+    return analysis
 
 
 @app.get("/settings", response_class=HTMLResponse)

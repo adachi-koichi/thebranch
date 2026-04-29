@@ -1,0 +1,254 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}AIエージェント学習・改善ダッシュボード - THEBRANCH{% endblock %}
+
+{% block content %}
+<div class="py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>AIエージェント学習・改善ダッシュボード</h1>
+        <div>
+            <button class="btn btn-outline-secondary btn-sm me-2">最近7日</button>
+            <button class="btn btn-outline-secondary btn-sm me-2">最近30日</button>
+            <button class="btn btn-outline-secondary btn-sm">全期間</button>
+        </div>
+    </div>
+
+    <!-- Learning Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">学習パターン</h6>
+                    <h2>1,247</h2>
+                    <small class="text-success">
+                        <i class="fas fa-arrow-up"></i> +145 (今月)
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">成功率</h6>
+                    <h2>94.2%</h2>
+                    <small class="text-muted">全ワークフロー平均</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">改善推奨</h6>
+                    <h2>12</h2>
+                    <small class="text-warning">アクション必要</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">学習スコア</h6>
+                    <h2>87/100</h2>
+                    <small class="text-muted">システム最適化度</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Learning Patterns -->
+    <div class="row mb-4">
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>ワークフロー実行トレンド</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="patternTrendChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>パターン種別</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="patternTypeChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Improvement Recommendations -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>改善推奨事項</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ワークフロー</th>
+                                    <th>カテゴリ</th>
+                                    <th>推奨内容</th>
+                                    <th>優先度</th>
+                                    <th>対応</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>営業提案生成</strong></td>
+                                    <td><span class="badge bg-danger">信頼度</span></td>
+                                    <td>平均信頼度が 0.65 です。プロンプト最適化を検討してください。</td>
+                                    <td><span class="badge bg-danger">高</span></td>
+                                    <td><button class="btn btn-sm btn-outline-primary">詳細</button></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>会計レポート生成</strong></td>
+                                    <td><span class="badge bg-warning">エラー率</span></td>
+                                    <td>失敗率が 18%。エラーハンドリングを強化してください。</td>
+                                    <td><span class="badge bg-warning">中</span></td>
+                                    <td><button class="btn btn-sm btn-outline-primary">詳細</button></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>顧客分析</strong></td>
+                                    <td><span class="badge bg-info">最適化</span></td>
+                                    <td>キャッシング戦略でコストを 30% 削減できる可能性があります。</td>
+                                    <td><span class="badge bg-info">低</span></td>
+                                    <td><button class="btn btn-sm btn-outline-primary">詳細</button></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>データクリーニング</strong></td>
+                                    <td><span class="badge bg-success">成功</span></td>
+                                    <td>成功率 98%。現在のロジックは最適化されています。</td>
+                                    <td><span class="badge bg-secondary">なし</span></td>
+                                    <td><button class="btn btn-sm btn-outline-secondary" disabled>確認済み</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Failure Analysis -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>失敗パターン分析</h5>
+                    <span class="badge bg-danger">直近7日: 23件</span>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>頻出エラータイプ</h6>
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    タイムアウト
+                                    <span class="badge bg-danger rounded-pill">8</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    バリデーションエラー
+                                    <span class="badge bg-danger rounded-pill">7</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    権限エラー
+                                    <span class="badge bg-danger rounded-pill">5</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    レート制限
+                                    <span class="badge bg-danger rounded-pill">3</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>推奨対応</h6>
+                            <div class="alert alert-info">
+                                <strong>タイムアウト対策:</strong> リトライロジックを強化し、タイムアウト値を調整してください。
+                            </div>
+                            <div class="alert alert-info">
+                                <strong>バリデーション改善:</strong> 入力スキーマを検証し、不正なデータをフィルタリングしてください。
+                            </div>
+                            <div class="alert alert-info">
+                                <strong>権限管理:</strong> エージェントのロール・権限設定を確認してください。
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Learning Insights -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="alert alert-success">
+                <i class="fas fa-lightbulb"></i> <strong>学習インサイト:</strong>
+                過去7日間で 1,247 個の実行パターンを記録しました。
+                システムの成功率は 94.2% で、前週比 +2.1% 向上しています。
+                現在 12 個の改善推奨が待機中です。優先度の高い項目から対応することをお勧めします。
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Pattern trend chart
+    const trendCtx = document.getElementById('patternTrendChart').getContext('2d');
+    new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: ['月', '火', '水', '木', '金', '土', '日'],
+            datasets: [{
+                label: '成功パターン',
+                data: [180, 195, 210, 205, 220, 180, 150],
+                borderColor: '#28a745',
+                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                tension: 0.4,
+                fill: true
+            }, {
+                label: '失敗パターン',
+                data: [12, 8, 15, 10, 18, 5, 3],
+                borderColor: '#dc3545',
+                backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: true }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    // Pattern type chart
+    const typeCtx = document.getElementById('patternTypeChart').getContext('2d');
+    new Chart(typeCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['成功', 'エラー', 'タイムアウト', 'バリデーション'],
+            datasets: [{
+                data: [940, 180, 80, 70],
+                backgroundColor: ['#28a745', '#dc3545', '#ffc107', '#17a2b8']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true
+        }
+    });
+</script>
+{% endblock %}
