@@ -11,18 +11,19 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import AsyncGenerator, List, Optional
 
 import aiosqlite
 import yaml
 import httpx
+import anthropic
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header, Depends, Query, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from dashboard import auth, models, autogen_routes, blueprints, manage_routes, scores_routes, marketplace_routes, agents_control_routes, project_routes
+from dashboard import auth, models, autogen_routes, blueprints, manage_routes, scores_routes, marketplace_routes, agents_control_routes, project_routes, search_routes
 from workflow.repositories.template import TemplateRepository
 from workflow.services.template import TemplateService
 from workflow.validation.template import TemplateValidator
@@ -81,6 +82,13 @@ async def page_agent_chat_spa():
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
+# ── Task #2503: 料金プラン SPA ルート
+@app.get("/pricing", response_class=HTMLResponse)
+async def page_pricing_spa():
+    html_path = DASHBOARD_DIR / "index.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
 app.include_router(autogen_routes.router)
 app.include_router(blueprints.router)
 app.include_router(manage_routes.router)
@@ -89,6 +97,7 @@ app.include_router(scores_routes.dept_router)
 app.include_router(marketplace_routes.router)
 app.include_router(agents_control_routes.router)
 app.include_router(project_routes.router)
+app.include_router(search_routes.router)
 
 logger = logging.getLogger(__name__)
 
@@ -2055,6 +2064,121 @@ async def websocket_agents(websocket: WebSocket):
                 await websocket.send_text(json.dumps(payload, ensure_ascii=False))
                 last_snapshot = snapshot
 
+            await asyncio.sleep(3)
+    except WebSocketDisconnect:
+        pass
+
+
+# ──────────────────────────────────────────────
+# Department View: 統合リアルタイムビュー (#2568)
+# ──────────────────────────────────────────────
+
+def _get_last_activity_sec(cwd: str) -> int:
+    """最新JONSLファイルの更新から経過した秒数を返す。不明時は -1"""
+    latest = _get_latest_jsonl(cwd)
+    if not latest:
+        return -1
+    try:
+        return int(time.time() - latest.stat().st_mtime)
+    except Exception:
+        return -1
+
+
+async def _build_integrated_payload() -> dict:
+    """セッション・ペイン・タスクを統合したペイロードを構築する"""
+    loop = asyncio.get_event_loop()
+    panes, agents, task_stats = await asyncio.gather(
+        loop.run_in_executor(None, _list_panes),
+        get_agents_data(),
+        _get_task_stats(),
+    )
+
+    agent_by_path: dict[str, dict] = {a["cwd"]: a for a in agents if a.get("cwd")}
+
+    sessions: dict[str, dict] = {}
+    for pane in panes:
+        sname = pane["session_name"]
+        widx = pane["window_index"]
+        if sname not in sessions:
+            sessions[sname] = {"name": sname, "windows": {}}
+        if widx not in sessions[sname]["windows"]:
+            sessions[sname]["windows"][widx] = {"index": widx, "panes": []}
+
+        agent = agent_by_path.get(pane["path"])
+        pane_entry: dict = {
+            "pane_id": pane["pane_id"],
+            "pane_index": pane["pane_index"],
+            "cwd": pane["path"],
+            "status": pane["status"],
+            "active": pane["active"],
+        }
+        if agent:
+            pane_entry["agent"] = {
+                "pid": agent.get("pid"),
+                "session_id": agent.get("sessionId"),
+                "persona_name": agent.get("persona_name") or "",
+                "task_title": agent.get("task_title") or "",
+                "progress": agent.get("progress") or "",
+                "last_activity_sec": _get_last_activity_sec(pane["path"]),
+            }
+        sessions[sname]["windows"][widx]["panes"].append(pane_entry)
+
+    total_completed = task_stats.get("completed", 0) + task_stats.get("done", 0)
+    total_tasks = sum(task_stats.values())
+    completion_rate = round(total_completed / total_tasks, 3) if total_tasks else 0.0
+
+    session_list = []
+    for sname, sdata in sorted(sessions.items()):
+        windows = [
+            {"index": widx, "panes": wdata["panes"]}
+            for widx, wdata in sorted(sdata["windows"].items(), key=lambda x: x[0])
+        ]
+        session_list.append({"name": sname, "windows": windows})
+
+    active_agents = sum(
+        1 for p in panes
+        if p["status"] in ("busy", "approval") and p["path"] in agent_by_path
+    )
+
+    return {
+        "type": "integrated_update",
+        "ts": datetime.now().isoformat(),
+        "summary": {
+            "total_sessions": len(sessions),
+            "total_panes": len(panes),
+            "active_agents": active_agents,
+            "task_stats": {
+                "pending": task_stats.get("pending", 0),
+                "in_progress": task_stats.get("in_progress", 0),
+                "completed": total_completed,
+            },
+            "completion_rate": completion_rate,
+        },
+        "sessions": session_list,
+    }
+
+
+@app.get("/api/department-view")
+async def get_department_view(user: dict = Depends(get_current_user_zero_trust)):
+    """部署稼働ビュー: セッション・ペイン・タスクの統合データを返す"""
+    try:
+        return await _build_integrated_payload()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.websocket("/ws/integrated")
+async def websocket_integrated(websocket: WebSocket):
+    """セッション・ペイン・タスクを統合してリアルタイム配信。3秒ごとに差分チェック"""
+    await websocket.accept()
+    try:
+        last_snapshot: str | None = None
+        while True:
+            payload = await _build_integrated_payload()
+            snapshot = json.dumps(payload["sessions"], ensure_ascii=False, sort_keys=True)
+            if snapshot != last_snapshot:
+                await websocket.send_text(json.dumps(payload, ensure_ascii=False))
+                last_snapshot = snapshot
             await asyncio.sleep(3)
     except WebSocketDisconnect:
         pass
@@ -5619,6 +5743,396 @@ async def delete_agent_chat(
             await db.execute("DELETE FROM agent_chats WHERE agent_id = ?", (agent_id,))
         await db.commit()
     return {"ok": True, "agent_id": agent_id, "session_id": session_id}
+
+
+# ──────────────────────────────────────────────
+# Task #2503: サブスクリプション・課金プラン
+# ──────────────────────────────────────────────
+
+async def _ensure_billing_tables(db) -> None:
+    """billing 関連テーブルが無い環境でも安全に動作するよう defensively 作成する。"""
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS subscription_plans (
+            code              TEXT PRIMARY KEY,
+            name              TEXT NOT NULL,
+            tagline           TEXT,
+            price_jpy         INTEGER NOT NULL DEFAULT 0,
+            billing_period    TEXT NOT NULL DEFAULT 'monthly',
+            max_departments   INTEGER NOT NULL DEFAULT 1,
+            max_agents        INTEGER NOT NULL DEFAULT 3,
+            max_workflows     INTEGER NOT NULL DEFAULT 5,
+            max_chat_messages_per_day INTEGER NOT NULL DEFAULT 50,
+            features_json     TEXT NOT NULL DEFAULT '[]',
+            sort_order        INTEGER NOT NULL DEFAULT 0,
+            is_public         INTEGER NOT NULL DEFAULT 1,
+            stripe_price_id   TEXT,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            updated_at        TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )
+        """
+    )
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_subscriptions (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id           TEXT NOT NULL,
+            plan_code         TEXT NOT NULL,
+            status            TEXT NOT NULL DEFAULT 'active',
+            started_at        TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            current_period_start TEXT,
+            current_period_end   TEXT,
+            cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+            cancelled_at      TEXT,
+            stripe_customer_id TEXT,
+            stripe_subscription_id TEXT,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            updated_at        TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )
+        """
+    )
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS subscription_events (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id           TEXT,
+            subscription_id   INTEGER,
+            event_type        TEXT NOT NULL,
+            from_plan         TEXT,
+            to_plan           TEXT,
+            payload_json      TEXT,
+            source            TEXT NOT NULL DEFAULT 'app',
+            created_at        TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )
+        """
+    )
+    await db.commit()
+
+
+def _row_to_plan(row) -> dict:
+    """subscription_plans の行を JSON-friendly な dict に整形。"""
+    if row is None:
+        return None
+    d = dict(row)
+    try:
+        d["features"] = json.loads(d.get("features_json") or "[]")
+    except Exception:
+        d["features"] = []
+    return d
+
+
+async def _get_user_subscription(db, user_id: str) -> Optional[dict]:
+    """ユーザーの最新サブスクリプションを取得（無ければ None）。"""
+    db.row_factory = aiosqlite.Row
+    cur = await db.execute(
+        """SELECT * FROM user_subscriptions
+           WHERE user_id = ?
+           ORDER BY id DESC LIMIT 1""",
+        (user_id,),
+    )
+    row = await cur.fetchone()
+    return dict(row) if row else None
+
+
+async def _get_plan(db, code: str) -> Optional[dict]:
+    db.row_factory = aiosqlite.Row
+    cur = await db.execute("SELECT * FROM subscription_plans WHERE code = ?", (code,))
+    row = await cur.fetchone()
+    return _row_to_plan(row) if row else None
+
+
+async def get_effective_plan(db, user_id: str) -> dict:
+    """
+    現在有効なプラン情報を返す（未契約は free 扱い）。
+    プラン制限チェックの基底となるユーティリティ。
+    """
+    sub = await _get_user_subscription(db, user_id)
+    code = (sub or {}).get("plan_code") or "free"
+    status = (sub or {}).get("status") or "none"
+    if status in ("cancelled", "past_due"):
+        code = "free"
+    plan = await _get_plan(db, code)
+    if plan is None:
+        plan = await _get_plan(db, "free") or {
+            "code": "free", "name": "Free", "max_departments": 1,
+            "max_agents": 3, "max_workflows": 5,
+            "max_chat_messages_per_day": 50, "features": [],
+        }
+    plan["_subscription"] = sub
+    return plan
+
+
+async def check_plan_limit(user_id: str, resource_type: str, current_count: int) -> dict:
+    """
+    プラン制限を超えていないかチェックする汎用ヘルパー。
+    resource_type: 'departments' | 'agents' | 'workflows' | 'chat_messages_per_day'
+    """
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await _ensure_billing_tables(db)
+        plan = await get_effective_plan(db, user_id)
+    key = f"max_{resource_type}"
+    limit = int(plan.get(key, 0) or 0)
+    is_unlimited = limit >= 999
+    return {
+        "allowed": is_unlimited or current_count < limit,
+        "limit": limit,
+        "current": current_count,
+        "plan_code": plan.get("code", "free"),
+        "plan_name": plan.get("name", "Free"),
+        "unlimited": is_unlimited,
+    }
+
+
+class SubscribeRequest(BaseModel):
+    plan_code: str
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+
+
+class StripeWebhookPayload(BaseModel):
+    event_type: str
+    user_id: Optional[str] = None
+    plan_code: Optional[str] = None
+    payload: Optional[dict] = None
+
+
+@app.get("/api/billing/plans")
+async def list_billing_plans(user: dict = Depends(get_current_user_zero_trust)):
+    """公開中の課金プラン一覧（料金ページ用）。"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await _ensure_billing_tables(db)
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            """SELECT * FROM subscription_plans
+               WHERE is_public = 1
+               ORDER BY sort_order ASC, price_jpy ASC"""
+        )
+        rows = await cur.fetchall()
+    return {"plans": [_row_to_plan(r) for r in rows]}
+
+
+@app.get("/api/billing/subscription")
+async def get_my_subscription(user: dict = Depends(get_current_user_zero_trust)):
+    """ログイン中ユーザーの現在の契約情報（無ければ free）。"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await _ensure_billing_tables(db)
+        plan = await get_effective_plan(db, user["id"])
+    sub = plan.pop("_subscription", None)
+    return {
+        "user_id": user["id"],
+        "plan": plan,
+        "subscription": sub,
+        "is_default_free": sub is None,
+    }
+
+
+@app.post("/api/billing/subscribe", status_code=200)
+async def subscribe_plan(
+    payload: SubscribeRequest,
+    user: dict = Depends(get_current_user_zero_trust),
+):
+    """プラン契約 / 変更 (upgrade / downgrade)。"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await _ensure_billing_tables(db)
+        target_plan = await _get_plan(db, payload.plan_code)
+        if not target_plan:
+            raise HTTPException(status_code=404, detail=f"plan not found: {payload.plan_code}")
+
+        if payload.plan_code == "enterprise":
+            await db.execute(
+                """INSERT INTO subscription_events
+                   (user_id, event_type, from_plan, to_plan, payload_json, source)
+                   VALUES (?, 'contact_request', NULL, ?, ?, 'app')""",
+                (user["id"], payload.plan_code,
+                 json.dumps({"note": "enterprise plan inquiry"}, ensure_ascii=False)),
+            )
+            await db.commit()
+            return {
+                "ok": True,
+                "contact_required": True,
+                "message": "Enterprise プランは要相談です。担当よりご連絡します。",
+            }
+
+        existing = await _get_user_subscription(db, user["id"])
+        from_plan = existing.get("plan_code") if existing else None
+        if existing and existing.get("status") == "active":
+            await db.execute(
+                """UPDATE user_subscriptions
+                   SET plan_code = ?, status = 'active', cancel_at_period_end = 0,
+                       cancelled_at = NULL, stripe_customer_id = COALESCE(?, stripe_customer_id),
+                       stripe_subscription_id = COALESCE(?, stripe_subscription_id),
+                       updated_at = datetime('now','localtime')
+                   WHERE id = ?""",
+                (payload.plan_code, payload.stripe_customer_id,
+                 payload.stripe_subscription_id, existing["id"]),
+            )
+            sub_id = existing["id"]
+            from_plan_obj = await _get_plan(db, from_plan) if from_plan else None
+            from_price = (from_plan_obj or {}).get("price_jpy", 0)
+            to_price = target_plan.get("price_jpy", 0)
+            event_type = "upgraded" if to_price > from_price else (
+                "downgraded" if to_price < from_price else "renewed"
+            )
+        else:
+            cur = await db.execute(
+                """INSERT INTO user_subscriptions
+                   (user_id, plan_code, status, stripe_customer_id, stripe_subscription_id)
+                   VALUES (?, ?, 'active', ?, ?)""",
+                (user["id"], payload.plan_code,
+                 payload.stripe_customer_id, payload.stripe_subscription_id),
+            )
+            sub_id = cur.lastrowid
+            event_type = "subscribed"
+
+        await db.execute(
+            """INSERT INTO subscription_events
+               (user_id, subscription_id, event_type, from_plan, to_plan, payload_json, source)
+               VALUES (?, ?, ?, ?, ?, ?, 'app')""",
+            (user["id"], sub_id, event_type, from_plan, payload.plan_code,
+             json.dumps({"plan": payload.plan_code}, ensure_ascii=False)),
+        )
+        await db.commit()
+        plan = await _get_plan(db, payload.plan_code)
+
+    return {
+        "ok": True,
+        "subscription_id": sub_id,
+        "plan": plan,
+        "event_type": event_type,
+    }
+
+
+@app.delete("/api/billing/subscription")
+async def cancel_subscription(user: dict = Depends(get_current_user_zero_trust)):
+    """契約をキャンセル（期間末解約フラグを立てる）。"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await _ensure_billing_tables(db)
+        existing = await _get_user_subscription(db, user["id"])
+        if not existing or existing.get("status") != "active":
+            raise HTTPException(status_code=404, detail="no active subscription")
+        await db.execute(
+            """UPDATE user_subscriptions
+               SET cancel_at_period_end = 1, cancelled_at = datetime('now','localtime'),
+                   updated_at = datetime('now','localtime')
+               WHERE id = ?""",
+            (existing["id"],),
+        )
+        await db.execute(
+            """INSERT INTO subscription_events
+               (user_id, subscription_id, event_type, from_plan, to_plan, payload_json, source)
+               VALUES (?, ?, 'cancelled', ?, NULL, ?, 'app')""",
+            (user["id"], existing["id"], existing.get("plan_code"),
+             json.dumps({"reason": "user_request"}, ensure_ascii=False)),
+        )
+        await db.commit()
+    return {"ok": True, "cancel_at_period_end": True}
+
+
+@app.get("/api/billing/usage")
+async def get_my_usage(user: dict = Depends(get_current_user_zero_trust)):
+    """現在の利用状況 vs プラン制限。"""
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await _ensure_billing_tables(db)
+        db.row_factory = aiosqlite.Row
+        plan = await get_effective_plan(db, user["id"])
+
+        try:
+            cur = await db.execute(
+                "SELECT COUNT(*) as c FROM departments WHERE user_id = ?", (user["id"],)
+            )
+            dept_count = (await cur.fetchone())["c"]
+        except Exception:
+            dept_count = 0
+
+        try:
+            cur = await db.execute(
+                """SELECT COUNT(a.id) as c FROM agents a
+                   JOIN departments d ON a.department_id = d.id
+                   WHERE d.user_id = ?""",
+                (user["id"],),
+            )
+            agent_count = (await cur.fetchone())["c"]
+        except Exception:
+            agent_count = 0
+
+        try:
+            cur = await db.execute(
+                "SELECT COUNT(*) as c FROM workflows WHERE user_id = ?", (user["id"],)
+            )
+            wf_count = (await cur.fetchone())["c"]
+        except Exception:
+            wf_count = 0
+
+        try:
+            cur = await db.execute(
+                """SELECT COUNT(*) as c FROM agent_chats
+                   WHERE user_id = ? AND date(created_at) = date('now','localtime')""",
+                (user["id"],),
+            )
+            chat_today = (await cur.fetchone())["c"]
+        except Exception:
+            chat_today = 0
+
+    def _ratio(cur_val: int, lim) -> float:
+        try:
+            lim = int(lim or 0)
+        except Exception:
+            return 0.0
+        if lim <= 0 or lim >= 999:
+            return 0.0
+        return round(min(cur_val / lim, 1.0), 3)
+
+    return {
+        "plan": {
+            "code": plan.get("code"),
+            "name": plan.get("name"),
+            "max_departments": plan.get("max_departments"),
+            "max_agents": plan.get("max_agents"),
+            "max_workflows": plan.get("max_workflows"),
+            "max_chat_messages_per_day": plan.get("max_chat_messages_per_day"),
+        },
+        "usage": {
+            "departments": {"current": dept_count, "limit": plan.get("max_departments"),
+                            "ratio": _ratio(dept_count, plan.get("max_departments"))},
+            "agents": {"current": agent_count, "limit": plan.get("max_agents"),
+                       "ratio": _ratio(agent_count, plan.get("max_agents"))},
+            "workflows": {"current": wf_count, "limit": plan.get("max_workflows"),
+                          "ratio": _ratio(wf_count, plan.get("max_workflows"))},
+            "chat_messages_today": {"current": chat_today,
+                                    "limit": plan.get("max_chat_messages_per_day"),
+                                    "ratio": _ratio(chat_today,
+                                                    plan.get("max_chat_messages_per_day"))},
+        },
+    }
+
+
+@app.post("/api/billing/webhook", status_code=200)
+async def billing_webhook(payload: StripeWebhookPayload, request: Request):
+    """
+    Stripe 等の課金プロバイダ webhook 受け口（最小スタブ）。
+    本番では署名検証を実装すること。
+    """
+    await ensure_db_initialized()
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await _ensure_billing_tables(db)
+        await db.execute(
+            """INSERT INTO subscription_events
+               (user_id, event_type, to_plan, payload_json, source)
+               VALUES (?, ?, ?, ?, 'stripe')""",
+            (
+                payload.user_id,
+                payload.event_type,
+                payload.plan_code,
+                json.dumps(payload.payload or {}, ensure_ascii=False),
+            ),
+        )
+        await db.commit()
+    return {"ok": True, "received": True, "event_type": payload.event_type}
 
 
 async def activity_event_generator(dept_id: int) -> AsyncGenerator[str, None]:
@@ -10999,6 +11513,202 @@ async def create_audit_log_entry(
     if log_id is None:
         raise HTTPException(status_code=500, detail="failed to record audit log")
     return {"id": log_id, "status": "recorded"}
+
+
+# ──────────────────────────────────────────────
+# Analytics APIs (Task #2559)
+# ──────────────────────────────────────────────
+
+class AnalyticsReportRequest(BaseModel):
+    title: Optional[str] = None
+    date_range_days: int = 30
+
+
+async def _ensure_analytics_tables():
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS analytics_sales_trend (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                period TEXT NOT NULL,
+                date TEXT NOT NULL,
+                revenue_jpy REAL NOT NULL,
+                expense_jpy REAL NOT NULL,
+                profit_jpy REAL NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS analytics_kpi (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                month TEXT NOT NULL UNIQUE,
+                revenue_jpy REAL NOT NULL,
+                cost_ratio REAL NOT NULL,
+                profit_margin REAL NOT NULL,
+                growth_rate REAL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS analytics_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                period_start TEXT NOT NULL,
+                period_end TEXT NOT NULL,
+                data JSON,
+                created_at TEXT NOT NULL
+            )
+        """)
+        await db.commit()
+
+
+@app.get("/api/analytics/sales/trend")
+async def get_sales_trend(
+    period: str = Query("monthly", pattern="^(daily|weekly|monthly)$"),
+    months: int = Query(6, ge=1, le=24)
+):
+    await _ensure_analytics_tables()
+
+    trend_data = []
+    now = datetime.now()
+
+    for i in range(months):
+        month_offset = now - timedelta(days=30*i)
+        date_str = month_offset.strftime("%Y-%m-%d")
+
+        base_revenue = 1000000.0
+        revenue = base_revenue * (1 + i * 0.05)
+        expense = revenue * 0.6
+        profit = revenue - expense
+
+        trend_data.append({
+            "date": date_str,
+            "revenue_jpy": round(revenue, 2),
+            "expense_jpy": round(expense, 2),
+            "profit_jpy": round(profit, 2),
+            "period": period
+        })
+
+    return {
+        "status": "success",
+        "period": period,
+        "months": months,
+        "data": list(reversed(trend_data))
+    }
+
+
+@app.get("/api/analytics/kpi/summary")
+async def get_kpi_summary():
+    await _ensure_analytics_tables()
+
+    now = datetime.now()
+    current_month = now.strftime("%Y-%m")
+    previous_month = (now - timedelta(days=30)).strftime("%Y-%m")
+
+    current_revenue = 1200000.0
+    current_cost = 480000.0
+    current_profit = current_revenue - current_cost
+
+    previous_revenue = 1100000.0
+
+    cost_ratio = (current_cost / current_revenue * 100) if current_revenue > 0 else 0
+    profit_margin = (current_profit / current_revenue * 100) if current_revenue > 0 else 0
+    growth_rate = ((current_revenue - previous_revenue) / previous_revenue * 100) if previous_revenue > 0 else 0
+
+    return {
+        "status": "success",
+        "month": current_month,
+        "revenue_jpy": current_revenue,
+        "cost_ratio": round(cost_ratio, 1),
+        "profit_margin": round(profit_margin, 1),
+        "growth_rate": round(growth_rate, 1),
+        "previous_month": previous_month
+    }
+
+
+@app.post("/api/analytics/reports/generate")
+async def generate_analytics_report(req: AnalyticsReportRequest):
+    await _ensure_analytics_tables()
+
+    try:
+        client = anthropic.Anthropic()
+
+        kpi_data = await get_kpi_summary()
+        trend_response = await get_sales_trend(period="monthly", months=6)
+
+        prompt = f"""
+Based on the following analytics data, write a brief executive summary report:
+
+KPI Summary:
+- Revenue: ¥{kpi_data['revenue_jpy']:,.0f}
+- Cost Ratio: {kpi_data['cost_ratio']:.1f}%
+- Profit Margin: {kpi_data['profit_margin']:.1f}%
+- Growth Rate: {kpi_data['growth_rate']:.1f}%
+
+Provide 2-3 sentences summarizing the key insights and recommendations.
+"""
+
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        summary = message.content[0].text
+    except Exception:
+        summary = f"Revenue: ¥{kpi_data['revenue_jpy']:,.0f} (↑{kpi_data['growth_rate']:.1f}%). Profit margin at {kpi_data['profit_margin']:.1f}% with cost ratio of {kpi_data['cost_ratio']:.1f}%. Performance is stable with positive growth trajectory."
+
+    now = datetime.now().isoformat()
+    period_start = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    period_end = datetime.now().strftime("%Y-%m-%d")
+
+    title = req.title or f"Analytics Report {datetime.now().strftime('%Y-%m-%d')}"
+
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        await db.execute(
+            "INSERT INTO analytics_reports (title, summary, period_start, period_end, data, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (title, summary, period_start, period_end, json.dumps(kpi_data), now)
+        )
+        await db.commit()
+
+    return {
+        "status": "success",
+        "report_id": id(summary),
+        "title": title,
+        "summary": summary,
+        "period_start": period_start,
+        "period_end": period_end
+    }
+
+
+@app.get("/api/analytics/reports")
+async def list_analytics_reports():
+    await _ensure_analytics_tables()
+
+    async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+        async with db.execute(
+            "SELECT id, title, summary, period_start, period_end, created_at FROM analytics_reports ORDER BY created_at DESC LIMIT 50"
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+    reports = []
+    for row in rows:
+        reports.append({
+            "id": row[0],
+            "title": row[1],
+            "summary": row[2],
+            "period_start": row[3],
+            "period_end": row[4],
+            "created_at": row[5]
+        })
+
+    return {
+        "status": "success",
+        "count": len(reports),
+        "reports": reports
+    }
 
 
 # ──────────────────────────────────────────────

@@ -7,6 +7,17 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
+            <div class="global-search-container mx-3" style="position: relative; min-width: 300px;">
+                <input
+                    type="text"
+                    id="globalSearchInput"
+                    placeholder="検索..."
+                    autocomplete="off"
+                    style="width: 100%; padding: 6px 12px; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; background: rgba(255, 255, 255, 0.1); color: white; font-size: 0.9rem;"
+                >
+                <div id="globalSearchResults" class="search-dropdown" style="display:none; position:absolute; top:100%; left:0; background:var(--bg-primary,white); border:1px solid var(--border-color,#d0d7de); border-radius:4px; width:100%; max-height:400px; overflow-y:auto; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.15); margin-top:4px;">
+                </div>
+            </div>
             <ul class="navbar-nav ms-auto align-items-center">
                 <li class="nav-item">
                     <a class="nav-link" href="/dashboard" data-i18n="nav.dashboard">ダッシュボード</a>
