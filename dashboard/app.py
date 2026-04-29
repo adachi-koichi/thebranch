@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from dashboard import auth, models, autogen_routes, blueprints, manage_routes, scores_routes, marketplace_routes, agents_control_routes, project_routes, search_routes
 from dashboard.websocket_manager import ConnectionManager
 from dashboard.routes.webhooks import router as webhooks_router
+from dashboard.routes.subscriptions import router as subscriptions_router
 from workflow.repositories.template import TemplateRepository
 from workflow.services.template import TemplateService
 from workflow.validation.template import TemplateValidator
@@ -107,6 +108,13 @@ async def page_workflow_editor():
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
+# ── Task #2548: プラン管理・サブスクリプション
+@app.get("/subscriptions", response_class=HTMLResponse)
+async def page_subscriptions():
+    html_path = DASHBOARD_DIR / "templates" / "pages" / "subscriptions.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
 app.include_router(autogen_routes.router)
 app.include_router(blueprints.router)
 app.include_router(manage_routes.router)
@@ -116,6 +124,7 @@ app.include_router(marketplace_routes.router)
 app.include_router(agents_control_routes.router)
 app.include_router(project_routes.router)
 app.include_router(search_routes.router)
+app.include_router(subscriptions_router)
 app.include_router(webhooks_router)
 
 logger = logging.getLogger(__name__)
