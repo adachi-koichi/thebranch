@@ -1,0 +1,59 @@
+filters:
+  and:
+    - file.ext == "md"
+    - not:
+        - file.name == "Welcome.md"
+        - file.name == "SPEC_INDEX.md"
+formulas:
+  category: if(file.inFolder("design"), "設計", if(file.inFolder("api"), "API仕様", if(file.inFolder("product"), "プロダクト", if(file.inFolder("test_reports"), "テスト", "システム仕様"))))
+  days_since_updated: (now() - file.mtime).days.round(0)
+  size_kb: (file.size / 1024).round(1)
+properties:
+  formula.category:
+    displayName: カテゴリ
+  formula.days_since_updated:
+    displayName: 最終更新(日前)
+  formula.size_kb:
+    displayName: サイズ(KB)
+  file.folder:
+    displayName: フォルダ
+  file.mtime:
+    displayName: 更新日時
+views:
+  - type: table
+    name: 全仕様書
+    groupBy:
+      property: formula.category
+      direction: ASC
+    order:
+      - file.name
+      - formula.category
+      - file.folder
+      - formula.size_kb
+      - file.mtime
+  - type: table
+    name: 設計書
+    filters:
+      and:
+        - file.inFolder("design")
+    order:
+      - file.name
+      - formula.size_kb
+      - file.mtime
+  - type: table
+    name: API仕様
+    filters:
+      and:
+        - file.inFolder("api")
+    order:
+      - file.name
+      - formula.size_kb
+      - file.mtime
+  - type: table
+    name: 最近更新
+    order:
+      - file.name
+      - formula.category
+      - file.mtime
+      - formula.days_since_updated
+    limit: 20
