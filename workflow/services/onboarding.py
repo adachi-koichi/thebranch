@@ -20,9 +20,7 @@ SALARY_BENCHMARKS = {
 class OnboardingService:
     def __init__(self):
         api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
-        self.client = Anthropic(api_key=api_key)
+        self.client = Anthropic(api_key=api_key) if api_key else None
         self.model = "claude-opus-4-7"
 
     def analyze_vision_for_templates(self, vision_input: str) -> List[Dict[str, Any]]:
@@ -76,6 +74,8 @@ JSON形式で回答してください:
 """.format(vision_input=vision_input)
 
         try:
+            if not self.client:
+                return self._get_default_suggestions()
             message = self.client.messages.create(
                 model=self.model,
                 max_tokens=1024,
@@ -158,6 +158,8 @@ JSON形式で回答してください:
 """.format(dept_name=dept_name, kpi=kpi, budget=budget, members_count=members_count)
 
         try:
+            if not self.client:
+                return self._get_default_tasks(dept_name, budget, members_count)
             message = self.client.messages.create(
                 model=self.model,
                 max_tokens=1500,
