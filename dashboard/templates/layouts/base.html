@@ -17,6 +17,14 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     {% block extra_css %}{% endblock %}
+
+    <!-- i18n: apply stored lang before first paint to avoid flash -->
+    <script>
+        (function() {
+            var lang = localStorage.getItem('thebranch_lang') || 'ja';
+            document.documentElement.lang = lang;
+        })();
+    </script>
 </head>
 <body>
     <!-- Navigation -->
@@ -48,6 +56,9 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- i18n -->
+    <script src="/js/i18n.js"></script>
 
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
