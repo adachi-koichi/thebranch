@@ -8615,6 +8615,170 @@ async def get_sla_violations(policy_id: int = None, limit: int = 50, user: dict 
         logger.error(f"Failed to get SLA violations: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/sla-monitor")
+async def get_sla_monitor(user: dict = Depends(get_current_user_zero_trust)):
+    """SLA統合ダッシュボード - 全ポリシーの状態を取得"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+
+            cursor = await db.execute("SELECT COUNT(*) as count FROM sla_policies WHERE enabled = 1")
+            row = await cursor.fetchone()
+            total_policies = row['count'] if row else 0
+
+            cursor = await db.execute("""
+                SELECT p.id, p.name, p.response_time_limit_ms, p.uptime_percentage, p.error_rate_limit
+                FROM sla_policies p
+                WHERE p.enabled = 1
+                ORDER BY p.created_at DESC
+            """)
+            policies = [dict(row) for row in await cursor.fetchall()]
+
+            policies_summary = []
+            system_uptime_values = []
+
+            for policy in policies:
+                cursor = await db.execute("""
+                    SELECT AVG(uptime_percentage) as avg_uptime,
+                           AVG(response_time_ms) as avg_response_time,
+                           AVG(error_rate) as avg_error_rate,
+                           COUNT(*) as count
+                    FROM sla_metrics
+                    WHERE policy_id = ? AND measured_at >= datetime('now', '-24 hours')
+                """, (policy['id'],))
+                metrics_row = await cursor.fetchone()
+
+                cursor = await db.execute("""
+                    SELECT COUNT(*) as count FROM sla_violations
+                    WHERE policy_id = ? AND resolved_at IS NULL
+                """, (policy['id'],))
+                violations_row = await cursor.fetchone()
+
+                avg_uptime = metrics_row['avg_uptime'] if metrics_row and metrics_row['avg_uptime'] else 0
+                avg_response_time = metrics_row['avg_response_time'] if metrics_row and metrics_row['avg_response_time'] else 0
+                avg_error_rate = metrics_row['avg_error_rate'] if metrics_row and metrics_row['avg_error_rate'] else 0
+                unresolved_violations = violations_row['count'] if violations_row else 0
+
+                status = "healthy" if unresolved_violations == 0 and avg_uptime >= policy['uptime_percentage'] else "degraded"
+
+                system_uptime_values.append(avg_uptime)
+                policies_summary.append({
+                    "policy_id": policy['id'],
+                    "name": policy['name'],
+                    "uptime_percentage": round(avg_uptime, 2),
+                    "avg_response_time_ms": round(avg_response_time, 2),
+                    "error_rate": round(avg_error_rate, 4),
+                    "status": status,
+                    "latest_violation": None,
+                    "compliance_rate": round(avg_uptime, 2)
+                })
+
+            cursor = await db.execute("""
+                SELECT id, policy_id, violation_type, severity, created_at
+                FROM sla_violations
+                WHERE resolved_at IS NULL
+                ORDER BY created_at DESC
+            """)
+            active_violations = [dict(row) for row in await cursor.fetchall()]
+
+            critical_violations_count = sum(1 for v in active_violations if v.get('severity') == 'critical')
+
+            system_uptime = sum(system_uptime_values) / len(system_uptime_values) if system_uptime_values else 0
+
+            return {
+                "total_policies": total_policies,
+                "policies_summary": policies_summary,
+                "system_uptime": round(system_uptime, 2),
+                "active_violations": active_violations,
+                "active_violations_count": len(active_violations),
+                "critical_violations_count": critical_violations_count,
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+    except Exception as e:
+        logger.error(f"Failed to get SLA monitor: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/sla-monitor/alerts")
+async def get_sla_monitor_alerts(policy_id: int = None, severity: str = None,
+                                  user: dict = Depends(get_current_user_zero_trust)):
+    """SLA未解決アラート一覧"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+
+            query = """
+                SELECT id, policy_id, metric_id, violation_type, severity, details, alert_sent, created_at
+                FROM sla_violations
+                WHERE resolved_at IS NULL
+            """
+            params = []
+
+            if policy_id:
+                query += " AND policy_id = ?"
+                params.append(policy_id)
+
+            if severity:
+                query += " AND severity = ?"
+                params.append(severity)
+
+            query += " ORDER BY created_at DESC"
+
+            cursor = await db.execute(query, params)
+            unresolved_alerts = [dict(row) for row in await cursor.fetchall()]
+
+            sent_count = sum(1 for alert in unresolved_alerts if alert.get('alert_sent') == 1)
+            unsent_count = len(unresolved_alerts) - sent_count
+
+            return {
+                "unresolved_alerts": unresolved_alerts,
+                "total": len(unresolved_alerts),
+                "sent_count": sent_count,
+                "unsent_count": unsent_count
+            }
+    except Exception as e:
+        logger.error(f"Failed to get SLA alerts: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/sla-monitor/alerts/{violation_id}/send")
+async def send_sla_alert(violation_id: int, user: dict = Depends(get_current_user_zero_trust)):
+    """SLAアラート送信（alert_sent フラグを更新）"""
+    await ensure_db_initialized()
+    try:
+        async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
+            db.row_factory = sqlite3.Row
+
+            cursor = await db.execute(
+                "SELECT id FROM sla_violations WHERE id = ?",
+                (violation_id,)
+            )
+            if not await cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Violation not found")
+
+            await db.execute(
+                "UPDATE sla_violations SET alert_sent = 1 WHERE id = ?",
+                (violation_id,)
+            )
+            await db.commit()
+
+            cursor = await db.execute(
+                "SELECT id, policy_id, violation_type, severity, alert_sent, created_at FROM sla_violations WHERE id = ?",
+                (violation_id,)
+            )
+            violation_row = await cursor.fetchone()
+
+            return {
+                "success": True,
+                "message": "Alert sent successfully",
+                "violation": dict(violation_row)
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to send SLA alert: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/agents", status_code=201)
 async def create_agent(req: models.AgentCreate, user: dict = Depends(get_current_user_zero_trust)):
     """エージェントを作成"""
