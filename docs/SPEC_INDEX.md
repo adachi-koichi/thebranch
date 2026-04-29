@@ -129,6 +129,7 @@ AIエージェント・Claudeが仕様書を素早く参照するためのナビ
 | `product/feature_spec.md` | THEBRANCH 機能仕様化・UIプロトタイプ実装ガイド | 機能仕様→実装ガイド |
 | `product/prototype.md` | THEBRANCH プロトタイプ設計 | プロトタイプ設計書 |
 | `product/user_research.md` | THEBRANCHユーザー課題研究 | ユーザー課題リサーチ結果 |
+| `product/service-concept.md` | The Branch - サービス企画メモ | コアコンセプト・ビジネスモデル・GTM・育成ロイヤリティモデル |
 
 ## テスト（test_reports/）
 
@@ -146,6 +147,8 @@ AIエージェント・Claudeが仕様書を素早く参照するためのナビ
 | DBスキーマ・テーブル設計 | `data-model.md`, `design/DATA-MODEL.md`, `design/marketplace_db_schema.md` |
 | 画面設計・UI仕様 | `design/WIREFRAMES_DESIGN.md`, `design/ORGANIZATION-DASHBOARD.md` |
 | オンボーディングフロー | `design/onboarding-flow.md`, `API_SPEC_ONBOARDING.md` |
+| ビジネスモデル・GTM戦略 | `product/service-concept.md`, `business_model_canvas.md` |
+| エージェント育成・ロイヤリティモデル | `product/service-concept.md` |
 | マルチテナント・認証 | `design/MULTITENANCY-ARCHITECTURE.md`, `design/auth_multitenancy_design.md` |
 | SLA管理 | `design/sla-api-specification.md`, `design/sla-metrics-specification.md` |
 | エージェント設計 | `design/AGENT_TASK_DELEGATION_API.md`, `design/accounting_department_design.md` |
