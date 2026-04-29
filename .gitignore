@@ -1,4 +1,5 @@
 docs/.obsidian/
+docs/.trash/
 __pycache__/
 *.pyc
 *.pyo
