@@ -6543,89 +6543,88 @@ user: dict = Depends(get_current_user_zero_trust)):
         from datetime import datetime
 
         async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
-            # Get onboarding details
+            # Get stored onboarding data
             cursor = await db.execute(
                 """
-                SELECT dept_id FROM user_onboarding_progress
+                SELECT dept_name, manager_name, members_count, budget, kpi
+                FROM user_onboarding_progress
                 WHERE onboarding_id = ? AND user_id = ?
                 """,
                 (req.onboarding_id, user_id)
             )
             row = await cursor.fetchone()
             if not row:
-                raise HTTPException(status_code=404, detail="Onboarding not found")
+                raise HTTPException(status_code=404, detail="オンボーディングが見つかりません")
 
-            dept_id = row[0]
+            stored_dept_name, manager_name, members_count, budget, kpi = row
 
-            # Get department details
+            # Use request dept_name if provided, otherwise fall back to stored value
+            dept_name = req.dept_name or stored_dept_name or "新しい部署"
+            members_count = members_count or 3
+            budget = budget or 10000
+            kpi = kpi or "初期KPI設定"
+
+            # Create department
+            import re
+            slug = re.sub(r'[^a-z0-9-]', '-', dept_name.lower().replace(' ', '-'))
+            slug = re.sub(r'-+', '-', slug).strip('-') or 'new-dept'
             cursor = await db.execute(
-                "SELECT name FROM departments WHERE id = ?",
-                (dept_id,)
+                """INSERT INTO departments (name, slug, description, status, created_by, created_at, updated_at)
+                   VALUES (?, ?, ?, 'active', ?, datetime('now','localtime'), datetime('now','localtime'))""",
+                (dept_name, slug, f"{dept_name}（AI部署）", str(user_id))
             )
-            dept_row = await cursor.fetchone()
-            if not dept_row:
-                raise HTTPException(status_code=404, detail="Department not found")
+            await db.commit()
+            dept_id = cursor.lastrowid
 
-            dept_name = dept_row[0]
-
-            # Generate initial tasks
+            # Generate initial tasks using AI
             onboarding_service = get_onboarding_service()
             tasks = onboarding_service.generate_initial_tasks(
                 dept_name=dept_name,
-                kpi="初期KPI設定",
-                budget=10000.0,  # デフォルト予算
-                members_count=3
+                kpi=kpi,
+                budget=float(budget),
+                members_count=int(members_count)
             )
 
             # Create tasks in database
             tasks_created = []
-            for i, task in enumerate(tasks):
+            for task in tasks:
                 cursor = await db.execute(
-                    """
-                    INSERT INTO tasks
+                    """INSERT INTO tasks
                     (title, description, status, department_id, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-                    """,
-                    (task.get("title"), task.get("description"), "pending", dept_id)
+                    VALUES (?, ?, 'pending', ?, datetime('now','localtime'), datetime('now','localtime'))""",
+                    (task.get("title"), task.get("description"), dept_id)
                 )
                 await db.commit()
                 task_id = cursor.lastrowid
-
                 tasks_created.append({
                     "task_id": str(task_id),
-                    "title": task.get("title"),
-                    "description": task.get("description"),
-                    "budget": task.get("budget", 0),
-                    "deadline": task.get("deadline"),
-                    "assigned_to": task.get("assigned_to")
+                    "title": task.get("title", ""),
+                    "description": task.get("description", ""),
+                    "budget": int(task.get("budget", 0)),
+                    "deadline": task.get("deadline", ""),
+                    "assigned_to": task.get("assigned_to", "Manager")
                 })
 
-            # Create agent
+            # Create coordinator agent
             session_id = f"thebranch_onboarding_{user_id}_{dept_id}"
-            cursor = await db.execute(
-                """
-                INSERT INTO agents
+            await db.execute(
+                """INSERT INTO agents
                 (department_id, session_id, role, status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))
-                """,
-                (dept_id, session_id, "coordinator", "activating")
+                VALUES (?, ?, 'coordinator', 'activating', datetime('now','localtime'), datetime('now','localtime'))""",
+                (dept_id, session_id)
             )
-            await db.commit()
-            agent_id = cursor.lastrowid
 
-            # Update onboarding_progress
+            # Update onboarding progress
             now = datetime.now().isoformat()
             await db.execute(
-                """
-                UPDATE user_onboarding_progress
-                SET current_step = 3, completed_at = datetime('now','localtime'),
+                """UPDATE user_onboarding_progress
+                SET current_step = 3, dept_id = ?, completed_at = datetime('now','localtime'),
                     updated_at = datetime('now','localtime')
-                WHERE onboarding_id = ?
-                """,
-                (req.onboarding_id,)
+                WHERE onboarding_id = ?""",
+                (str(dept_id), req.onboarding_id)
             )
 
-            # Update user
+            # Mark user onboarding as completed
             await db.execute(
                 "UPDATE users SET onboarding_completed = 1 WHERE id = ?",
                 (user_id,)
@@ -11006,6 +11005,21 @@ from jinja2 import Environment, FileSystemLoader
 
 template_dir = DASHBOARD_DIR / "templates"
 jinja_env = Environment(loader=FileSystemLoader(str(template_dir)))
+
+
+def _jinja_url_for(name: str, **values) -> str:
+    if name == "static":
+        filename = values.get("filename", "")
+        if filename.startswith("css/"):
+            return "/styles/" + filename[4:]
+        if filename.startswith("js/"):
+            return "/js/" + filename[3:]
+        return "/static/" + filename
+    return "/"
+
+
+jinja_env.globals["url_for"] = _jinja_url_for
+jinja_env.globals["get_flashed_messages"] = lambda with_categories=False: []
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

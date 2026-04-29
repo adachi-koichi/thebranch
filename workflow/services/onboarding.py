@@ -35,41 +35,41 @@ class OnboardingService:
         Returns:
             TemplateSuggestion 형태의 제안 목록 (최소 2개)
         """
-        prompt = """당신은 조직 구조 설계 전문가입니다. 사용자의 비전을 분석하여 가장 적합한 부서 템플릿을 제안해주세요.
+        prompt = """あなたは組織設計の専門家です。ユーザーのビジョンを分析し、最適な部署テンプレートを提案してください。
 
-사용자 비전:
+ユーザーのビジョン:
 "{vision_input}"
 
-다음 부서 템플릿 중에서 비전과 가장 잘 맞는 2-3개를 선택하고, 각각에 대해:
-1. template_id: 1-10 범위의 정수
-2. name: 부서명
-3. category: 부서 카테고리
-4. total_roles: 역할 수
-5. total_processes: 프로세스 수
-6. reason: 이 템플릿을 선택한 이유 (50-100자)
-7. rank: 적합도 순위 (1=가장 적합, 2=중간, 3=대안)
+以下の部署テンプレートカタログから、ビジョンに最も合致する2〜3個を選択し、それぞれについて:
+1. template_id: 1〜10の整数
+2. name: 部署名
+3. category: 部署カテゴリ
+4. total_roles: 役割数
+5. total_processes: プロセス数
+6. reason: このテンプレートを選んだ理由（50〜100文字）
+7. rank: 適合度ランク（1=最適、2=中位、3=代替）
 
-부서 템플릿 카탈로그:
-- ID 1: 마케팅 (Marketing) - 4개 역할, 6개 프로세스
-- ID 2: 영업 (Sales) - 5개 역할, 7개 프로세스
-- ID 3: 엔지니어링 (Engineering) - 6개 역할, 8개 프로세스
-- ID 4: 재무 (Finance) - 4개 역할, 5개 프로세스
-- ID 5: 운영 (Operations) - 5개 역할, 6개 프로세스
-- ID 6: 고객 지원 (Support) - 4개 역할, 6개 프로세스
-- ID 7: 인사 (HR) - 4개 역할, 5개 프로세스
-- ID 8: 법무 (Legal) - 3개 역할, 4개 프로세스
-- ID 9: 제품 (Product) - 5개 역할, 6개 프로세스
-- ID 10: 데이터 분석 (Analytics) - 4개 역할, 5개 프로세스
+部署テンプレートカタログ:
+- ID 1: マーケティング (Marketing) - 4役割、6プロセス
+- ID 2: 営業 (Sales) - 5役割、7プロセス
+- ID 3: エンジニアリング (Engineering) - 6役割、8プロセス
+- ID 4: 財務 (Finance) - 4役割、5プロセス
+- ID 5: オペレーション (Operations) - 5役割、6プロセス
+- ID 6: カスタマーサポート (Support) - 4役割、6プロセス
+- ID 7: 人事 (HR) - 4役割、5プロセス
+- ID 8: 法務 (Legal) - 3役割、4プロセス
+- ID 9: プロダクト (Product) - 5役割、6プロセス
+- ID 10: データ分析 (Analytics) - 4役割、5プロセス
 
-JSON 형식으로 응답하세요:
+JSON形式で回答してください:
 [
   {{
     "template_id": 1,
-    "name": "부서명",
-    "category": "카테고리",
+    "name": "部署名",
+    "category": "カテゴリ",
     "total_roles": 4,
     "total_processes": 6,
-    "reason": "선택 이유",
+    "reason": "選択理由",
     "rank": 1
   }}
 ]
@@ -128,31 +128,31 @@ JSON 형식으로 응답하세요:
         Returns:
             InitialTask 형태의 작업 목록 (3-5개)
         """
-        prompt = """당신은 부서 목표 달성을 위한 작업 계획 전문가입니다. 주어진 정보를 기반으로 초기 작업을 생성해주세요.
+        prompt = """あなたは部署目標達成のためのタスク計画専門家です。以下の情報をもとに初期タスクを生成してください。
 
-부서 정보:
-- 부서명: {dept_name}
+部署情報:
+- 部署名: {dept_name}
 - KPI: {kpi}
-- 월 예산: ${budget}
-- 팀원 수: {members_count}명
+- 月次予算: ${budget}
+- チームメンバー数: {members_count}名
 
-다음 요구사항을 만족하는 3-5개의 초기 작업을 생성하세요:
-1. task_id: "task_001" 형식
-2. title: 작업 제목 (30자 이내)
-3. description: 작업 설명 (50-100자)
-4. budget: 작업 예산 (USD, 전체 예산의 합 ≤ {budget})
-5. deadline: 기한 (YYYY-MM-DD 형식, 30일 이내)
-6. assigned_to: 담당자 역할
+以下の要件を満たす3〜5個の初期タスクを生成してください:
+1. task_id: "task_001" 形式
+2. title: タスクタイトル（30文字以内）
+3. description: タスク説明（50〜100文字）
+4. budget: タスク予算（USD、合計が{budget}以下）
+5. deadline: 期限（YYYY-MM-DD形式、30日以内）
+6. assigned_to: 担当者の役割（日本語）
 
-JSON 형식으로 응답하세요:
+JSON形式で回答してください:
 [
   {{
     "task_id": "task_001",
-    "title": "작업 제목",
-    "description": "작업 설명",
+    "title": "タスクタイトル",
+    "description": "タスク説明",
     "budget": 1000.0,
-    "deadline": "2026-05-15",
-    "assigned_to": "Manager"
+    "deadline": "2026-05-30",
+    "assigned_to": "マネージャー"
   }}
 ]
 """.format(dept_name=dept_name, kpi=kpi, budget=budget, members_count=members_count)

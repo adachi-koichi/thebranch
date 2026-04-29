@@ -668,7 +668,8 @@ class InitialTask(BaseModel):
 
 class ExecuteRequest(BaseModel):
     onboarding_id: str
-    dept_id: int
+    template_id: Optional[int] = None
+    dept_name: Optional[str] = None
 
 
 class ExecuteResponse(BaseModel):

@@ -1,26 +1,33 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="/">
-            <i class="fas fa-project-diagram"></i> THEBRANCH
+            <i class="fas fa-project-diagram"></i> <span data-i18n="brand.name">THEBRANCH</span>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto">
+            <ul class="navbar-nav ms-auto align-items-center">
                 <li class="nav-item">
-                    <a class="nav-link" href="/dashboard">ダッシュボード</a>
+                    <a class="nav-link" href="/dashboard" data-i18n="nav.dashboard">ダッシュボード</a>
                 </li>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
-                        アカウント
+                        <span data-i18n="nav.account">アカウント</span>
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
-                        <li><a class="dropdown-item" href="/profile">プロフィール</a></li>
-                        <li><a class="dropdown-item" href="/settings">設定</a></li>
+                        <li><a class="dropdown-item" href="/profile" data-i18n="nav.profile">プロフィール</a></li>
+                        <li><a class="dropdown-item" href="/settings" data-i18n="nav.settings">設定</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="/logout">ログアウト</a></li>
+                        <li><a class="dropdown-item" href="/logout" data-i18n="nav.logout">ログアウト</a></li>
                     </ul>
+                </li>
+                <li class="nav-item ms-2">
+                    <button id="lang-toggle-btn" class="btn btn-outline-light btn-sm"
+                            onclick="window.i18n && window.i18n.toggleLang()"
+                            aria-label="Switch language" title="Switch language">
+                        <span data-i18n="nav.lang_toggle">EN</span>
+                    </button>
                 </li>
             </ul>
         </div>
