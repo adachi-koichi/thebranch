@@ -98,6 +98,13 @@ async def page_marketplace_spa():
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
+# ── Task #2545: ワークフロー自動化ビジュアルエディタ
+@app.get("/workflow-editor", response_class=HTMLResponse)
+async def page_workflow_editor():
+    html_path = DASHBOARD_DIR / "templates" / "pages" / "workflow-editor.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
 app.include_router(autogen_routes.router)
 app.include_router(blueprints.router)
 app.include_router(manage_routes.router)
