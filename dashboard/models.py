@@ -633,7 +633,7 @@ class SuggestResponse(BaseModel):
 
 class DetailedSetupRequest(BaseModel):
     onboarding_id: str
-    template_id: int
+    template_id: Optional[int] = None
     dept_name: str
     manager_name: str
     members_count: int
@@ -661,7 +661,7 @@ class InitialTask(BaseModel):
     task_id: str
     title: str
     description: str
-    budget: int
+    budget: float
     deadline: str
     assigned_to: str
 

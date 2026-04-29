@@ -6566,12 +6566,16 @@ user: dict = Depends(get_current_user_zero_trust)):
 
             # Create department
             import re
-            slug = re.sub(r'[^a-z0-9-]', '-', dept_name.lower().replace(' ', '-'))
-            slug = re.sub(r'-+', '-', slug).strip('-') or 'new-dept'
+            import uuid as _uuid
+            unique_suffix = str(_uuid.uuid4())[:8]
+            slug_base = re.sub(r'[^a-z0-9-]', '-', dept_name.lower().replace(' ', '-'))
+            slug_base = re.sub(r'-+', '-', slug_base).strip('-') or 'dept'
+            slug = f"{slug_base}-{unique_suffix}"
+            dept_name_unique = f"{dept_name}-{unique_suffix}"
             cursor = await db.execute(
                 """INSERT INTO departments (name, slug, description, status, created_by, created_at, updated_at)
                    VALUES (?, ?, ?, 'active', ?, datetime('now','localtime'), datetime('now','localtime'))""",
-                (dept_name, slug, f"{dept_name}（AI部署）", str(user_id))
+                (dept_name_unique, slug, f"{dept_name}（AI部署）", str(user_id))
             )
             await db.commit()
             dept_id = cursor.lastrowid
@@ -6610,7 +6614,7 @@ user: dict = Depends(get_current_user_zero_trust)):
             await db.execute(
                 """INSERT INTO agents
                 (department_id, session_id, role, status, created_at, updated_at)
-                VALUES (?, ?, 'coordinator', 'activating', datetime('now','localtime'), datetime('now','localtime'))""",
+                VALUES (?, ?, 'coordinator', 'starting', datetime('now','localtime'), datetime('now','localtime'))""",
                 (dept_id, session_id)
             )
 
