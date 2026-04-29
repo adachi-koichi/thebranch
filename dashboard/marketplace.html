@@ -416,12 +416,12 @@
             <label class="category-label">カテゴリー</label>
             <div class="category-tabs">
                 <button class="category-tab active" data-category="all">すべて</button>
-                <button class="category-tab" data-category="hr">人事</button>
-                <button class="category-tab" data-category="finance">経理</button>
-                <button class="category-tab" data-category="legal">法務</button>
-                <button class="category-tab" data-category="sales">営業</button>
-                <button class="category-tab" data-category="marketing">マーケティング</button>
-                <button class="category-tab" data-category="development">開発</button>
+                <button class="category-tab" data-category="cat-001">人事</button>
+                <button class="category-tab" data-category="cat-002">経理</button>
+                <button class="category-tab" data-category="cat-007">法務</button>
+                <button class="category-tab" data-category="cat-004">営業</button>
+                <button class="category-tab" data-category="cat-003">マーケティング</button>
+                <button class="category-tab" data-category="cat-005">開発</button>
             </div>
         </div>
 
@@ -449,18 +449,21 @@
         let filteredTemplates = [];
 
         const CATEGORY_MAP = {
-            'hr': '人事',
-            'finance': '経理',
-            'legal': '法務',
-            'sales': '営業',
-            'marketing': 'マーケティング',
-            'development': '開発',
-            'back-office': 'バックオフィス'
+            'cat-001': '人事',
+            'cat-002': '経理',
+            'cat-003': 'マーケティング',
+            'cat-004': '営業',
+            'cat-005': '開発',
+            'cat-006': 'サポート',
+            'cat-007': '法務',
+            'cat-008': 'オペレーション',
+            'cat-009': '分析',
+            'cat-010': 'コミュニケーション'
         };
 
         const SORT_OPTIONS = {
-            'newest': (a, b) => b.id - a.id,
-            'popular': (a, b) => (b.total_tasks || 0) - (a.total_tasks || 0),
+            'newest': (a, b) => new Date(b.id || 0) - new Date(a.id || 0),
+            'popular': (a, b) => (b.usage_count || 0) - (a.usage_count || 0),
             'rating': (a, b) => (b.rating || 0) - (a.rating || 0)
         };
 
@@ -501,23 +504,26 @@
         // ============================================================
         async function loadTemplates() {
             try {
-                const response = await fetch('/api/department-templates');
-                if (!response.ok) throw new Error('Failed to load templates');
+                const response = await fetch('/api/marketplace/agents?page=1&per_page=100');
+                if (!response.ok) throw new Error('Failed to load agents');
 
-                allTemplates = await response.json();
-
-                // Add mock ratings and usage counts for demonstration
-                allTemplates = allTemplates.map(template => ({
-                    ...template,
-                    rating: (Math.random() * 2 + 3).toFixed(1), // 3.0 - 5.0
-                    usage_count: Math.floor(Math.random() * 150) + 10
+                const data = await response.json();
+                allTemplates = data.items.map(agent => ({
+                    id: agent.id,
+                    name: agent.name,
+                    description: agent.description,
+                    category: agent.category_id,
+                    rating: agent.rating || 0,
+                    usage_count: agent.installation_count || 0,
+                    total_roles: 0,
+                    total_processes: 0
                 }));
 
                 filteredTemplates = [...allTemplates];
             } catch (error) {
-                console.error('Error loading templates:', error);
+                console.error('Error loading agents:', error);
                 document.getElementById('templatesGrid').innerHTML =
-                    '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h3>テンプレートの読み込みに失敗しました</h3><p>もう一度ページを読み込んでください</p></div>';
+                    '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h3>エージェントの読み込みに失敗しました</h3><p>もう一度ページを読み込んでください</p></div>';
             }
         }
 
