@@ -4988,23 +4988,52 @@
       tree.innerHTML = sessions.map(renderSession).join('');
     }
 
+    let dvConnection = { type: 'none' };
+
+    function handleDvMessage(data) {
+      if (data.type !== 'integrated_update') return;
+      updateSummary(data.summary || {});
+      updateTree(data.sessions || []);
+      const el = document.getElementById('dv-last-updated');
+      if (el) el.textContent = '最終更新: ' + new Date(data.ts).toLocaleTimeString('ja-JP');
+    }
+
+    function startDvSse() {
+      const es = new EventSource('/sse/integrated');
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          handleDvMessage(data);
+        } catch(_) {}
+      };
+      es.onerror = () => {
+        es.close();
+        const tree = document.getElementById(TREE_ID);
+        if (tree) tree.innerHTML = '<p class="dv-loading">接続エラー。再接続中...</p>';
+        setTimeout(startDvSse, 5000);
+      };
+      dvConnection = { type: 'sse', es };
+    }
+
     function startDvWs() {
       const ws = new WebSocket(`ws://${location.host}/ws/integrated`);
       ws.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
-          if (data.type !== 'integrated_update') return;
-          updateSummary(data.summary || {});
-          updateTree(data.sessions || []);
-          const el = document.getElementById('dv-last-updated');
-          if (el) el.textContent = '最終更新: ' + new Date(data.ts).toLocaleTimeString('ja-JP');
+          handleDvMessage(data);
         } catch(_) {}
       };
       ws.onerror = () => {
         const tree = document.getElementById(TREE_ID);
-        if (tree) tree.innerHTML = '<p class="dv-loading">接続エラー。再接続中...</p>';
+        if (tree) tree.innerHTML = '<p class="dv-loading">WebSocket 接続失敗。SSE で再接続中...</p>';
+        setTimeout(startDvSse, 1000);
       };
-      ws.onclose = () => { setTimeout(startDvWs, 5000); };
+      ws.onclose = () => {
+        if (dvConnection.type === 'ws') {
+          setTimeout(startDvWs, 5000);
+        }
+      };
+      dvConnection = { type: 'ws', ws };
     }
 
     if (document.readyState === 'loading') {

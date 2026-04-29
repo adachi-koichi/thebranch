@@ -2184,6 +2184,31 @@ async def websocket_integrated(websocket: WebSocket):
         pass
 
 
+async def _sse_integrated_generator():
+    """SSE フォールバック用イベントジェネレーター"""
+    last_snapshot: str | None = None
+    while True:
+        try:
+            payload = await _build_integrated_payload()
+            snapshot = json.dumps(payload["sessions"], ensure_ascii=False, sort_keys=True)
+            if snapshot != last_snapshot:
+                yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                last_snapshot = snapshot
+            await asyncio.sleep(3)
+        except Exception:
+            await asyncio.sleep(1)
+
+
+@app.get("/sse/integrated")
+async def sse_integrated(user: dict = Depends(get_current_user_zero_trust)):
+    """WebSocket 不対応ブラウザ用 SSE フォールバック。部署稼働ビュー統合データを3秒ごとに配信"""
+    return StreamingResponse(
+        _sse_integrated_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 # ──────────────────────────────────────────────
 # Costs
 # ──────────────────────────────────────────────
