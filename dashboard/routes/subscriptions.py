@@ -136,7 +136,7 @@ async def get_current_subscription(user_id: str = Depends(get_current_user)):
                 """
                 SELECT us.id, us.user_id, us.plan_code, us.status,
                        us.current_period_start, us.current_period_end,
-                       us.cancelled_at, us.created_at, us.updated_at
+                       us.canceled_at, us.created_at, us.updated_at
                 FROM user_subscriptions us
                 WHERE us.user_id = ? AND us.status IN ('active', 'trialing')
                 LIMIT 1
@@ -166,7 +166,7 @@ async def get_current_subscription(user_id: str = Depends(get_current_user)):
                     """
                     SELECT id, user_id, plan_code, status,
                            current_period_start, current_period_end,
-                           cancelled_at, created_at, updated_at
+                           canceled_at, created_at, updated_at
                     FROM user_subscriptions
                     WHERE user_id = ? AND plan_code = 'free'
                     LIMIT 1
@@ -185,7 +185,7 @@ async def get_current_subscription(user_id: str = Depends(get_current_user)):
             status=sub_row["status"],
             current_period_start=sub_row["current_period_start"],
             current_period_end=sub_row["current_period_end"],
-            canceled_at=sub_row["cancelled_at"],
+            canceled_at=sub_row["canceled_at"],
             created_at=sub_row["created_at"],
             updated_at=sub_row["updated_at"],
         )
@@ -270,7 +270,7 @@ async def change_subscription_plan(
                 """
                 SELECT id, user_id, plan_code, status,
                        current_period_start, current_period_end,
-                       cancelled_at, created_at, updated_at
+                       canceled_at, created_at, updated_at
                 FROM user_subscriptions
                 WHERE id = ?
                 """,
@@ -285,7 +285,7 @@ async def change_subscription_plan(
                 status=updated_sub["status"],
                 current_period_start=updated_sub["current_period_start"],
                 current_period_end=updated_sub["current_period_end"],
-                canceled_at=updated_sub["cancelled_at"],
+                canceled_at=updated_sub["canceled_at"],
                 created_at=updated_sub["created_at"],
                 updated_at=updated_sub["updated_at"],
             )

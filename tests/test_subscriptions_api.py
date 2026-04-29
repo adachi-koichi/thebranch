@@ -39,8 +39,8 @@ async def setup_test_user():
 
         await db.execute(
             """
-            INSERT OR IGNORE INTO subscriptions
-            (id, user_id, plan, status, current_period_start, current_period_end, created_at, updated_at)
+            INSERT OR IGNORE INTO user_subscriptions
+            (id, user_id, plan_code, status, current_period_start, current_period_end, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
@@ -60,7 +60,7 @@ async def setup_test_user():
 
     # クリーンアップ
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:
-        await db.execute("DELETE FROM subscriptions WHERE user_id = ?", (test_user_id,))
+        await db.execute("DELETE FROM user_subscriptions WHERE user_id = ?", (test_user_id,))
         await db.execute("DELETE FROM users WHERE id = ?", (test_user_id,))
         await db.commit()
 
