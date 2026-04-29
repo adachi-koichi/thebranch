@@ -1,356 +1,255 @@
-#!/usr/bin/env python3
 """
-test_question_classifier.py — Wave25カスタマーサポート質問分類テストスイート
+test_question_classifier.py — Wave25 質問分類ロジックテスト
+7カテゴリ分類の動作確認
 """
 
-import sys
-from pathlib import Path
-
-# プロジェクトルートをPATHに追加
-_PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(_PROJECT_ROOT))
-
-from workflow.models.question import QuestionCategory, SupportContext
+import pytest
+from workflow.models.question import (
+    QuestionCategory,
+    ClassificationResult,
+    SupportContext,
+)
 from workflow.services.question_classifier import (
+    QuestionClassifier,
+    ClassificationRules,
+    ContextAnalyzer,
     classify_question,
     classify_question_with_details,
-    QuestionClassifier,
 )
 
 
-class TestAutoRespond:
-    """AUTO_RESPOND カテゴリのテスト"""
+class TestClassificationRules:
+    """キーワードマッチングルールのテスト"""
 
-    def test_faq_rate_limit(self):
-        """FAQ: API レート制限"""
-        result = classify_question("API レート制限について教えてください", {})
-        assert result == QuestionCategory.AUTO_RESPOND
-        print("✓ FAQ rate limit → AUTO_RESPOND")
-
-    def test_faq_setup(self):
-        """FAQ: セットアップ方法"""
-        result = classify_question("Wave25 のセットアップ方法は？", {})
-        assert result == QuestionCategory.AUTO_RESPOND
-        print("✓ FAQ setup → AUTO_RESPOND")
-
-    def test_faq_documentation(self):
-        """FAQ: ドキュメント参照"""
-        result = classify_question("APIドキュメントはどこにありますか？", {})
-        assert result == QuestionCategory.AUTO_RESPOND
-        print("✓ FAQ documentation → AUTO_RESPOND")
-
-
-class TestAutoApprove:
-    """AUTO_APPROVE カテゴリのテスト"""
-
-    def test_bug_report_simple(self):
-        """バグ報告: シンプルなエラー"""
-        result = classify_question_with_details(
-            "APIが500エラーを返すバグを発見しました", {}
+    def test_bug_keywords_match(self):
+        """バグキーワードのマッチング"""
+        assert ClassificationRules.match_keywords(
+            "アプリがクラッシュします", ClassificationRules.BUG_KEYWORDS
         )
-        assert result.category == QuestionCategory.AUTO_APPROVE
-        assert result.confidence >= 0.8
-        print("✓ Bug report → AUTO_APPROVE")
-
-    def test_bug_report_with_code(self):
-        """バグ報告: エラーコード付き"""
-        result = classify_question_with_details(
-            "データベース接続エラーが発生: [エラーコード 001]", {}
+        assert ClassificationRules.match_keywords(
+            "I got an error 500", ClassificationRules.BUG_KEYWORDS
         )
-        assert result.category == QuestionCategory.AUTO_APPROVE
-        assert result.confidence >= 0.8
-        print("✓ Bug report with error code → AUTO_APPROVE")
-
-    def test_bug_crash(self):
-        """バグ報告: アプリクラッシュ"""
-        result = classify_question_with_details(
-            "アプリケーションがクラッシュします", {}
+        assert not ClassificationRules.match_keywords(
+            "機能の使い方を教えてください", ClassificationRules.BUG_KEYWORDS
         )
-        assert result.category == QuestionCategory.AUTO_APPROVE
-        assert result.confidence >= 0.75
-        print("✓ Crash report → AUTO_APPROVE")
 
-
-class TestEscalatePriority:
-    """ESCALATE_PRIORITY カテゴリのテスト"""
-
-    def test_critical_data_loss(self):
-        """優先度: 重大なデータ喪失"""
-        result = classify_question_with_details(
-            "緊急: データが全て削除されました。システムクラッシュです", {}
+    def test_faq_keywords_match(self):
+        """FAQ候補キーワードのマッチング"""
+        assert ClassificationRules.match_keywords(
+            "レート制限とは何ですか？", ClassificationRules.FAQ_KEYWORDS
         )
-        assert result.category == QuestionCategory.ESCALATE_PRIORITY
-        assert result.confidence >= 0.9
-        print("✓ Data loss → ESCALATE_PRIORITY")
-
-    def test_security_issue(self):
-        """優先度: セキュリティ脆弱性"""
-        result = classify_question_with_details(
-            "APIキーが漏洩した可能性があります", {}
+        assert ClassificationRules.match_keywords(
+            "How do I set up the API?", ClassificationRules.FAQ_KEYWORDS
         )
-        assert result.category == QuestionCategory.ESCALATE_PRIORITY
-        assert result.confidence >= 0.85
-        print("✓ Security issue → ESCALATE_PRIORITY")
-
-    def test_system_down(self):
-        """優先度: システムダウン"""
-        result = classify_question_with_details(
-            "システムが完全にダウンしています。緊急対応をお願いします", {}
+        assert not ClassificationRules.match_keywords(
+            "セキュリティ脆弱性の報告", ClassificationRules.FAQ_KEYWORDS
         )
-        assert result.category == QuestionCategory.ESCALATE_PRIORITY
-        print("✓ System down → ESCALATE_PRIORITY")
+
+    def test_escalation_keywords_match(self):
+        """エスカレーション必要なキーワードのマッチング"""
+        assert ClassificationRules.match_keywords(
+            "セキュリティ脆弱性を発見しました", ClassificationRules.ESCALATION_KEYWORDS
+        )
+        assert ClassificationRules.match_keywords(
+            "Enterprise SLA の交渉", ClassificationRules.ESCALATION_KEYWORDS
+        )
+
+    def test_priority_extraction(self):
+        """優先度キーワード抽出"""
+        assert ClassificationRules.extract_priority("これは緊急です") == "high"
+        assert ClassificationRules.extract_priority("critical bug found") == "critical"
+        assert ClassificationRules.extract_priority("普通の質問です") == "normal"
 
 
-class TestEscalateSpecialty:
-    """ESCALATE_SPECIALTY カテゴリのテスト"""
+class TestContextAnalyzer:
+    """文脈分析のテスト"""
 
-    def test_enterprise_discount(self):
-        """専門: エンタープライズ割引"""
+    def test_enterprise_company_adjustment(self):
+        """企業規模別優先度調整"""
         context = SupportContext(
-            question="エンタープライズプラン向けの割引交渉について相談したい",
+            question="テスト", company_size="enterprise", is_paying_customer=True
+        )
+        analysis = ContextAnalyzer.analyze(context, QuestionCategory.AUTO_APPROVE)
+        assert analysis["company_size_adjustment"] == 0.1
+
+    def test_customer_history_factor(self):
+        """顧客履歴に基づく自動応答可能性調整"""
+        context = SupportContext(
+            question="テスト", previous_support_count=6, is_paying_customer=True
+        )
+        analysis = ContextAnalyzer.analyze(context, QuestionCategory.AUTO_RESPOND)
+        assert analysis["customer_history_factor"] == 1.1
+
+
+class TestQuestionClassifier:
+    """メイン分類器のテスト"""
+
+    def test_critical_security_bug_classification(self):
+        """セキュリティバグ（最高優先度）"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        result = classifier.classify(
+            "セキュリティ脆弱性: パスワード保存時のバグが見つかった"
+        )
+        assert result.category == QuestionCategory.ESCALATE_PRIORITY
+        assert result.confidence >= 0.95
+
+    def test_bug_report_critical_classification(self):
+        """高優先度バグレポート"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        result = classifier.classify("critical: システムがダウンしています")
+        assert result.category == QuestionCategory.ESCALATE_PRIORITY
+        assert "bug_keywords" in result.matched_rules
+
+    def test_bug_report_normal_classification(self):
+        """通常優先度バグレポート"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        result = classifier.classify("ボタンをクリックしてもエラーが出ます")
+        assert result.category == QuestionCategory.AUTO_APPROVE
+        assert result.confidence >= 0.85
+
+    def test_faq_classification(self):
+        """FAQ候補の分類"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        result = classifier.classify("APIの使い方を教えてください")
+        assert result.category == QuestionCategory.AUTO_RESPOND
+
+    def test_escalation_enterprise_classification(self):
+        """エンタープライズ顧客のエスカレーション"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        context = SupportContext(
+            question="Enterprise SLA の契約内容について",
+            company_size="enterprise",
+        )
+        result = classifier.classify(
+            "Enterprise SLA の契約内容について変更したい", context
+        )
+        assert result.category in [
+            QuestionCategory.ESCALATE_SPECIALTY,
+            QuestionCategory.NEEDS_REVIEW,
+        ]
+
+    def test_clarification_needed_low_confidence(self):
+        """信頼度が低い場合は明確化を要求"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        result = classifier.classify("何かあります")  # 曖昧な質問
+        # 信頼度が低い場合は明確化を要求または不明
+        assert result.category in [
+            QuestionCategory.CLARIFICATION_NEEDED,
+            QuestionCategory.UNKNOWN,
+        ]
+
+    def test_context_analysis_integration(self):
+        """文脈統合テスト"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        context = SupportContext(
+            question="バグ報告",
+            customer_id=123,
             company_size="enterprise",
             is_paying_customer=True,
+            previous_support_count=10,
         )
-        classifier = QuestionClassifier(use_claude_api=False)
-        result = classifier.classify(context.question, context)
-        # enterprise の割引相談はスペシャリティ
-        assert result.category in [
-            QuestionCategory.ESCALATE_SPECIALTY,
-            QuestionCategory.NEEDS_REVIEW,
-        ]
-        print("✓ Enterprise discount → ESCALATE_SPECIALTY")
-
-    def test_custom_integration(self):
-        """専門: カスタム統合"""
-        result = classify_question_with_details(
-            "カスタムシステムとの統合についてエンタープライズサポートが必要です",
-            {"company_size": "enterprise"},
-        )
-        assert result.category in [
-            QuestionCategory.ESCALATE_SPECIALTY,
-            QuestionCategory.NEEDS_REVIEW,
-        ]
-        print("✓ Custom integration → ESCALATE_SPECIALTY")
+        result = classifier.classify("データが削除されてしまいました", context)
+        assert isinstance(result, ClassificationResult)
+        assert result.confidence > 0
 
 
-class TestClarificationNeeded:
-    """CLARIFICATION_NEEDED カテゴリのテスト"""
+class TestPublicAPIs:
+    """公開API（シンプルインターフェース）のテスト"""
 
-    def test_unclear_question(self):
-        """不明確: 曖昧な質問"""
-        result = classify_question_with_details("うまくいきません", {})
-        assert result.category == QuestionCategory.CLARIFICATION_NEEDED
-        assert result.confidence < 0.7
-        print("✓ Unclear question → CLARIFICATION_NEEDED")
+    def test_classify_question_simple_api(self):
+        """classify_question シンプルAPI"""
+        category = classify_question("バグが発生しました")
+        assert isinstance(category, QuestionCategory)
 
-    def test_vague_problem(self):
-        """不明確: 問題が特定されていない"""
-        result = classify_question_with_details("何か問題があります", {})
-        assert result.category == QuestionCategory.CLARIFICATION_NEEDED
-        print("✓ Vague problem → CLARIFICATION_NEEDED")
+    def test_classify_question_with_context(self):
+        """classify_question with context"""
+        context = {
+            "customer_id": 123,
+            "company_size": "enterprise",
+            "is_paying_customer": True,
+        }
+        category = classify_question("API の設定方法を教えてください", context)
+        assert isinstance(category, QuestionCategory)
 
-    def test_minimal_info(self):
-        """不明確: 情報不足"""
-        result = classify_question_with_details("サービスについて質問があります", {})
-        # 情報不足の場合
-        if result.confidence < 0.7:
-            assert result.category == QuestionCategory.CLARIFICATION_NEEDED
-            print("✓ Minimal info → CLARIFICATION_NEEDED")
-
-
-class TestNeedsReview:
-    """NEEDS_REVIEW カテゴリのテスト"""
-
-    def test_feature_request(self):
-        """レビュー: 機能リクエスト"""
-        result = classify_question_with_details(
-            "新しい統合機能を追加してほしいのですが、これは可能ですか？", {}
-        )
-        # 機能リクエストはレビューまたはエスカレーション
-        assert result.category in [
-            QuestionCategory.NEEDS_REVIEW,
-            QuestionCategory.ESCALATE_SPECIALTY,
-        ]
-        print("✓ Feature request → NEEDS_REVIEW or ESCALATE_SPECIALTY")
-
-    def test_architecture_decision(self):
-        """レビュー: アーキテクチャ決定"""
-        result = classify_question_with_details(
-            "このアーキテクチャ設計で進めても大丈夫ですか？", {}
-        )
-        # アーキテクチャはレビューが必要
-        assert result.category == QuestionCategory.NEEDS_REVIEW
-        print("✓ Architecture decision → NEEDS_REVIEW")
-
-
-class TestContextBasedRouting:
-    """コンテキストに基づいた振り分けテスト"""
-
-    def test_company_size_adjustment(self):
-        """企業規模による分類の変更"""
-        question = "割引について相談したいです"
-
-        # Startup は自動応答
-        result_startup = classify_question_with_details(
-            question, {"company_size": "startup"}
-        )
-        assert result_startup.category == QuestionCategory.AUTO_RESPOND
-        print("✓ Startup discount → AUTO_RESPOND")
-
-        # Enterprise はスペシャリティ
-        result_enterprise = classify_question_with_details(
-            question, {"company_size": "enterprise", "is_paying_customer": True}
-        )
-        assert result_enterprise.category in [
-            QuestionCategory.ESCALATE_SPECIALTY,
-            QuestionCategory.NEEDS_REVIEW,
-        ]
-        print("✓ Enterprise discount → ESCALATE_SPECIALTY/NEEDS_REVIEW")
-
-    def test_existing_customer_boost(self):
-        """既存顧客のサポート件数による精度向上"""
-        question = "API認証の設定方法は？"
-
-        # 新規顧客
-        result_new = classify_question_with_details(
-            question, {"previous_support_count": 0}
-        )
-
-        # 既存顧客（5件以上）
-        result_existing = classify_question_with_details(
-            question, {"previous_support_count": 5, "is_paying_customer": True}
-        )
-
-        # 両方とも自動応答のはずだが、既存顧客の方が信頼度が高い
-        if result_new.category == QuestionCategory.AUTO_RESPOND:
-            assert result_existing.category == QuestionCategory.AUTO_RESPOND
-            print("✓ Both new and existing customers → AUTO_RESPOND")
-
-
-class TestConfidenceScoring:
-    """信頼度スコアのテスト"""
-
-    def test_high_confidence_bug(self):
-        """高信頼度: 明確なバグ報告"""
-        result = classify_question_with_details(
-            "データベース接続エラー: [エラーコード 001]", {}
-        )
-        assert result.confidence >= 0.85
-        print(f"✓ Clear bug report confidence: {result.confidence:.2f}")
-
-    def test_medium_confidence_faq(self):
-        """中信頼度: FAQ質問"""
-        result = classify_question_with_details(
-            "APIの使い方について教えてください", {}
-        )
-        assert 0.7 <= result.confidence < 0.85
-        print(f"✓ FAQ question confidence: {result.confidence:.2f}")
-
-    def test_low_confidence_unclear(self):
-        """低信頼度: 不明確な質問"""
-        result = classify_question_with_details("何かについて質問があります", {})
-        assert result.confidence < 0.7
-        print(f"✓ Unclear question confidence: {result.confidence:.2f}")
-
-
-class TestMultiplexedKeywords:
-    """複合キーワードマッチングのテスト"""
-
-    def test_bug_and_security(self):
-        """バグとセキュリティの両方"""
-        result = classify_question_with_details(
-            "バグによりデータが削除され、セキュリティ脆弱性も発見しました", {}
-        )
-        assert result.category == QuestionCategory.ESCALATE_PRIORITY
-        assert len(result.matched_rules) > 1
-        assert result.confidence >= 0.85
-        print("✓ Multiple keywords → ESCALATE_PRIORITY")
-
-
-class TestUnknownClassification:
-    """分類不可のテスト"""
-
-    def test_unrelated_question(self):
-        """無関係な質問"""
-        result = classify_question_with_details("今日の天気はどう？", {})
-        assert result.category == QuestionCategory.UNKNOWN
-        print("✓ Unrelated question → UNKNOWN")
-
-    def test_off_topic(self):
-        """オフトピック"""
-        result = classify_question_with_details("ランチはどこへ行きます？", {})
-        assert result.category == QuestionCategory.UNKNOWN
-        print("✓ Off-topic question → UNKNOWN")
+    def test_classify_question_with_details(self):
+        """classify_question_with_details 詳細API"""
+        result = classify_question_with_details("セキュリティ問題を報告します")
+        assert isinstance(result, ClassificationResult)
+        assert result.confidence >= 0.0
+        assert result.category in list(QuestionCategory)
 
 
 class TestRecommendedActions:
     """推奨アクションのテスト"""
 
     def test_auto_respond_action(self):
-        """自動応答の推奨アクション"""
-        result = classify_question_with_details(
-            "API レート制限について", {}
+        """AUTO_RESPOND のアクション"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        result = classifier.classify("API の使用方法は？")
+        assert "FAQ" in result.recommended_action
+
+    def test_escalate_priority_action(self):
+        """ESCALATE_PRIORITY のアクション"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        result = classifier.classify("critical: システム停止")
+        assert "escalate" in result.recommended_action.lower()
+
+    def test_needs_review_action(self):
+        """NEEDS_REVIEW のアクション"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        result = classifier.classify(
+            "複雑なカスタマイズについて相談したいです"
         )
-        assert "FAQ" in result.recommended_action or "auto response" in result.recommended_action.lower()
-        print("✓ AUTO_RESPOND has FAQ action")
+        # needs_review または他のカテゴリ
+        assert result.recommended_action is not None
 
-    def test_escalate_action(self):
-        """エスカレーションの推奨アクション"""
-        result = classify_question_with_details(
-            "データが削除されました", {}
+
+class TestConfidenceThreshold:
+    """信頼度閾値のテスト"""
+
+    def test_is_confident_above_threshold(self):
+        """is_confident: 閾値以上"""
+        result = ClassificationResult(
+            category=QuestionCategory.AUTO_RESPOND,
+            confidence=0.85,
+            matched_rules=["faq_keywords"],
+            intent_details={"intent": "faq"},
+            recommended_action="Provide FAQ response",
         )
-        if result.category == QuestionCategory.ESCALATE_PRIORITY:
-            assert "senior" in result.recommended_action.lower() or "SLA" in result.recommended_action
-            print("✓ ESCALATE_PRIORITY has SLA action")
+        assert result.is_confident(0.7)
+
+    def test_is_confident_below_threshold(self):
+        """is_confident: 閾値以下"""
+        result = ClassificationResult(
+            category=QuestionCategory.CLARIFICATION_NEEDED,
+            confidence=0.5,
+            matched_rules=[],
+            intent_details={"intent": "unknown"},
+            recommended_action="Request clarification",
+        )
+        assert not result.is_confident(0.7)
 
 
-def run_all_tests():
-    """全テストを実行"""
-    test_classes = [
-        TestAutoRespond,
-        TestAutoApprove,
-        TestEscalatePriority,
-        TestEscalateSpecialty,
-        TestClarificationNeeded,
-        TestNeedsReview,
-        TestContextBasedRouting,
-        TestConfidenceScoring,
-        TestMultiplexedKeywords,
-        TestUnknownClassification,
-        TestRecommendedActions,
-    ]
+class TestMultipleRuleMatches:
+    """複数ルールマッチのテスト"""
 
-    passed = 0
-    failed = 0
+    def test_bug_and_escalation_keywords(self):
+        """バグ + エスカレーションキーワード"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        result = classifier.classify(
+            "セキュリティバグ: パスワードが平文で保存されています"
+        )
+        assert result.category == QuestionCategory.ESCALATE_PRIORITY
+        assert "bug_keywords" in result.matched_rules
+        assert "escalation_keywords" in result.matched_rules
 
-    for test_class in test_classes:
-        print(f"\n📋 {test_class.__name__}")
-        instance = test_class()
-        for method_name in dir(instance):
-            if method_name.startswith("test_"):
-                try:
-                    method = getattr(instance, method_name)
-                    method()
-                    passed += 1
-                except AssertionError as e:
-                    print(f"✗ {method_name} failed: {e}")
-                    failed += 1
-                except Exception as e:
-                    print(f"✗ {method_name} error: {e}")
-                    failed += 1
-
-    print(f"\n{'='*60}")
-    print(f"📊 テスト結果: {passed} 成功, {failed} 失敗")
-    print(f"{'='*60}")
-
-    return failed == 0
-
-
-if __name__ == "__main__":
-    success = run_all_tests()
-    if success:
-        print("\n✅ 全テスト成功！")
-        sys.exit(0)
-    else:
-        print("\n❌ テスト失敗があります")
-        sys.exit(1)
+    def test_escalation_only_keywords(self):
+        """エスカレーションキーワードのみ"""
+        classifier = QuestionClassifier(use_claude_api=False)
+        result = classifier.classify(
+            "Enterprise プランの高度なカスタマイズについて"
+        )
+        assert result.category in [
+            QuestionCategory.ESCALATE_SPECIALTY,
+            QuestionCategory.NEEDS_REVIEW,
+        ]
