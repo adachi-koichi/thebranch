@@ -10832,3 +10832,62 @@ async def create_audit_log_entry(
     if log_id is None:
         raise HTTPException(status_code=500, detail="failed to record audit log")
     return {"id": log_id, "status": "recorded"}
+
+
+# ──────────────────────────────────────────────
+# Jinja2 テンプレートページルート
+# ──────────────────────────────────────────────
+
+from jinja2 import Environment, FileSystemLoader
+
+template_dir = DASHBOARD_DIR / "templates"
+jinja_env = Environment(loader=FileSystemLoader(str(template_dir)))
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def page_dashboard():
+    """ダッシュボード - KPI・アナリティクス表示"""
+    template = jinja_env.get_template("pages/dashboard.html")
+    return template.render()
+
+
+@app.get("/organizations", response_class=HTMLResponse)
+async def page_organizations():
+    """組織管理 - 部署・エージェント設定・デプロイ"""
+    template = jinja_env.get_template("pages/organizations.html")
+    return template.render()
+
+
+@app.get("/workflow-builder", response_class=HTMLResponse)
+async def page_workflow_builder():
+    """ワークフロー設計 - ドラッグ&ドロップ型業務フロー設計ツール"""
+    template = jinja_env.get_template("pages/workflow-builder.html")
+    return template.render()
+
+
+@app.get("/notifications", response_class=HTMLResponse)
+async def page_notifications():
+    """通知センター - リアルタイムアラート管理"""
+    template = jinja_env.get_template("pages/notifications.html")
+    return template.render()
+
+
+@app.get("/analytics", response_class=HTMLResponse)
+async def page_analytics():
+    """分析 - パフォーマンス分析・ビジネスメトリクス"""
+    template = jinja_env.get_template("pages/analytics.html")
+    return template.render()
+
+
+@app.get("/cost-dashboard", response_class=HTMLResponse)
+async def page_cost_dashboard():
+    """コスト追跡ダッシュボード - API利用コスト可視化"""
+    template = jinja_env.get_template("pages/cost-dashboard.html")
+    return template.render()
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def page_settings():
+    """設定 - APIキー管理・外部サービス連携"""
+    template = jinja_env.get_template("pages/api-keys.html")
+    return template.render()

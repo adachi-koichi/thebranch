@@ -1,0 +1,199 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}通知センター - THEBRANCH{% endblock %}
+
+{% block content %}
+<div class="py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>通知センター</h1>
+        <div>
+            <button class="btn btn-outline-secondary btn-sm me-2">全て既読</button>
+            <button class="btn btn-outline-secondary btn-sm">フィルタ</button>
+        </div>
+    </div>
+
+    <!-- Notification Alerts Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card border-start border-danger">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">緊急アラート</h6>
+                    <h2 class="text-danger">3</h2>
+                    <small class="text-muted">直ちに対応が必要</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border-start border-warning">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">警告</h6>
+                    <h2 class="text-warning">8</h2>
+                    <small class="text-muted">注意が必要</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border-start border-info">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">情報通知</h6>
+                    <h2 class="text-info">15</h2>
+                    <small class="text-muted">一般的なお知らせ</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border-start border-success">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">成功</h6>
+                    <h2 class="text-success">42</h2>
+                    <small class="text-muted">完了・成功通知</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Notifications -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>リアルタイムアラート（未読）</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="fas fa-exclamation-circle"></i> <strong>緊急:</strong> 営業部エージェント「リード生成AI」がエラーで停止しています。稼働率 0%。
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                        <i class="fas fa-exclamation-triangle"></i> <strong>警告:</strong> APIの応答時間が通常の 3 倍になっています（5秒 → 15秒）。
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="fas fa-exclamation-circle"></i> <strong>緊急:</strong> ストレージ使用率が 95% に達しました。クリーンアップが必要です。
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+
+                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                        <i class="fas fa-info-circle"></i> <strong>情報:</strong> 財務部ワークフローが 1,250 件のタスクを処理しました（本日）。
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification History -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                    <h5>通知履歴</h5>
+                    <div>
+                        <input type="text" class="form-control form-control-sm" placeholder="検索..." style="width: 200px; display: inline-block;">
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;"></th>
+                                    <th>時刻</th>
+                                    <th>タイプ</th>
+                                    <th>メッセージ</th>
+                                    <th>ソース</th>
+                                    <th>ステータス</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><i class="fas fa-circle text-danger" style="font-size: 8px;"></i></td>
+                                    <td>2026-04-30 14:32</td>
+                                    <td><span class="badge bg-danger">緊急</span></td>
+                                    <td>営業部エージェントが停止</td>
+                                    <td>部署: 営業部</td>
+                                    <td><button class="btn btn-xs btn-outline-danger">対応中</button></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-circle text-warning" style="font-size: 8px;"></i></td>
+                                    <td>2026-04-30 14:15</td>
+                                    <td><span class="badge bg-warning">警告</span></td>
+                                    <td>API レスポンス時間が異常</td>
+                                    <td>インフラ</td>
+                                    <td><button class="btn btn-xs btn-outline-warning">監視中</button></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-circle text-success" style="font-size: 8px;"></i></td>
+                                    <td>2026-04-30 14:00</td>
+                                    <td><span class="badge bg-success">成功</span></td>
+                                    <td>日次レポート生成完了</td>
+                                    <td>部署: 分析部</td>
+                                    <td><span class="badge bg-light text-dark">読取済み</span></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-circle text-info" style="font-size: 8px;"></i></td>
+                                    <td>2026-04-30 13:45</td>
+                                    <td><span class="badge bg-info">情報</span></td>
+                                    <td>ワークフロー実行: 営業フロー（450件処理）</td>
+                                    <td>ワークフロー</td>
+                                    <td><span class="badge bg-light text-dark">読取済み</span></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-circle text-success" style="font-size: 8px;"></i></td>
+                                    <td>2026-04-30 13:30</td>
+                                    <td><span class="badge bg-success">成功</span></td>
+                                    <td>データバックアップ完了</td>
+                                    <td>システム</td>
+                                    <td><span class="badge bg-light text-dark">読取済み</span></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-circle text-warning" style="font-size: 8px;"></i></td>
+                                    <td>2026-04-30 13:15</td>
+                                    <td><span class="badge bg-warning">警告</span></td>
+                                    <td>メモリ使用率が 80% に達しました</td>
+                                    <td>インフラ</td>
+                                    <td><span class="badge bg-light text-dark">読取済み</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Settings -->
+    <div class="row mt-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>通知設定</h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="emailNotifications" checked>
+                        <label class="form-check-label" for="emailNotifications">
+                            メール通知を有効にする
+                        </label>
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="slackNotifications" checked>
+                        <label class="form-check-label" for="slackNotifications">
+                            Slack通知を有効にする
+                        </label>
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="urgentOnly">
+                        <label class="form-check-label" for="urgentOnly">
+                            緊急アラートのみ通知する
+                        </label>
+                    </div>
+                    <button class="btn btn-primary">設定を保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

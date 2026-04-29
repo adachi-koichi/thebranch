@@ -1,0 +1,158 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}ダッシュボード - THEBRANCH{% endblock %}
+
+{% block content %}
+<div class="py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>ダッシュボード</h1>
+        <div>
+            <button class="btn btn-outline-secondary btn-sm me-2">週間</button>
+            <button class="btn btn-outline-secondary btn-sm me-2">月間</button>
+            <button class="btn btn-outline-secondary btn-sm">年間</button>
+        </div>
+    </div>
+
+    <!-- KPI Cards Row -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            {% include 'components/kpi_card.html' with {
+                'title': 'エージェント稼働率',
+                'value': '94.2%',
+                'subtitle': '過去7日間',
+                'icon': 'fa-check-circle',
+                'trend': 5
+            } %}
+        </div>
+        <div class="col-md-4 mb-3">
+            {% include 'components/kpi_card.html' with {
+                'title': 'タスク完了数',
+                'value': '1,240',
+                'subtitle': '今月',
+                'icon': 'fa-tasks',
+                'trend': 12
+            } %}
+        </div>
+        <div class="col-md-4 mb-3">
+            {% include 'components/kpi_card.html' with {
+                'title': '月次コスト',
+                'value': '¥28,450',
+                'subtitle': '使用額',
+                'icon': 'fa-dollar-sign',
+                'trend': -3
+            } %}
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row">
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>過去7日間のエージェント稼働率</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="uptimeChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>コスト内訳</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="costChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Tasks Chart -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>日別タスク完了数（12ヶ月）</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="tasksChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 7-day uptime chart
+    const uptimeCtx = document.getElementById('uptimeChart').getContext('2d');
+    new Chart(uptimeCtx, {
+        type: 'line',
+        data: {
+            labels: ['月', '火', '水', '木', '金', '土', '日'],
+            datasets: [{
+                label: '稼働率 (%)',
+                data: [92, 94, 95, 93, 96, 94, 94],
+                borderColor: '#007bff',
+                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, max: 100 }
+            }
+        }
+    });
+
+    // Cost breakdown pie chart
+    const costCtx = document.getElementById('costChart').getContext('2d');
+    new Chart(costCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['API実行', 'ストレージ', '通信', 'その他'],
+            datasets: [{
+                data: [55, 20, 15, 10],
+                backgroundColor: ['#007bff', '#28a745', '#ffc107', '#6c757d']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true
+        }
+    });
+
+    // Monthly tasks bar chart
+    const tasksCtx = document.getElementById('tasksChart').getContext('2d');
+    new Chart(tasksCtx, {
+        type: 'bar',
+        data: {
+            labels: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+            datasets: [{
+                label: 'タスク完了数',
+                data: [850, 920, 1050, 1100, 980, 1200, 1240, 1150, 900, 1080, 1010, 950],
+                backgroundColor: '#007bff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+</script>
+{% endblock %}

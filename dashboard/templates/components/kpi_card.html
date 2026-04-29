@@ -1,0 +1,53 @@
+<div class="card kpi-card">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col">
+                <h6 class="card-title text-muted mb-0">{{ title }}</h6>
+                <h3 class="mb-0">{{ value }}</h3>
+                <small class="text-muted">{{ subtitle }}</small>
+            </div>
+            <div class="col-auto">
+                <div class="metric-icon">
+                    <i class="fas {{ icon }}"></i>
+                </div>
+            </div>
+        </div>
+        {% if trend %}
+        <div class="trend mt-3">
+            <span class="badge {{ 'bg-success' if trend > 0 else 'bg-danger' }}">
+                <i class="fas {{ 'fa-arrow-up' if trend > 0 else 'fa-arrow-down' }}"></i>
+                {{ trend }}%
+            </span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .kpi-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .kpi-card .card-body {
+        padding: 20px;
+    }
+
+    .kpi-card h3 {
+        font-weight: 600;
+        color: #212529;
+    }
+
+    .metric-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 8px;
+        background-color: #f0f2f5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        color: #007bff;
+    }
+</style>

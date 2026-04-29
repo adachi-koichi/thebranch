@@ -1,0 +1,165 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}ワークフロー設計 - THEBRANCH{% endblock %}
+
+{% block content %}
+<div class="py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>ワークフロー設計</h1>
+        <button class="btn btn-primary">新規ワークフロー</button>
+    </div>
+
+    <!-- Workflow Editor -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>ドラッグ&ドロップ型業務フロー設計ツール</h5>
+                    <small class="text-muted">左側のコンポーネントをドラッグしてフローを構築</small>
+                </div>
+                <div class="card-body" style="min-height: 500px;">
+                    <div class="row">
+                        <!-- Component Palette -->
+                        <div class="col-md-3 border-end">
+                            <h6 class="mb-3">利用可能なコンポーネント</h6>
+                            <div class="list-group list-group-flush">
+                                <a href="#" class="list-group-item list-group-item-action draggable-component" data-component="trigger">
+                                    <i class="fas fa-bolt"></i> トリガー
+                                </a>
+                                <a href="#" class="list-group-item list-group-item-action draggable-component" data-component="action">
+                                    <i class="fas fa-play-circle"></i> アクション
+                                </a>
+                                <a href="#" class="list-group-item list-group-item-action draggable-component" data-component="condition">
+                                    <i class="fas fa-code-branch"></i> 条件分岐
+                                </a>
+                                <a href="#" class="list-group-item list-group-item-action draggable-component" data-component="loop">
+                                    <i class="fas fa-redo"></i> ループ
+                                </a>
+                                <a href="#" class="list-group-item list-group-item-action draggable-component" data-component="delay">
+                                    <i class="fas fa-hourglass-half"></i> 遅延
+                                </a>
+                                <a href="#" class="list-group-item list-group-item-action draggable-component" data-component="api">
+                                    <i class="fas fa-plug"></i> API呼び出し
+                                </a>
+                                <a href="#" class="list-group-item list-group-item-action draggable-component" data-component="notification">
+                                    <i class="fas fa-bell"></i> 通知
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Canvas Area -->
+                        <div class="col-md-9">
+                            <div id="workflow-canvas" style="min-height: 400px; background-color: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 8px; padding: 20px;">
+                                <div class="text-center text-muted" style="padding: 60px 20px;">
+                                    <p>コンポーネントをここにドラッグして業務フローを構築してください</p>
+                                    <small>右クリックでコンポーネント削除、接続線でフロー接続</small>
+                                </div>
+                            </div>
+                            <div class="mt-3 d-flex gap-2">
+                                <button class="btn btn-success">保存</button>
+                                <button class="btn btn-secondary">プレビュー</button>
+                                <button class="btn btn-outline-danger">リセット</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Saved Workflows -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>保存済みワークフロー</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ワークフロー名</th>
+                                <th>説明</th>
+                                <th>ステータス</th>
+                                <th>最終更新</th>
+                                <th>アクション</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-sitemap text-primary"></i> 営業フロー自動化
+                                </td>
+                                <td>新規リード取得→スコアリング→営業割り当て</td>
+                                <td><span class="badge bg-success">実行中</span></td>
+                                <td>2026-04-28</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary">編集</button>
+                                    <button class="btn btn-sm btn-outline-danger">削除</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-sitemap text-primary"></i> 支払い処理ワークフロー
+                                </td>
+                                <td>請求書受取→検証→支払い実行</td>
+                                <td><span class="badge bg-success">実行中</span></td>
+                                <td>2026-04-27</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary">編集</button>
+                                    <button class="btn btn-sm btn-outline-danger">削除</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-sitemap text-secondary"></i> データ統合パイプライン
+                                </td>
+                                <td>複数ソースからのデータ抽出・変換・ロード</td>
+                                <td><span class="badge bg-warning">ドラフト</span></td>
+                                <td>2026-04-20</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary">編集</button>
+                                    <button class="btn btn-sm btn-outline-danger">削除</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Draggable component initialization (placeholder)
+    document.querySelectorAll('.draggable-component').forEach(el => {
+        el.addEventListener('dragstart', (e) => {
+            e.dataTransfer.effectAllowed = 'copy';
+            e.dataTransfer.setData('component', el.dataset.component);
+        });
+    });
+
+    const canvas = document.getElementById('workflow-canvas');
+    canvas.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        canvas.style.backgroundColor = '#e7f1ff';
+    });
+
+    canvas.addEventListener('dragleave', () => {
+        canvas.style.backgroundColor = '#f8f9fa';
+    });
+
+    canvas.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const component = e.dataTransfer.getData('component');
+        if (component) {
+            console.log('Dropped component:', component);
+            canvas.style.backgroundColor = '#f8f9fa';
+            // TODO: Add component to canvas
+        }
+    });
+</script>
+{% endblock %}

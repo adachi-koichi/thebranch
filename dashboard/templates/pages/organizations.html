@@ -1,0 +1,177 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}組織管理 - THEBRANCH{% endblock %}
+
+{% block content %}
+<div class="py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>組織管理</h1>
+        <button class="btn btn-primary">新規部署作成</button>
+    </div>
+
+    <!-- Organization Overview -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">総部署数</h6>
+                    <h2>12</h2>
+                    <small class="text-muted">このシーズン</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">稼働中のエージェント</h6>
+                    <h2>48</h2>
+                    <small class="text-muted">リアルタイム実行中</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Departments List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>部署一覧</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <div class="card border">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h5 class="card-title">営業部</h5>
+                                        <button class="btn btn-sm btn-outline-secondary">設定</button>
+                                    </div>
+                                    <p class="card-text text-muted">リード管理と顧客獲得を自動化</p>
+                                    <div class="mb-2">
+                                        <small>
+                                            <span class="badge bg-info">営業エージェント</span>
+                                            <span class="badge bg-secondary">Zapier連携</span>
+                                        </small>
+                                    </div>
+                                    <div class="progress mb-3" style="height: 5px;">
+                                        <div class="progress-bar bg-success" style="width: 95%"></div>
+                                    </div>
+                                    <small class="text-muted">稼働率: 95% | エージェント数: 4</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-4">
+                            <div class="card border">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h5 class="card-title">財務部</h5>
+                                        <button class="btn btn-sm btn-outline-secondary">設定</button>
+                                    </div>
+                                    <p class="card-text text-muted">請求書処理と費用管理の自動化</p>
+                                    <div class="mb-2">
+                                        <small>
+                                            <span class="badge bg-warning">財務エージェント</span>
+                                            <span class="badge bg-secondary">API連携</span>
+                                        </small>
+                                    </div>
+                                    <div class="progress mb-3" style="height: 5px;">
+                                        <div class="progress-bar bg-success" style="width: 88%"></div>
+                                    </div>
+                                    <small class="text-muted">稼働率: 88% | エージェント数: 3</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-4">
+                            <div class="card border">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h5 class="card-title">人事部</h5>
+                                        <button class="btn btn-sm btn-outline-secondary">設定</button>
+                                    </div>
+                                    <p class="card-text text-muted">採用フロー・勤怠管理の自動化</p>
+                                    <div class="mb-2">
+                                        <small>
+                                            <span class="badge bg-success">HR エージェント</span>
+                                            <span class="badge bg-secondary">Slack連携</span>
+                                        </small>
+                                    </div>
+                                    <div class="progress mb-3" style="height: 5px;">
+                                        <div class="progress-bar bg-success" style="width: 92%"></div>
+                                    </div>
+                                    <small class="text-muted">稼働率: 92% | エージェント数: 2</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-4">
+                            <div class="card border bg-light">
+                                <div class="card-body d-flex align-items-center justify-content-center" style="height: 200px;">
+                                    <div class="text-center">
+                                        <i class="fas fa-plus fa-2x text-muted mb-2"></i>
+                                        <p class="text-muted">新規部署を追加</p>
+                                        <button class="btn btn-sm btn-outline-primary">作成</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Department Config Section -->
+    <div class="row mt-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>部署テンプレート・デプロイ設定</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>テンプレート名</th>
+                                    <th>説明</th>
+                                    <th>利用可能なAIエージェント</th>
+                                    <th>デプロイ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>営業自動化テンプレート</strong></td>
+                                    <td>リード生成・スコアリング・クローズ支援</td>
+                                    <td><span class="badge bg-primary">営業エージェント</span></td>
+                                    <td><button class="btn btn-sm btn-success">デプロイ</button></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>顧客サービステンプレート</strong></td>
+                                    <td>サポートチケット処理・FAQ応答</td>
+                                    <td><span class="badge bg-primary">CSエージェント</span></td>
+                                    <td><button class="btn btn-sm btn-success">デプロイ</button></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>データ分析テンプレート</strong></td>
+                                    <td>定期的なデータ抽出・分析・レポート生成</td>
+                                    <td><span class="badge bg-primary">分析エージェント</span></td>
+                                    <td><button class="btn btn-sm btn-success">デプロイ</button></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>マーケティングオートメーション</strong></td>
+                                    <td>キャンペーン実行・リード育成</td>
+                                    <td><span class="badge bg-primary">マーケティングエージェント</span></td>
+                                    <td><button class="btn btn-sm btn-success">デプロイ</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

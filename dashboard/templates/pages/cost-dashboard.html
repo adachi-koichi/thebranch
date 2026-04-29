@@ -1,0 +1,278 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}コスト追跡ダッシュボード - THEBRANCH{% endblock %}
+
+{% block content %}
+<div class="py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>コスト追跡ダッシュボード</h1>
+        <div>
+            <button class="btn btn-outline-secondary btn-sm me-2">月別</button>
+            <button class="btn btn-outline-secondary btn-sm me-2">四半期別</button>
+            <button class="btn btn-outline-secondary btn-sm">年別</button>
+        </div>
+    </div>
+
+    <!-- Cost Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">今月の使用額</h6>
+                    <h2>¥28,450</h2>
+                    <small class="text-success">
+                        <i class="fas fa-arrow-down"></i> 前月比 -12%
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">本年度累計</h6>
+                    <h2>¥187,320</h2>
+                    <small class="text-muted">4ヶ月分</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">予測年間費用</h6>
+                    <h2>¥561,960</h2>
+                    <small class="text-muted">現在の使用率基準</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">予算残額</h6>
+                    <h2>¥312,680</h2>
+                    <small class="text-warning">年間予算 ¥500,000</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cost Breakdown Charts -->
+    <div class="row mb-4">
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>月別コスト推移</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="costTrendChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>カテゴリ別コスト内訳</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="costCategoryChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cost by Department -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>部署別コスト</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>部署名</th>
+                                    <th>今月費用</th>
+                                    <th>前月費用</th>
+                                    <th>変化率</th>
+                                    <th>エージェント数</th>
+                                    <th>平均コスト/エージェント</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-chart-pie text-primary"></i> 営業部
+                                    </td>
+                                    <td>¥10,240</td>
+                                    <td>¥11,500</td>
+                                    <td><span class="badge bg-success">-11%</span></td>
+                                    <td>4</td>
+                                    <td>¥2,560</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-chart-pie text-info"></i> 財務部
+                                    </td>
+                                    <td>¥8,150</td>
+                                    <td>¥7,800</td>
+                                    <td><span class="badge bg-danger">+4.5%</span></td>
+                                    <td>3</td>
+                                    <td>¥2,717</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-chart-pie text-success"></i> 人事部
+                                    </td>
+                                    <td>¥5,620</td>
+                                    <td>¥5,400</td>
+                                    <td><span class="badge bg-danger">+4.1%</span></td>
+                                    <td>2</td>
+                                    <td>¥2,810</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-chart-pie text-warning"></i> 分析部
+                                    </td>
+                                    <td>¥3,440</td>
+                                    <td>¥3,200</td>
+                                    <td><span class="badge bg-danger">+7.5%</span></td>
+                                    <td>2</td>
+                                    <td>¥1,720</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cost by Resource Type -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>リソースタイプ別コスト詳細</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>リソースタイプ</th>
+                                    <th>今月使用量</th>
+                                    <th>単価</th>
+                                    <th>今月費用</th>
+                                    <th>前月費用</th>
+                                    <th>変化率</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>API 実行</strong></td>
+                                    <td>125,000 回</td>
+                                    <td>¥0.08 / 回</td>
+                                    <td>¥10,000</td>
+                                    <td>¥11,200</td>
+                                    <td><span class="badge bg-success">-10.7%</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ストレージ</strong></td>
+                                    <td>250 GB</td>
+                                    <td>¥8 / GB</td>
+                                    <td>¥2,000</td>
+                                    <td>¥2,000</td>
+                                    <td><span class="badge bg-secondary">0%</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>通信（データ転送）</strong></td>
+                                    <td>150 GB</td>
+                                    <td>¥6.4 / GB</td>
+                                    <td>¥960</td>
+                                    <td>¥1,100</td>
+                                    <td><span class="badge bg-success">-12.7%</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>コンピュートリソース</strong></td>
+                                    <td>480 時間</td>
+                                    <td>¥5.5 / 時</td>
+                                    <td>¥2,640</td>
+                                    <td>¥2,400</td>
+                                    <td><span class="badge bg-danger">+10%</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>その他サービス</strong></td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>¥1,850</td>
+                                    <td>¥1,700</td>
+                                    <td><span class="badge bg-danger">+8.8%</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Budget Alert -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> 現在の使用率でいくと、年間予算 ¥500,000 に対して残額は約 ¥312,680 です。
+                今月の平均コストを維持する場合、年間で予算内に収まる見込みです。予算超過を避けるため、定期的な監視をお勧めします。
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Monthly cost trend chart
+    const trendCtx = document.getElementById('costTrendChart').getContext('2d');
+    new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: ['1月', '2月', '3月', '4月'],
+            datasets: [{
+                label: 'コスト (¥)',
+                data: [32500, 35200, 30100, 28450],
+                borderColor: '#007bff',
+                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: true }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    // Cost category breakdown chart
+    const categoryCtx = document.getElementById('costCategoryChart').getContext('2d');
+    new Chart(categoryCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['API実行', 'ストレージ', '通信', 'コンピュート', 'その他'],
+            datasets: [{
+                data: [35.2, 7.0, 3.4, 9.3, 6.5, 38.6],
+                backgroundColor: ['#007bff', '#28a745', '#ffc107', '#17a2b8', '#6c757d']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true
+        }
+    });
+</script>
+{% endblock %}
