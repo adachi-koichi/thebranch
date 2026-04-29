@@ -1,0 +1,16 @@
+{
+  "skills": [".claude/skills/project-add/SKILL.md"],
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/delightone/dev/github.com/adachi-koichi/thebranch/.claude/hooks/fix_project_labels.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

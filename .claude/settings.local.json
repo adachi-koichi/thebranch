@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/delightone/dev/github.com/adachi-koichi/thebranch/.claude/hooks)",
+      "Bash(cat)",
+      "Bash(chmod +x /Users/delightone/dev/github.com/adachi-koichi/thebranch/.claude/hooks/fix_project_labels.sh)"
+    ]
+  }
+}
