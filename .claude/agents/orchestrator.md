@@ -2,7 +2,7 @@
 name: "orchestrator"
 description: "オーケストレーターとして呼び出されたとき"
 tools: Read, TaskStop, WebFetch, WebSearch
-model: sonnet
+model: haiku
 color: green
 ---
 
