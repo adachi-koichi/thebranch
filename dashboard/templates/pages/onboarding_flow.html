@@ -1,0 +1,674 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}はじめる - THEBRANCH{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ===== Progress Bar ===== */
+  .onboarding-header {
+    background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+    color: #fff;
+    padding: 32px 40px 24px;
+    border-radius: 12px;
+    margin-bottom: 32px;
+  }
+  .onboarding-header h2 { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+  .onboarding-header p  { opacity: .85; margin-bottom: 20px; font-size: .95rem; }
+
+  .progress-track {
+    background: rgba(255,255,255,.25);
+    border-radius: 999px;
+    height: 10px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: #fff;
+    border-radius: 999px;
+    transition: width .6s cubic-bezier(.4,0,.2,1);
+  }
+  .progress-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: .8rem;
+    opacity: .85;
+  }
+
+  .step-dots {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+  .step-dot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.3);
+    border: 2px solid rgba(255,255,255,.5);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .7rem; font-weight: 700;
+    transition: background .3s, border-color .3s;
+    cursor: pointer;
+  }
+  .step-dot.done     { background: #fff; border-color: #fff; color: #3B82F6; }
+  .step-dot.active   { background: rgba(255,255,255,.6); border-color: #fff; color: #1D4ED8; }
+
+  /* ===== Checklist ===== */
+  .checklist-section { margin-bottom: 32px; }
+  .checklist-section-title {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #6b7280;
+    margin-bottom: 12px;
+  }
+
+  .checklist-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+  }
+  .checklist-item:hover { border-color: #3B82F6; box-shadow: 0 0 0 3px rgba(59,130,246,.08); }
+  .checklist-item.completed {
+    background: #f0fdf4;
+    border-color: #86efac;
+  }
+  .checklist-item.active { border-color: #3B82F6; box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+
+  .check-circle {
+    width: 22px; height: 22px; min-width: 22px;
+    border-radius: 50%;
+    border: 2px solid #d1d5db;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .2s, border-color .2s;
+    margin-top: 1px;
+  }
+  .checklist-item.completed .check-circle {
+    background: #22c55e; border-color: #22c55e; color: #fff;
+  }
+  .checklist-item.active .check-circle { border-color: #3B82F6; }
+
+  .checklist-body { flex: 1; }
+  .checklist-title {
+    font-weight: 600; font-size: .95rem; color: #1f2937;
+    margin-bottom: 2px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .checklist-item.completed .checklist-title { color: #6b7280; text-decoration: line-through; }
+  .checklist-desc { font-size: .83rem; color: #6b7280; line-height: 1.5; }
+
+  .badge-est {
+    font-size: .7rem; background: #eff6ff; color: #3B82F6;
+    border-radius: 999px; padding: 1px 8px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-optional {
+    font-size: .7rem; background: #f3f4f6; color: #9ca3af;
+    border-radius: 999px; padding: 1px 8px; font-weight: 600;
+  }
+
+  .checklist-action {
+    display: flex; align-items: center;
+    color: #3B82F6; font-size: .82rem; font-weight: 600;
+    white-space: nowrap; gap: 4px;
+    text-decoration: none;
+  }
+  .checklist-item.completed .checklist-action { color: #9ca3af; }
+
+  /* ===== Guide Tour Overlay ===== */
+  #tour-backdrop {
+    position: fixed; inset: 0;
+    z-index: 1040;
+    pointer-events: none;
+  }
+  #tour-spotlight {
+    position: absolute;
+    border-radius: 8px;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,.6);
+    transition: all .35s cubic-bezier(.4,0,.2,1);
+    pointer-events: none;
+  }
+
+  #tour-tooltip {
+    position: fixed;
+    z-index: 1050;
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px 22px 16px;
+    width: 320px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.18);
+    transition: all .3s ease;
+  }
+  .tour-step-badge {
+    font-size: .7rem; font-weight: 700; color: #3B82F6;
+    text-transform: uppercase; letter-spacing: .06em;
+    margin-bottom: 6px;
+  }
+  .tour-tooltip-title { font-size: 1rem; font-weight: 700; color: #111827; margin-bottom: 6px; }
+  .tour-tooltip-body  { font-size: .875rem; color: #6b7280; line-height: 1.6; margin-bottom: 16px; }
+  .tour-arrow {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    background: #fff;
+    transform: rotate(45deg);
+  }
+  .tour-controls { display: flex; align-items: center; justify-content: space-between; }
+  .tour-dots { display: flex; gap: 5px; }
+  .tour-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #e5e7eb; transition: background .2s;
+  }
+  .tour-dot.active { background: #3B82F6; }
+  .tour-btns { display: flex; gap: 8px; }
+  .btn-tour-skip { background: none; border: none; color: #9ca3af; font-size: .83rem; cursor: pointer; }
+  .btn-tour-skip:hover { color: #6b7280; }
+  .btn-tour-prev {
+    background: #f3f4f6; border: none; color: #374151;
+    padding: 7px 14px; border-radius: 7px; font-size: .83rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-tour-prev:hover { background: #e5e7eb; }
+  .btn-tour-next {
+    background: #3B82F6; border: none; color: #fff;
+    padding: 7px 16px; border-radius: 7px; font-size: .83rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-tour-next:hover { background: #2563EB; }
+
+  #tour-backdrop.hidden, #tour-tooltip.hidden { display: none !important; }
+
+  /* ===== Start Tour Button ===== */
+  .btn-start-tour {
+    background: #fff; color: #3B82F6;
+    border: 1.5px solid rgba(255,255,255,.4);
+    padding: 8px 20px; border-radius: 8px;
+    font-weight: 600; font-size: .875rem; cursor: pointer;
+    transition: background .2s, transform .15s;
+  }
+  .btn-start-tour:hover { background: #eff6ff; transform: translateY(-1px); }
+
+  /* ===== Congrats Banner ===== */
+  #congrats-banner {
+    display: none;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff; border-radius: 12px;
+    padding: 24px 32px; text-align: center; margin-bottom: 32px;
+  }
+  #congrats-banner.show { display: block; animation: fadeIn .5s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+  /* Dark mode */
+  @media (prefers-color-scheme: dark) {
+    .checklist-item { background: #1f2937; border-color: #374151; }
+    .checklist-item:hover { border-color: #3B82F6; }
+    .checklist-item.completed { background: #022c22; border-color: #166534; }
+    .checklist-title { color: #f3f4f6; }
+    .checklist-item.completed .checklist-title { color: #6b7280; }
+    #tour-tooltip { background: #1f2937; }
+    .tour-tooltip-title { color: #f9fafb; }
+    .tour-tooltip-body  { color: #9ca3af; }
+    .tour-arrow { background: #1f2937; }
+    .tour-dot { background: #374151; }
+    .btn-tour-prev { background: #374151; color: #f9fafb; }
+    .btn-tour-prev:hover { background: #4b5563; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="py-4">
+
+  <!-- ===== Congrats Banner ===== -->
+  <div id="congrats-banner">
+    <div style="font-size:2rem; margin-bottom:8px;">🎉</div>
+    <h3 style="font-weight:700; margin-bottom:6px;">セットアップ完了！</h3>
+    <p style="opacity:.9; margin-bottom:16px;">THEBRANCHの準備が整いました。AIエージェント部署を起動しましょう。</p>
+    <a href="/projects" class="btn btn-light btn-sm fw-bold">プロジェクトを開始する →</a>
+  </div>
+
+  <!-- ===== Header + Progress Bar ===== -->
+  <div class="onboarding-header" id="tour-target-header">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <h2>THEBRANCHへようこそ 👋</h2>
+        <p>以下のステップを完了して、AIエージェント部署の運営を始めましょう。</p>
+      </div>
+      <button class="btn-start-tour" onclick="startTour()">
+        <i class="fas fa-compass me-1"></i>ガイドツアーを開始
+      </button>
+    </div>
+
+    <div class="progress-track" id="tour-target-progress">
+      <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+    </div>
+    <div class="progress-labels">
+      <span id="progress-label">0 / 6 完了</span>
+      <span id="progress-pct">0%</span>
+    </div>
+
+    <div class="step-dots" id="step-dots"></div>
+  </div>
+
+  <!-- ===== Checklist ===== -->
+  <div class="row">
+    <div class="col-lg-8">
+
+      <!-- Section 1: 基本設定 -->
+      <div class="checklist-section">
+        <div class="checklist-section-title">基本設定</div>
+
+        <div class="checklist-item" id="item-profile" data-key="profile" onclick="toggleItem(this)">
+          <div class="check-circle" id="chk-profile">
+            <i class="fas fa-check" style="font-size:.65rem;"></i>
+          </div>
+          <div class="checklist-body">
+            <div class="checklist-title" id="tour-target-profile">
+              プロフィール設定
+              <span class="badge-est">2分</span>
+            </div>
+            <div class="checklist-desc">会社名・担当者名・タイムゾーンを入力してください。</div>
+          </div>
+          <a href="/settings" class="checklist-action" onclick="event.stopPropagation()">
+            設定する <i class="fas fa-arrow-right" style="font-size:.7rem;"></i>
+          </a>
+        </div>
+
+        <div class="checklist-item" id="item-department" data-key="department" onclick="toggleItem(this)">
+          <div class="check-circle" id="chk-department">
+            <i class="fas fa-check" style="font-size:.65rem;"></i>
+          </div>
+          <div class="checklist-body">
+            <div class="checklist-title" id="tour-target-department">
+              最初の部署を作成
+              <span class="badge-est">5分</span>
+            </div>
+            <div class="checklist-desc">マーケティング・営業・カスタマーサポートなど、AIに任せたい部署を選んで作成します。</div>
+          </div>
+          <a href="/projects" class="checklist-action" onclick="event.stopPropagation()">
+            作成する <i class="fas fa-arrow-right" style="font-size:.7rem;"></i>
+          </a>
+        </div>
+
+        <div class="checklist-item" id="item-agent" data-key="agent" onclick="toggleItem(this)">
+          <div class="check-circle" id="chk-agent">
+            <i class="fas fa-check" style="font-size:.65rem;"></i>
+          </div>
+          <div class="checklist-body">
+            <div class="checklist-title" id="tour-target-agent">
+              AIエージェントを起動
+              <span class="badge-est">3分</span>
+            </div>
+            <div class="checklist-desc">作成した部署でAIエージェントを初回起動してみましょう。</div>
+          </div>
+          <a href="/agent-chat" class="checklist-action" onclick="event.stopPropagation()">
+            起動する <i class="fas fa-arrow-right" style="font-size:.7rem;"></i>
+          </a>
+        </div>
+      </div>
+
+      <!-- Section 2: ワークフロー -->
+      <div class="checklist-section">
+        <div class="checklist-section-title">ワークフロー</div>
+
+        <div class="checklist-item" id="item-workflow" data-key="workflow" onclick="toggleItem(this)">
+          <div class="check-circle" id="chk-workflow">
+            <i class="fas fa-check" style="font-size:.65rem;"></i>
+          </div>
+          <div class="checklist-body">
+            <div class="checklist-title" id="tour-target-workflow">
+              ワークフローを設定
+              <span class="badge-est">10分</span>
+            </div>
+            <div class="checklist-desc">定型業務をワークフローとして登録し、AIが自動実行できるようにします。</div>
+          </div>
+          <a href="/workflows" class="checklist-action" onclick="event.stopPropagation()">
+            設定する <i class="fas fa-arrow-right" style="font-size:.7rem;"></i>
+          </a>
+        </div>
+
+        <div class="checklist-item" id="item-marketplace" data-key="marketplace" onclick="toggleItem(this)">
+          <div class="check-circle" id="chk-marketplace">
+            <i class="fas fa-check" style="font-size:.65rem;"></i>
+          </div>
+          <div class="checklist-body">
+            <div class="checklist-title">
+              マーケットプレイスを探索
+              <span class="badge-optional">任意</span>
+            </div>
+            <div class="checklist-desc">他社が公開している部署テンプレートをインポートして即戦力化できます。</div>
+          </div>
+          <a href="/marketplace" class="checklist-action" onclick="event.stopPropagation()">
+            見る <i class="fas fa-arrow-right" style="font-size:.7rem;"></i>
+          </a>
+        </div>
+
+        <div class="checklist-item" id="item-apikey" data-key="apikey" onclick="toggleItem(this)">
+          <div class="check-circle" id="chk-apikey">
+            <i class="fas fa-check" style="font-size:.65rem;"></i>
+          </div>
+          <div class="checklist-body">
+            <div class="checklist-title">
+              APIキーを連携
+              <span class="badge-optional">任意</span>
+            </div>
+            <div class="checklist-desc">外部サービス（Slack・Notion・Salesforce等）とAPIキーで接続できます。</div>
+          </div>
+          <a href="/api-keys" class="checklist-action" onclick="event.stopPropagation()">
+            連携する <i class="fas fa-arrow-right" style="font-size:.7rem;"></i>
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===== Sidebar Tips ===== -->
+    <div class="col-lg-4">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h6 class="fw-bold mb-3"><i class="fas fa-lightbulb text-warning me-2"></i>ヒント</h6>
+          <ul class="list-unstyled small text-secondary" style="line-height:2;">
+            <li>✅ チェックリストはいつでも再開できます</li>
+            <li>🚀 部署は後から追加・編集可能</li>
+            <li>🤝 チームメンバーを招待して共同運営</li>
+            <li>📊 ダッシュボードでコストを一元管理</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body text-center py-4">
+          <div style="font-size:2rem; margin-bottom:8px;">🎓</div>
+          <h6 class="fw-bold">ドキュメントを読む</h6>
+          <p class="small text-secondary mb-3">詳しい使い方はドキュメントサイトで確認できます。</p>
+          <a href="#" class="btn btn-outline-primary btn-sm">ドキュメントへ</a>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /row -->
+
+</div><!-- /py-4 -->
+
+<!-- ===== Guide Tour: Backdrop + Spotlight ===== -->
+<div id="tour-backdrop" class="hidden">
+  <div id="tour-spotlight"></div>
+</div>
+
+<!-- ===== Guide Tour: Tooltip ===== -->
+<div id="tour-tooltip" class="hidden">
+  <div class="tour-arrow" id="tour-arrow"></div>
+  <div class="tour-step-badge" id="tour-step-badge">ステップ 1 / 5</div>
+  <div class="tour-tooltip-title" id="tour-tooltip-title"></div>
+  <div class="tour-tooltip-body"  id="tour-tooltip-body"></div>
+  <div class="tour-controls">
+    <div class="tour-dots" id="tour-dots"></div>
+    <div class="tour-btns">
+      <button class="btn-tour-skip" onclick="endTour()">スキップ</button>
+      <button class="btn-tour-prev" id="btn-prev" onclick="tourPrev()">前へ</button>
+      <button class="btn-tour-next" id="btn-next" onclick="tourNext()">次へ</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ===================================================================
+   オンボーディングフロー – ガイドツアー・チェックリスト・プログレスバー
+=================================================================== */
+
+// ── チェックリスト状態管理 ──────────────────────────────────────────
+const STORAGE_KEY = 'thebranch_onboarding_v1';
+
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch { return {}; }
+}
+
+function saveState(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+const ITEMS = ['profile', 'department', 'agent', 'workflow', 'marketplace', 'apikey'];
+
+function toggleItem(el) {
+  const key = el.dataset.key;
+  const state = loadState();
+  state[key] = !state[key];
+  saveState(state);
+  renderChecklist();
+  syncProgress();
+  checkAllDone();
+  // API 同期（認証済み環境のみ）
+  if (state[key]) persistToApi(key);
+}
+
+function renderChecklist() {
+  const state = loadState();
+  ITEMS.forEach(key => {
+    const item = document.getElementById(`item-${key}`);
+    if (!item) return;
+    if (state[key]) item.classList.add('completed');
+    else            item.classList.remove('completed');
+  });
+}
+
+function syncProgress() {
+  const state = loadState();
+  const done  = ITEMS.filter(k => state[k]).length;
+  const total = ITEMS.length;
+  const pct   = Math.round((done / total) * 100);
+
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = `${done} / ${total} 完了`;
+  document.getElementById('progress-pct').textContent   = pct + '%';
+
+  renderStepDots(done, total);
+}
+
+function renderStepDots(done, total) {
+  const container = document.getElementById('step-dots');
+  container.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement('div');
+    d.className = 'step-dot' + (i < done ? ' done' : i === done ? ' active' : '');
+    d.textContent = i + 1;
+    container.appendChild(d);
+  }
+}
+
+function checkAllDone() {
+  const state = loadState();
+  const done  = ITEMS.filter(k => state[k]).length;
+  if (done === ITEMS.length) {
+    document.getElementById('congrats-banner').classList.add('show');
+    persistCompleteToApi();
+  }
+}
+
+async function persistToApi(key) {
+  try {
+    await fetch('/api/onboarding/step', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_step: key })
+    });
+  } catch {}
+}
+
+async function persistCompleteToApi() {
+  try { await fetch('/api/onboarding/complete', { method: 'POST' }); }
+  catch {}
+}
+
+// ── ガイドツアー ────────────────────────────────────────────────────
+const TOUR_STEPS = [
+  {
+    target: 'tour-target-header',
+    title:  'THEBRANCHへようこそ',
+    body:   'このページではセットアップの進捗を一目で確認できます。上のプログレスバーが100%になれば準備完了です。',
+    pos:    'bottom'
+  },
+  {
+    target: 'tour-target-progress',
+    title:  'プログレスバー',
+    body:   '完了したステップの数に応じてバーが伸びます。ステップをクリックしてチェックすると自動更新されます。',
+    pos:    'bottom'
+  },
+  {
+    target: 'tour-target-profile',
+    title:  'プロフィール設定',
+    body:   'まずはプロフィールを入力しましょう。会社名・タイムゾーン等を設定するだけで完了です（約2分）。',
+    pos:    'right'
+  },
+  {
+    target: 'tour-target-department',
+    title:  '部署を作成する',
+    body:   'AIに任せたい部署を選んで作成します。マーケティング・営業・CSなど多様なテンプレートから選べます。',
+    pos:    'right'
+  },
+  {
+    target: 'tour-target-agent',
+    title:  'AIエージェントを起動',
+    body:   '部署が作成されたら、AIエージェントを初回起動してみましょう。すぐに動き始めます。',
+    pos:    'right'
+  },
+  {
+    target: 'tour-target-workflow',
+    title:  'ワークフローを設定',
+    body:   '定型業務をワークフローとして登録すると、AIが自動で実行してくれます。まず1つ試してみましょう。',
+    pos:    'right'
+  }
+];
+
+let tourStep = 0;
+let tourActive = false;
+
+function startTour() {
+  tourStep  = 0;
+  tourActive = true;
+  document.getElementById('tour-backdrop').classList.remove('hidden');
+  document.getElementById('tour-tooltip').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  showTourStep(tourStep);
+}
+
+function endTour() {
+  tourActive = false;
+  document.getElementById('tour-backdrop').classList.add('hidden');
+  document.getElementById('tour-tooltip').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function tourNext() {
+  if (tourStep < TOUR_STEPS.length - 1) { tourStep++; showTourStep(tourStep); }
+  else endTour();
+}
+
+function tourPrev() {
+  if (tourStep > 0) { tourStep--; showTourStep(tourStep); }
+}
+
+function showTourStep(idx) {
+  const step   = TOUR_STEPS[idx];
+  const total  = TOUR_STEPS.length;
+  const target = document.getElementById(step.target);
+
+  // Update tooltip text
+  document.getElementById('tour-step-badge').textContent   = `ステップ ${idx + 1} / ${total}`;
+  document.getElementById('tour-tooltip-title').textContent = step.title;
+  document.getElementById('tour-tooltip-body').textContent  = step.body;
+  document.getElementById('btn-prev').style.visibility = idx === 0 ? 'hidden' : 'visible';
+  document.getElementById('btn-next').textContent = idx === total - 1 ? '完了' : '次へ';
+
+  // Step dots
+  const dotsEl = document.getElementById('tour-dots');
+  dotsEl.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement('div');
+    d.className = 'tour-dot' + (i === idx ? ' active' : '');
+    dotsEl.appendChild(d);
+  }
+
+  if (!target) return;
+
+  // Scroll target into view
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  requestAnimationFrame(() => {
+    const rect    = target.getBoundingClientRect();
+    const pad     = 8;
+    const spot    = document.getElementById('tour-spotlight');
+    const tooltip = document.getElementById('tour-tooltip');
+    const arrow   = document.getElementById('tour-arrow');
+
+    // Spotlight
+    spot.style.left   = (rect.left   - pad) + 'px';
+    spot.style.top    = (rect.top    - pad) + 'px';
+    spot.style.width  = (rect.width  + pad * 2) + 'px';
+    spot.style.height = (rect.height + pad * 2) + 'px';
+
+    // Tooltip position
+    const ttW = 320, ttH = 200;
+    let left, top;
+
+    if (step.pos === 'bottom') {
+      left = rect.left + rect.width / 2 - ttW / 2;
+      top  = rect.bottom + pad + 14;
+      arrow.style.cssText = `top:-6px; left:50%; transform:translateX(-50%) rotate(45deg);`;
+    } else {
+      // right
+      left = rect.right + 16;
+      top  = rect.top + rect.height / 2 - ttH / 2;
+      arrow.style.cssText = `top:50%; left:-6px; transform:translateY(-50%) rotate(45deg);`;
+    }
+
+    // Clamp within viewport
+    const vw = window.innerWidth, vh = window.innerHeight;
+    left = Math.max(12, Math.min(left, vw - ttW - 12));
+    top  = Math.max(12, Math.min(top,  vh - ttH - 12));
+
+    tooltip.style.left = left + 'px';
+    tooltip.style.top  = top  + 'px';
+  });
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if (!tourActive) return;
+  if (e.key === 'ArrowRight' || e.key === 'Enter') tourNext();
+  if (e.key === 'ArrowLeft')                        tourPrev();
+  if (e.key === 'Escape')                           endTour();
+});
+
+// ── 初期化 ──────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  renderChecklist();
+  syncProgress();
+
+  // API からステータスを取得して同期（認証済み環境）
+  fetch('/api/onboarding/status')
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data) return;
+      const state = loadState();
+      // API 側の current_step をローカルステートに反映
+      if (data.current_step && !state[data.current_step]) {
+        state[data.current_step] = true;
+        saveState(state);
+        renderChecklist();
+        syncProgress();
+      }
+    })
+    .catch(() => {});
+});
+</script>
+{% endblock %}
