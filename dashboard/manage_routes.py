@@ -19,6 +19,12 @@ async def manage_dashboard():
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
+@router.get("/workflows", response_class=HTMLResponse)
+async def workflows_page():
+    html_path = DASHBOARD_DIR / "workflows.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
 @router.get("/api/manage/departments")
 async def manage_get_departments():
     async with aiosqlite.connect(str(THEBRANCH_DB)) as db:

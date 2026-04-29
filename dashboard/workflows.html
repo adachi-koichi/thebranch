@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>THEBRANCH — 業務フロー一覧</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --surface2: #1a1a24;
+      --border: #2a2a3a;
+      --accent: #6c63ff;
+      --accent2: #00d4aa;
+      --text: #e8e8f0;
+      --text2: #888899;
+      --success: #00cc88;
+      --warn: #ffaa00;
+      --radius: 12px;
+    }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+    header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; gap: 16px;
+      padding: 0 24px; height: 60px;
+      background: rgba(10,10,15,0.95); border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+    }
+    .logo { font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; text-decoration: none; }
+    .nav-links { display: flex; gap: 8px; margin-left: auto; }
+    .nav-link { padding: 6px 14px; border-radius: 8px; color: var(--text2); text-decoration: none; font-size: 13px; transition: all 0.15s; }
+    .nav-link:hover { background: var(--surface2); color: var(--text); }
+    .nav-link.active { background: var(--accent); color: #fff; }
+
+    main { margin-top: 60px; padding: 32px 24px; max-width: 1200px; margin-left: auto; margin-right: auto; }
+
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+    .page-title { font-size: 24px; font-weight: 700; }
+    .page-subtitle { color: var(--text2); font-size: 13px; margin-top: 4px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #5a52e0; }
+    .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--border); }
+
+    .toolbar { display: flex; gap: 10px; margin-bottom: 20px; }
+    .search-input {
+      flex: 1; padding: 9px 14px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 13px; outline: none;
+    }
+    .search-input:focus { border-color: var(--accent); }
+
+    .filter-tabs { display: flex; gap: 6px; margin-bottom: 20px; }
+    .filter-tab { padding: 6px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text2); transition: all 0.15s; }
+    .filter-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .workflow-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+
+    .workflow-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px; transition: border-color 0.15s, transform 0.15s;
+      cursor: pointer;
+    }
+    .workflow-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+    .card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+    .card-name { font-size: 15px; font-weight: 600; line-height: 1.4; }
+    .card-id { font-size: 11px; color: var(--text2); margin-top: 2px; }
+    .badge {
+      display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; white-space: nowrap;
+    }
+    .badge-active { background: rgba(0,204,136,0.15); color: var(--success); }
+    .badge-draft { background: rgba(255,170,0,0.15); color: var(--warn); }
+    .badge-inactive { background: var(--surface2); color: var(--text2); }
+
+    .card-desc {
+      color: var(--text2); font-size: 13px; line-height: 1.6;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+      margin-bottom: 14px; min-height: 40px;
+    }
+    .card-footer { display: flex; align-items: center; justify-content: space-between; }
+    .card-meta { font-size: 11px; color: var(--text2); }
+    .card-actions { display: flex; gap: 6px; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    .empty-state { text-align: center; padding: 80px 20px; color: var(--text2); }
+    .empty-icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-text { font-size: 16px; margin-bottom: 8px; color: var(--text); }
+
+    .loading { display: flex; align-items: center; justify-content: center; padding: 60px; color: var(--text2); gap: 10px; }
+    .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .count-badge { background: var(--surface2); color: var(--text2); padding: 2px 8px; border-radius: 20px; font-size: 12px; margin-left: 8px; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: none; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; width: 560px; max-width: 95vw; max-height: 80vh; overflow-y: auto; }
+    .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+    .modal-field { margin-bottom: 14px; }
+    .modal-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+    .modal-value { font-size: 14px; line-height: 1.6; }
+    .modal-close { float: right; background: none; border: none; color: var(--text2); font-size: 20px; cursor: pointer; line-height: 1; }
+    .modal-close:hover { color: var(--text); }
+    .node-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .node-chip { background: var(--surface2); border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px; font-size: 12px; }
+    .arrow { color: var(--text2); padding: 0 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/" class="logo">THEBRANCH</a>
+    <nav class="nav-links">
+      <a href="/" class="nav-link">ダッシュボード</a>
+      <a href="/workflows" class="nav-link active">業務フロー</a>
+      <a href="/manage" class="nav-link">管理</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">業務フロー一覧 <span id="total-count" class="count-badge">-</span></h1>
+        <p class="page-subtitle">登録済みの業務フローテンプレートを管理・閲覧できます</p>
+      </div>
+      <a href="/manage" class="btn btn-primary">＋ 新規作成</a>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="search" class="search-input" placeholder="フロー名・説明で検索..." oninput="filterFlows()">
+    </div>
+
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-status="all" onclick="setFilter('all', this)">すべて</button>
+      <button class="filter-tab" data-status="active" onclick="setFilter('active', this)">有効</button>
+      <button class="filter-tab" data-status="draft" onclick="setFilter('draft', this)">下書き</button>
+    </div>
+
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <span>読み込み中...</span>
+    </div>
+    <div id="empty" class="empty-state" style="display:none">
+      <div class="empty-icon">🔄</div>
+      <div class="empty-text">業務フローが見つかりません</div>
+      <div>条件を変えて検索してみてください</div>
+    </div>
+    <div id="workflow-grid" class="workflow-grid"></div>
+  </main>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="modal" onclick="closeModal(event)">
+    <div class="modal" id="modal-content">
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <div class="modal-title" id="modal-name"></div>
+      <div class="modal-field">
+        <div class="modal-label">ID</div>
+        <div class="modal-value" id="modal-id"></div>
+      </div>
+      <div class="modal-field">
+        <div class="modal-label">ステータス</div>
+        <div class="modal-value" id="modal-status"></div>
+      </div>
+      <div class="modal-field">
+        <div class="modal-label">説明</div>
+        <div class="modal-value" id="modal-desc"></div>
+      </div>
+      <div class="modal-field" id="modal-nodes-field" style="display:none">
+        <div class="modal-label">ノード（フローステップ）</div>
+        <div class="node-list" id="modal-nodes"></div>
+      </div>
+      <div class="modal-field">
+        <div class="modal-label">作成日時</div>
+        <div class="modal-value" id="modal-created"></div>
+      </div>
+      <div class="modal-field">
+        <div class="modal-label">更新日時</div>
+        <div class="modal-value" id="modal-updated"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allFlows = [];
+    let currentFilter = 'all';
+
+    async function loadFlows() {
+      try {
+        const res = await fetch('/api/manage/workflows');
+        if (!res.ok) throw new Error('取得失敗');
+        allFlows = await res.json();
+        // Parse description field for JSON-encoded workflows
+        allFlows = allFlows.map(f => {
+          let nodes = [], edges = [], desc = f.description || '';
+          try {
+            const parsed = JSON.parse(f.description || '{}');
+            if (parsed.nodes) { nodes = parsed.nodes; edges = parsed.edges || []; desc = ''; }
+          } catch {}
+          return { ...f, _nodes: nodes, _edges: edges, _desc: desc };
+        });
+        renderFlows();
+      } catch (e) {
+        document.getElementById('loading').innerHTML = `<span style="color:#ff4444">読み込みエラー: ${e.message}</span>`;
+      }
+    }
+
+    function setFilter(status, el) {
+      currentFilter = status;
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      renderFlows();
+    }
+
+    function filterFlows() { renderFlows(); }
+
+    function renderFlows() {
+      const query = document.getElementById('search').value.toLowerCase();
+      let flows = allFlows;
+      if (currentFilter !== 'all') flows = flows.filter(f => f.status === currentFilter);
+      if (query) flows = flows.filter(f =>
+        f.name.toLowerCase().includes(query) || (f._desc || '').toLowerCase().includes(query)
+      );
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('total-count').textContent = flows.length;
+      const grid = document.getElementById('workflow-grid');
+      grid.innerHTML = '';
+
+      if (flows.length === 0) {
+        document.getElementById('empty').style.display = 'block';
+        return;
+      }
+      document.getElementById('empty').style.display = 'none';
+
+      flows.forEach(f => {
+        const card = document.createElement('div');
+        card.className = 'workflow-card';
+        card.onclick = () => openModal(f);
+
+        const statusClass = f.status === 'active' ? 'badge-active' : f.status === 'draft' ? 'badge-draft' : 'badge-inactive';
+        const statusLabel = f.status === 'active' ? '有効' : f.status === 'draft' ? '下書き' : f.status || '-';
+        const desc = f._desc || (f._nodes.length > 0 ? f._nodes.map(n => n.label || n.key).join(' → ') : '');
+        const created = f.created_at ? f.created_at.slice(0, 10) : '';
+
+        card.innerHTML = `
+          <div class="card-header">
+            <div>
+              <div class="card-name">${esc(f.name)}</div>
+              <div class="card-id">#${f.id}</div>
+            </div>
+            <span class="badge ${statusClass}">${statusLabel}</span>
+          </div>
+          <div class="card-desc">${esc(desc) || '<span style="opacity:0.4">説明なし</span>'}</div>
+          <div class="card-footer">
+            <span class="card-meta">${created}</span>
+            <div class="card-actions">
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); openModal(${JSON.stringify(f).replace(/"/g, '&quot;')})">詳細</button>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function openModal(f) {
+      document.getElementById('modal-name').textContent = f.name;
+      document.getElementById('modal-id').textContent = '#' + f.id;
+      const statusLabel = f.status === 'active' ? '✅ 有効' : f.status === 'draft' ? '📝 下書き' : f.status || '-';
+      document.getElementById('modal-status').textContent = statusLabel;
+      document.getElementById('modal-desc').textContent = f._desc || '(説明なし)';
+      document.getElementById('modal-created').textContent = f.created_at || '-';
+      document.getElementById('modal-updated').textContent = f.updated_at || '-';
+
+      const nodesField = document.getElementById('modal-nodes-field');
+      const nodesList = document.getElementById('modal-nodes');
+      if (f._nodes && f._nodes.length > 0) {
+        nodesField.style.display = 'block';
+        nodesList.innerHTML = f._nodes.map((n, i) =>
+          (i > 0 ? '<span class="arrow">→</span>' : '') +
+          `<span class="node-chip">${esc(n.label || n.key || '')}</span>`
+        ).join('');
+      } else {
+        nodesField.style.display = 'none';
+      }
+
+      document.getElementById('modal').classList.add('open');
+    }
+
+    function closeModal(e) {
+      if (!e || e.target === document.getElementById('modal')) {
+        document.getElementById('modal').classList.remove('open');
+      }
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    loadFlows();
+  </script>
+</body>
+</html>
