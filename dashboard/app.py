@@ -91,6 +91,13 @@ async def page_pricing_spa():
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
+# ── Task #2544: AIエージェントマーケットプレイス SPA ルート
+@app.get("/marketplace", response_class=HTMLResponse)
+async def page_marketplace_spa():
+    html_path = DASHBOARD_DIR / "marketplace.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
 app.include_router(autogen_routes.router)
 app.include_router(blueprints.router)
 app.include_router(manage_routes.router)

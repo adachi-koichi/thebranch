@@ -1754,6 +1754,9 @@
             <li>
               <a href="/pricing" onclick="openPricingModal(); history.replaceState(null, '', '/pricing'); return false;" id="pricing-nav-link">料金プラン</a>
             </li>
+            <li>
+              <a href="#" onclick="openCostDashboard(); return false;" id="cost-dashboard-nav-link">💰 コスト</a>
+            </li>
           </ul>
           <div class="header-actions">
             <span id="user-role-badge" class="role-badge role-badge--member" style="display:none"></span>
@@ -5042,6 +5045,268 @@
       startDvWs();
     }
   })();
+
+  // ═══════════════════════════════════════════════════════════
+  // Task #2546: Cost Optimization Dashboard
+  // ═══════════════════════════════════════════════════════════
+  </script>
+
+  <!-- Cost Dashboard Modal -->
+  <div id="cost-dashboard-modal" class="modal" style="display: none;">
+    <div class="modal-overlay" onclick="closeCostDashboard()"></div>
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h2>💰 AIエージェント コスト最適化ダッシュボード</h2>
+        <button type="button" class="modal-close" onclick="closeCostDashboard()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="cost-dashboard-container" style="padding: 24px;">
+          <!-- Summary Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 8px; padding: 16px;">
+              <p style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px;">本日のコスト</p>
+              <p style="font-size: 24px; font-weight: 600; color: var(--accent);" id="today-cost">$0.00</p>
+            </div>
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 8px; padding: 16px;">
+              <p style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px;">全期間コスト</p>
+              <p style="font-size: 24px; font-weight: 600; color: var(--warning);" id="all-cost">$0.00</p>
+            </div>
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 8px; padding: 16px;">
+              <p style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px;">API呼び出し数</p>
+              <p style="font-size: 24px; font-weight: 600; color: var(--success);" id="api-calls">0</p>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <div style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border-light);">
+            <button class="cost-tab-btn active" onclick="switchCostTab('timeline')" style="padding: 12px 16px; border: none; background: none; color: var(--text-primary); cursor: pointer; border-bottom: 2px solid var(--accent);">タイムライン</button>
+            <button class="cost-tab-btn" onclick="switchCostTab('projects')" style="padding: 12px 16px; border: none; background: none; color: var(--text-primary); cursor: pointer; border-bottom: 2px solid transparent;">プロジェクト別</button>
+            <button class="cost-tab-btn" onclick="switchCostTab('details')" style="padding: 12px 16px; border: none; background: none; color: var(--text-primary); cursor: pointer; border-bottom: 2px solid transparent;">詳細</button>
+          </div>
+
+          <!-- Timeline Chart -->
+          <div id="timeline-tab" style="display: block;">
+            <canvas id="timeline-chart" style="max-height: 400px;"></canvas>
+          </div>
+
+          <!-- Projects Chart -->
+          <div id="projects-tab" style="display: none;">
+            <canvas id="projects-chart" style="max-height: 400px;"></canvas>
+          </div>
+
+          <!-- Details Table -->
+          <div id="details-tab" style="display: none;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <thead>
+                <tr style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-light);">
+                  <th style="padding: 12px; text-align: left;">セッション</th>
+                  <th style="padding: 12px; text-align: left;">日付</th>
+                  <th style="padding: 12px; text-align: right;">コスト</th>
+                </tr>
+              </thead>
+              <tbody id="session-details-tbody">
+                <tr><td colspan="3" style="padding: 24px; text-align: center; color: var(--text-tertiary);">データ読み込み中...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script>
+    let costCharts = {};
+
+    function openCostDashboard() {
+      const modal = document.getElementById('cost-dashboard-modal');
+      modal.style.display = 'flex';
+      loadCostData();
+    }
+
+    function closeCostDashboard() {
+      document.getElementById('cost-dashboard-modal').style.display = 'none';
+    }
+
+    function switchCostTab(tabName) {
+      document.querySelectorAll('[id$="-tab"]').forEach(el => el.style.display = 'none');
+      document.getElementById(tabName + '-tab').style.display = 'block';
+
+      document.querySelectorAll('.cost-tab-btn').forEach(btn => {
+        btn.style.borderBottomColor = 'transparent';
+        btn.style.color = 'var(--text-primary)';
+      });
+      event.target.style.borderBottomColor = 'var(--accent)';
+      event.target.style.color = 'var(--accent)';
+
+      if (tabName === 'timeline' && !costCharts.timeline) {
+        setTimeout(() => costCharts.timeline?.update?.(), 100);
+      } else if (tabName === 'projects' && !costCharts.projects) {
+        setTimeout(() => costCharts.projects?.update?.(), 100);
+      }
+    }
+
+    async function loadCostData() {
+      try {
+        const response = await fetch('/api/costs');
+        const data = await response.json();
+
+        // Update summary
+        document.getElementById('today-cost').textContent = '$' + data.today_total.toFixed(2);
+        document.getElementById('all-cost').textContent = '$' + data.all_total.toFixed(2);
+        document.getElementById('api-calls').textContent = (data.by_session?.length || 0).toString();
+
+        // Timeline Chart
+        const dateData = data.by_date || [];
+        const sortedDates = dateData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        const timelineCtx = document.getElementById('timeline-chart').getContext('2d');
+        costCharts.timeline = new Chart(timelineCtx, {
+          type: 'line',
+          data: {
+            labels: sortedDates.map(d => new Date(d.date).toLocaleDateString('ja-JP')),
+            datasets: [{
+              label: 'コスト（USD）',
+              data: sortedDates.map(d => d.costUSD),
+              borderColor: 'var(--accent)',
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              tension: 0.3,
+              fill: true,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: true } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+
+        // Projects Chart
+        const projectData = data.by_project || [];
+        const projectsCtx = document.getElementById('projects-chart').getContext('2d');
+        costCharts.projects = new Chart(projectsCtx, {
+          type: 'doughnut',
+          data: {
+            labels: projectData.map(p => p.project),
+            datasets: [{
+              data: projectData.map(p => p.costUSD),
+              backgroundColor: [
+                '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
+                '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'
+              ]
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } }
+          }
+        });
+
+        // Details Table
+        const tbody = document.getElementById('session-details-tbody');
+        tbody.innerHTML = '';
+        const sessions = data.by_session || [];
+        if (sessions.length > 0) {
+          sessions.slice(0, 20).forEach(s => {
+            const row = document.createElement('tr');
+            row.style.borderBottom = '1px solid var(--border-light)';
+            row.innerHTML = `
+              <td style="padding: 12px; font-family: monospace; font-size: 12px;">${s.sessionId.substring(0, 8)}</td>
+              <td style="padding: 12px;">${new Date(s.date).toLocaleDateString('ja-JP')}</td>
+              <td style="padding: 12px; text-align: right; font-weight: 500;">$${s.costUSD.toFixed(6)}</td>
+            `;
+            tbody.appendChild(row);
+          });
+        } else {
+          tbody.innerHTML = '<tr><td colspan="3" style="padding: 24px; text-align: center; color: var(--text-tertiary);">コストデータがありません</td></tr>';
+        }
+      } catch (err) {
+        console.error('Failed to load cost data:', err);
+        document.getElementById('cost-dashboard-container').innerHTML = '<p style="color: var(--error);">コストデータの読み込みに失敗しました</p>';
+      }
+    }
+
+    // Add CSS for modal styling
+    if (!document.getElementById('cost-dashboard-styles')) {
+      const style = document.createElement('style');
+      style.id = 'cost-dashboard-styles';
+      style.textContent = `
+        .modal {
+          display: none;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          z-index: 1000;
+          align-items: center;
+          justify-content: center;
+          overflow: auto;
+        }
+
+        .modal-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 1;
+        }
+
+        .modal-content {
+          position: relative;
+          background: var(--bg-primary);
+          border-radius: 8px;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+          z-index: 2;
+          max-width: 800px;
+          width: 90%;
+          max-height: 90vh;
+          overflow: auto;
+        }
+
+        .modal-lg {
+          max-width: 1000px;
+        }
+
+        .modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 24px;
+          border-bottom: 1px solid var(--border-light);
+        }
+
+        .modal-header h2 {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 600;
+        }
+
+        .modal-close {
+          background: none;
+          border: none;
+          font-size: 24px;
+          cursor: pointer;
+          color: var(--text-secondary);
+        }
+
+        .modal-close:hover {
+          color: var(--text-primary);
+        }
+
+        .modal-body {
+          overflow-y: auto;
+        }
+
+        .cost-tab-btn:hover {
+          color: var(--accent) !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
   </script>
 </body>
 </html>
