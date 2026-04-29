@@ -1,14 +1,14 @@
 {% extends 'layouts/base.html' %}
 
-{% block title %}<span data-i18n="page.analytics.title">分析</span> - THEBRANCH{% endblock %}
+{% block title %}分析 - THEBRANCH{% endblock %}
 
 {% block content %}
 <div class="py-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 data-i18n="page.analytics.title">分析</h1>
+        <h1>分析</h1>
         <div>
-            <button class="btn btn-outline-secondary btn-sm me-2" data-i18n="page.analytics.export">エクスポート</button>
-            <button class="btn btn-outline-secondary btn-sm" data-i18n="page.analytics.filter">フィルタ</button>
+            <button class="btn btn-outline-secondary btn-sm me-2" onclick="exportReport()">エクスポート</button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="loadSalesTrend()">更新</button>
         </div>
     </div>
 
@@ -17,40 +17,50 @@
         <div class="col-md-3 mb-3">
             <div class="card">
                 <div class="card-body">
-                    <h6 class="card-title text-muted" data-i18n="page.analytics.kpi.total_tasks">総タスク処理数</h6>
-                    <h2>24,580</h2>
-                    <small class="text-success">
-                        <i class="fas fa-arrow-up"></i> <span data-i18n="page.analytics.kpi.total_tasks_trend">前月比 +28%</span>
-                    </small>
+                    <h6 class="card-title text-muted">総売上</h6>
+                    <h2 id="kpi-revenue">-</h2>
+                    <small class="text-success" id="kpi-revenue-growth">-</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3 mb-3">
             <div class="card">
                 <div class="card-body">
-                    <h6 class="card-title text-muted" data-i18n="page.analytics.kpi.avg_time">平均処理時間</h6>
-                    <h2>4.2秒</h2>
-                    <small class="text-success">
-                        <i class="fas fa-arrow-down"></i> <span data-i18n="page.analytics.kpi.total_tasks_trend">前月比 +28%</span>
-                    </small>
+                    <h6 class="card-title text-muted">利益率</h6>
+                    <h2 id="kpi-profit-margin">-</h2>
+                    <small class="text-muted">営利率</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3 mb-3">
             <div class="card">
                 <div class="card-body">
-                    <h6 class="card-title text-muted" data-i18n="page.analytics.kpi.success_rate">成功率</h6>
-                    <h2>99.2%</h2>
-                    <small class="text-muted" data-i18n="page.analytics.kpi.success_rate_sub">エラー率 0.8%</small>
+                    <h6 class="card-title text-muted">原価率</h6>
+                    <h2 id="kpi-cost-ratio">-</h2>
+                    <small class="text-muted">コスト比率</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3 mb-3">
             <div class="card">
                 <div class="card-body">
-                    <h6 class="card-title text-muted" data-i18n="page.analytics.kpi.roi">ROI</h6>
-                    <h2>3.8x</h2>
-                    <small class="text-muted" data-i18n="page.analytics.kpi.roi_sub">投資回収率</small>
+                    <h6 class="card-title text-muted">成長率</h6>
+                    <h2 id="kpi-growth">-</h2>
+                    <small class="text-muted">月対比</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sales Trend Chart -->
+    <div class="row mb-4">
+        <div class="col-lg-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>売上トレンド（6ヶ月）</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="salesTrendChart" height="80"></canvas>
                 </div>
             </div>
         </div>
@@ -61,7 +71,7 @@
         <div class="col-lg-12 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h5 data-i18n="page.analytics.chart.task_trend">タスク処理量の推移（30日間）</h5>
+                    <h5>タスク処理量の推移（30日間）</h5>
                 </div>
                 <div class="card-body">
                     <canvas id="taskTrendChart" height="80"></canvas>
@@ -75,7 +85,7 @@
         <div class="col-lg-8 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h5 data-i18n="page.analytics.chart.dept_success">部署別成功率</h5>
+                    <h5>部署別成功率</h5>
                 </div>
                 <div class="card-body">
                     <canvas id="departmentSuccessChart" height="80"></canvas>
@@ -85,10 +95,33 @@
         <div class="col-lg-4 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h5 data-i18n="page.analytics.chart.task_type">タスクタイプ別分布</h5>
+                    <h5>タスクタイプ別分布</h5>
                 </div>
                 <div class="card-body">
                     <canvas id="taskTypeChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Generation -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>レポート生成</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <button class="btn btn-primary" onclick="generateReport()">
+                            <i class="fas fa-sparkles"></i> AI レポート生成
+                        </button>
+                    </div>
+                    <div id="report-summary" style="display:none;" class="alert alert-info">
+                        <h6 id="report-title">レポート</h6>
+                        <p id="report-content"></p>
+                        <small id="report-period"></small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -99,25 +132,25 @@
         <div class="col-lg-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 data-i18n="page.analytics.table.title">詳細パフォーマンス分析</h5>
+                    <h5>詳細パフォーマンス分析</h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
                         <table class="table table-hover table-sm">
                             <thead>
                                 <tr>
-                                    <th data-i18n="page.analytics.table.dept">部署</th>
-                                    <th data-i18n="page.analytics.table.this_month">今月処理数</th>
-                                    <th data-i18n="page.analytics.table.success">成功数</th>
-                                    <th data-i18n="page.analytics.table.failure">失敗数</th>
-                                    <th data-i18n="page.analytics.table.success_rate">成功率</th>
-                                    <th data-i18n="page.analytics.table.avg_time">平均処理時間</th>
-                                    <th data-i18n="page.analytics.table.trend">トレンド</th>
+                                    <th>部署</th>
+                                    <th>今月処理数</th>
+                                    <th>成功数</th>
+                                    <th>失敗数</th>
+                                    <th>成功率</th>
+                                    <th>平均処理時間</th>
+                                    <th>トレンド</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td><strong data-i18n="page.analytics.dept.sales">営業部</strong></td>
+                                    <td><strong>営業部</strong></td>
                                     <td>8,450</td>
                                     <td>8,420</td>
                                     <td>30</td>
@@ -130,7 +163,7 @@
                                     <td><i class="fas fa-arrow-up text-success"></i> +5%</td>
                                 </tr>
                                 <tr>
-                                    <td><strong data-i18n="page.analytics.dept.finance">財務部</strong></td>
+                                    <td><strong>財務部</strong></td>
                                     <td>6,220</td>
                                     <td>6,180</td>
                                     <td>40</td>
@@ -143,7 +176,7 @@
                                     <td><i class="fas fa-arrow-up text-success"></i> +3%</td>
                                 </tr>
                                 <tr>
-                                    <td><strong data-i18n="page.analytics.dept.hr">人事部</strong></td>
+                                    <td><strong>人事部</strong></td>
                                     <td>4,890</td>
                                     <td>4,850</td>
                                     <td>40</td>
@@ -156,7 +189,7 @@
                                     <td><i class="fas fa-arrow-down text-danger"></i> -2%</td>
                                 </tr>
                                 <tr>
-                                    <td><strong data-i18n="page.analytics.dept.analytics">分析部</strong></td>
+                                    <td><strong>分析部</strong></td>
                                     <td>3,120</td>
                                     <td>3,100</td>
                                     <td>20</td>
@@ -169,7 +202,7 @@
                                     <td><i class="fas fa-arrow-up text-success"></i> +12%</td>
                                 </tr>
                                 <tr>
-                                    <td><strong data-i18n="page.analytics.dept.cs">カスタマーサポート</strong></td>
+                                    <td><strong>カスタマーサポート</strong></td>
                                     <td>1,900</td>
                                     <td>1,880</td>
                                     <td>20</td>
@@ -189,28 +222,48 @@
         </div>
     </div>
 
+    <!-- Reports History -->
+    <div class="row mt-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>生成済みレポート</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm" id="reports-table">
+                            <thead>
+                                <tr>
+                                    <th>タイトル</th>
+                                    <th>期間</th>
+                                    <th>作成日時</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Alerts & Insights -->
     <div class="row mt-4">
         <div class="col-lg-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 data-i18n="page.analytics.insights.title">インサイト・アラート</h5>
+                    <h5>インサイト・アラート</h5>
                 </div>
                 <div class="card-body">
                     <div class="alert alert-info mb-2">
-                        <i class="fas fa-lightbulb"></i>
-                        <strong data-i18n="page.analytics.insights.info">インサイト:</strong>
-                        <span data-i18n="page.analytics.insights.info_body">営業部のタスク処理量が過去 3 ヶ月で 35% 増加しています。容量計画の見直しをお勧めします。</span>
+                        <i class="fas fa-lightbulb"></i> <strong>インサイト:</strong> 営業部のタスク処理量が過去 3 ヶ月で 35% 増加しています。容量計画の見直しをお勧めします。
                     </div>
                     <div class="alert alert-warning mb-2">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <strong data-i18n="page.analytics.insights.warning">注意:</strong>
-                        <span data-i18n="page.analytics.insights.warning_body">分析部の処理時間が増加しています（5.2秒 → 6.5秒）。パフォーマンス調査が必要です。</span>
+                        <i class="fas fa-exclamation-triangle"></i> <strong>注意:</strong> 分析部の処理時間が増加しています（5.2秒 → 6.5秒）。パフォーマンス調査が必要です。
                     </div>
                     <div class="alert alert-success mb-0">
-                        <i class="fas fa-check-circle"></i>
-                        <strong data-i18n="page.analytics.insights.success">成功:</strong>
-                        <span data-i18n="page.analytics.insights.success_body">全部署の成功率が 99% を超えています。品質管理の目標を達成しています。</span>
+                        <i class="fas fa-check-circle"></i> <strong>成功:</strong> 全部署の成功率が 99% を超えています。品質管理の目標を達成しています。
                     </div>
                 </div>
             </div>
@@ -220,31 +273,162 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-(function() {
-    function buildCharts() {
-        const t = window.i18n ? window.i18n.t.bind(window.i18n) : (k) => k;
+    let charts = {};
+    let currentReport = null;
 
-        const deptLabels = [
-            t('page.analytics.dept.sales'), t('page.analytics.dept.finance'),
-            t('page.analytics.dept.hr'), t('page.analytics.dept.analytics'),
-            t('page.analytics.dept.cs')
-        ];
-        const taskTypeLabels = [
-            t('chart.task_types.leads'), t('chart.task_types.invoices'),
-            t('chart.task_types.data_analysis'), t('chart.task_types.support'),
-            t('chart.task_types.other')
-        ];
-        const dayLabels = t('chart.days.range').split(',');
+    async function loadKPISummary() {
+        try {
+            const response = await fetch('/api/analytics/kpi/summary');
+            const data = await response.json();
 
-        // Task trend chart
-        const trendCtx = document.getElementById('taskTrendChart').getContext('2d');
-        const trendChart = new Chart(trendCtx, {
+            if (data.status === 'success') {
+                document.getElementById('kpi-revenue').textContent = '¥' + data.revenue_jpy.toLocaleString('ja-JP', {maximumFractionDigits: 0});
+                document.getElementById('kpi-revenue-growth').textContent = `前月比 ${data.growth_rate > 0 ? '+' : ''}${data.growth_rate}%`;
+                document.getElementById('kpi-profit-margin').textContent = data.profit_margin.toFixed(1) + '%';
+                document.getElementById('kpi-cost-ratio').textContent = data.cost_ratio.toFixed(1) + '%';
+                document.getElementById('kpi-growth').textContent = `${data.growth_rate > 0 ? '+' : ''}${data.growth_rate.toFixed(1)}%`;
+            }
+        } catch (error) {
+            console.error('Failed to load KPI summary:', error);
+        }
+    }
+
+    async function loadSalesTrend() {
+        try {
+            const response = await fetch('/api/analytics/sales/trend?period=monthly&months=6');
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                renderSalesTrendChart(data.data);
+            }
+        } catch (error) {
+            console.error('Failed to load sales trend:', error);
+        }
+    }
+
+    function renderSalesTrendChart(trendData) {
+        const ctx = document.getElementById('salesTrendChart').getContext('2d');
+
+        const dates = trendData.map(d => new Date(d.date).toLocaleDateString('ja-JP', {month: 'short', day: 'numeric'}));
+        const revenues = trendData.map(d => d.revenue_jpy);
+        const expenses = trendData.map(d => d.expense_jpy);
+
+        if (charts.salesTrend) {
+            charts.salesTrend.destroy();
+        }
+
+        charts.salesTrend = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: dayLabels,
+                labels: dates,
+                datasets: [
+                    {
+                        label: '売上',
+                        data: revenues,
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: '経費',
+                        data: expenses,
+                        borderColor: '#dc3545',
+                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: true }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    async function generateReport() {
+        try {
+            const response = await fetch('/api/analytics/reports/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: 'Auto Report', date_range_days: 30 })
+            });
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                currentReport = data;
+                document.getElementById('report-title').textContent = data.title;
+                document.getElementById('report-content').textContent = data.summary;
+                document.getElementById('report-period').textContent = `${data.period_start} 〜 ${data.period_end}`;
+                document.getElementById('report-summary').style.display = 'block';
+                loadReportsList();
+            }
+        } catch (error) {
+            console.error('Failed to generate report:', error);
+            alert('レポート生成に失敗しました');
+        }
+    }
+
+    async function loadReportsList() {
+        try {
+            const response = await fetch('/api/analytics/reports');
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                const tbody = document.querySelector('#reports-table tbody');
+                tbody.innerHTML = '';
+
+                data.reports.forEach(report => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${report.title}</td>
+                        <td>${report.period_start} 〜 ${report.period_end}</td>
+                        <td>${new Date(report.created_at).toLocaleString('ja-JP')}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+        } catch (error) {
+            console.error('Failed to load reports:', error);
+        }
+    }
+
+    function exportReport() {
+        if (!currentReport) {
+            alert('エクスポートするレポートがありません');
+            return;
+        }
+
+        const text = `${currentReport.title}\n期間: ${currentReport.period_start} 〜 ${currentReport.period_end}\n\n${currentReport.summary}`;
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `report-${currentReport.period_start}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // Task trend chart
+    function renderTaskTrendChart() {
+        const trendCtx = document.getElementById('taskTrendChart').getContext('2d');
+        if (charts.taskTrend) charts.taskTrend.destroy();
+
+        charts.taskTrend = new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: ['1日', '5日', '10日', '15日', '20日', '25日', '30日'],
                 datasets: [{
-                    label: t('page.analytics.kpi.total_tasks'),
+                    label: 'タスク処理数',
                     data: [650, 750, 820, 900, 950, 1100, 1050],
                     borderColor: '#007bff',
                     backgroundColor: 'rgba(0, 123, 255, 0.1)',
@@ -255,19 +439,27 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                plugins: { legend: { display: true } },
-                scales: { y: { beginAtZero: true } }
+                plugins: {
+                    legend: { display: true }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
             }
         });
+    }
 
-        // Department success rate
+    // Department success rate
+    function renderDepartmentChart() {
         const deptCtx = document.getElementById('departmentSuccessChart').getContext('2d');
-        const deptChart = new Chart(deptCtx, {
+        if (charts.department) charts.department.destroy();
+
+        charts.department = new Chart(deptCtx, {
             type: 'bar',
             data: {
-                labels: deptLabels,
+                labels: ['営業部', '財務部', '人事部', '分析部', 'CS部'],
                 datasets: [{
-                    label: t('page.analytics.chart.dept_success_label'),
+                    label: '成功率 (%)',
                     data: [99.6, 99.4, 99.2, 99.4, 98.9],
                     backgroundColor: ['#28a745', '#28a745', '#28a745', '#28a745', '#ffc107']
                 }]
@@ -275,37 +467,41 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                scales: { y: { beginAtZero: true, max: 100 } }
+                scales: {
+                    y: { beginAtZero: true, max: 100 }
+                }
             }
         });
+    }
 
-        // Task type distribution
+    // Task type distribution
+    function renderTaskTypeChart() {
         const typeCtx = document.getElementById('taskTypeChart').getContext('2d');
-        const typeChart = new Chart(typeCtx, {
+        if (charts.taskType) charts.taskType.destroy();
+
+        charts.taskType = new Chart(typeCtx, {
             type: 'doughnut',
             data: {
-                labels: taskTypeLabels,
+                labels: ['リード処理', '請求書処理', 'データ分析', 'サポートチケット', 'その他'],
                 datasets: [{
                     data: [34, 25, 15, 16, 10],
                     backgroundColor: ['#007bff', '#28a745', '#ffc107', '#17a2b8', '#6c757d']
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: true }
+            options: {
+                responsive: true,
+                maintainAspectRatio: true
+            }
         });
-
-        document.addEventListener('i18n:changed', function() {
-            trendChart.destroy();
-            deptChart.destroy();
-            typeChart.destroy();
-            buildCharts();
-        }, { once: true });
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', buildCharts);
-    } else {
-        buildCharts();
-    }
-})();
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadKPISummary();
+        await loadSalesTrend();
+        renderTaskTrendChart();
+        renderDepartmentChart();
+        renderTaskTypeChart();
+        await loadReportsList();
+    });
 </script>
 {% endblock %}

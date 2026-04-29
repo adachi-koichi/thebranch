@@ -1627,6 +1627,87 @@
     }
     .btn-role-assign:disabled { opacity: 0.5; cursor: not-allowed; }
     #user-role-badge { margin-left: 8px; vertical-align: middle; }
+
+    /* Department View (#2568) */
+    .dv-summary-bar {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      background: var(--surface-secondary, #f3f4f6); border-radius: 12px;
+      padding: 16px 20px; margin-bottom: 24px;
+    }
+    .dv-stat-card {
+      display: flex; flex-direction: column; align-items: center;
+      min-width: 80px; gap: 2px;
+    }
+    .dv-stat-value {
+      font-size: 1.6rem; font-weight: 700;
+      color: var(--text-primary, #111827);
+    }
+    .dv-stat-label {
+      font-size: 0.72rem; color: var(--text-secondary, #6b7280);
+    }
+    .dv-last-updated {
+      margin-left: auto; font-size: 0.72rem;
+      color: var(--text-secondary, #6b7280);
+    }
+    .dv-tree { display: flex; flex-direction: column; gap: 12px; }
+    .dv-session-block {
+      border: 1px solid var(--border-color, #e5e7eb);
+      border-radius: 10px; overflow: hidden;
+    }
+    .dv-session-header {
+      display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+      background: var(--surface-secondary, #f3f4f6);
+      font-weight: 600; font-size: 0.85rem; cursor: pointer;
+      user-select: none;
+    }
+    .dv-session-header:hover { background: var(--surface-hover, #e9ecef); }
+    .dv-session-toggle { font-size: 0.7rem; color: var(--text-secondary, #6b7280); }
+    .dv-window-group { padding: 8px 12px; border-top: 1px solid var(--border-color, #e5e7eb); }
+    .dv-window-label {
+      font-size: 0.72rem; font-weight: 600;
+      color: var(--text-secondary, #6b7280); margin-bottom: 6px;
+    }
+    .dv-panes-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .dv-pane-card {
+      background: var(--bg-primary, #fff);
+      border: 1px solid var(--border-color, #e5e7eb);
+      border-radius: 8px; padding: 10px 14px; min-width: 200px;
+      flex: 0 1 220px; cursor: pointer; transition: box-shadow 0.15s;
+    }
+    .dv-pane-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .dv-pane-top {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 6px; margin-bottom: 4px;
+    }
+    .dv-pane-name {
+      font-size: 0.82rem; font-weight: 600;
+      color: var(--text-primary, #111827); overflow: hidden;
+      white-space: nowrap; text-overflow: ellipsis; max-width: 130px;
+    }
+    .dv-pane-activity {
+      font-size: 0.68rem; color: var(--text-secondary, #6b7280);
+      white-space: nowrap;
+    }
+    .dv-pane-task {
+      font-size: 0.78rem; color: var(--text-primary, #374151);
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+      margin-bottom: 2px;
+    }
+    .dv-pane-progress {
+      font-size: 0.72rem; color: var(--text-secondary, #9ca3af); font-style: italic;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+    .dv-badge {
+      display: inline-block; padding: 1px 7px; border-radius: 99px;
+      font-size: 0.68rem; font-weight: 600; white-space: nowrap;
+    }
+    .dv-badge-busy   { background: #d1fae5; color: #065f46; }
+    .dv-badge-approval { background: #fef3c7; color: #92400e; }
+    .dv-badge-idle   { background: #f3f4f6; color: #6b7280; }
+    .dv-badge-unknown { background: #f3f4f6; color: #9ca3af; }
+    .dv-pane-no-agent { font-size: 0.75rem; color: var(--text-secondary, #9ca3af); }
+    .dv-loading { color: var(--text-secondary, #9ca3af); font-size: 0.85rem; padding: 20px 0; }
+    .dv-session-body.collapsed { display: none; }
   </style>
   <link rel="stylesheet" href="/styles/onboarding.css">
   <link rel="stylesheet" href="/styles/marketplace.css">
@@ -1642,6 +1723,7 @@
         <nav class="header-nav" aria-label="メインナビゲーション">
           <ul class="nav-links">
             <li><a href="#features">機能</a></li>
+            <li><a href="#department-view">部署稼働ビュー</a></li>
             <li><a href="#agent-scores">エージェントスコア</a></li>
             <li><a href="#cta">始める</a></li>
             <li><a href="#support">サポート</a></li>
@@ -1668,6 +1750,12 @@
             </li>
             <li>
               <a href="/agent-chat" onclick="openChatModal(); history.replaceState(null, '', '/agent-chat'); return false;" id="chat-nav-link">AIチャット</a>
+            </li>
+            <li>
+              <a href="/pricing" onclick="openPricingModal(); history.replaceState(null, '', '/pricing'); return false;" id="pricing-nav-link">料金プラン</a>
+            </li>
+            <li>
+              <a href="#" onclick="openCostDashboard(); return false;" id="cost-dashboard-nav-link">💰 コスト</a>
             </li>
           </ul>
           <div class="header-actions">
@@ -2094,6 +2182,38 @@
         <div id="template-empty" class="empty-state" style="display: none;">
           <div class="empty-icon">📚</div>
           <p>利用可能なテンプレートがまだありません</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Department View Section (#2568) -->
+    <section id="department-view" class="workflow-section" aria-labelledby="dv-heading">
+      <div class="container">
+        <div class="section-title">リアルタイム監視</div>
+        <h2 id="dv-heading" class="section-heading">部署稼働ビュー</h2>
+        <!-- サマリーバー -->
+        <div class="dv-summary-bar">
+          <div class="dv-stat-card">
+            <span class="dv-stat-value" id="dv-total-sessions">-</span>
+            <span class="dv-stat-label">セッション</span>
+          </div>
+          <div class="dv-stat-card">
+            <span class="dv-stat-value" id="dv-active-agents">-</span>
+            <span class="dv-stat-label">稼働エージェント</span>
+          </div>
+          <div class="dv-stat-card">
+            <span class="dv-stat-value" id="dv-inprogress">-</span>
+            <span class="dv-stat-label">進行中タスク</span>
+          </div>
+          <div class="dv-stat-card">
+            <span class="dv-stat-value" id="dv-completion-rate">-</span>
+            <span class="dv-stat-label">完了率</span>
+          </div>
+          <span class="dv-last-updated" id="dv-last-updated"></span>
+        </div>
+        <!-- セッションツリー -->
+        <div id="dv-session-tree" class="dv-tree">
+          <p class="dv-loading">接続中...</p>
         </div>
       </div>
     </section>
@@ -2781,6 +2901,108 @@
             </div>
           </div>
         </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       Task #2503: 料金プランモーダル (subscription / billing UI)
+       ========================================================================== -->
+  <style>
+    #pricing-modal .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 12px;
+    }
+    #pricing-modal .pricing-card {
+      border: 1px solid var(--border-color, #e5e7eb);
+      border-radius: 12px;
+      padding: 20px 16px;
+      background: var(--bg-primary, #fff);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    #pricing-modal .pricing-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+    #pricing-modal .pricing-card.recommended {
+      border: 2px solid #3b82f6;
+      box-shadow: 0 4px 16px rgba(59,130,246,0.18);
+    }
+    #pricing-modal .pricing-card.current {
+      background: #ecfdf5;
+      border-color: #10b981;
+    }
+    #pricing-modal .pricing-badge {
+      position: absolute; top: -10px; right: 14px;
+      background: #3b82f6; color: #fff;
+      padding: 3px 10px; font-size: 0.72rem; border-radius: 999px; font-weight: 600;
+    }
+    #pricing-modal .pricing-badge.current { background: #10b981; }
+    #pricing-modal .pricing-name { font-size: 1.05rem; font-weight: 700; color: var(--text-primary, #111827); }
+    #pricing-modal .pricing-tagline { font-size: 0.78rem; color: var(--text-secondary, #6b7280); min-height: 2.2em; }
+    #pricing-modal .pricing-price { font-size: 1.6rem; font-weight: 700; color: var(--text-primary, #111827); }
+    #pricing-modal .pricing-price .pricing-period { font-size: 0.72rem; font-weight: 400; color: var(--text-secondary, #6b7280); }
+    #pricing-modal .pricing-features { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 6px; }
+    #pricing-modal .pricing-features li { font-size: 0.78rem; color: var(--text-primary, #374151); padding-left: 18px; position: relative; }
+    #pricing-modal .pricing-features li::before { content: "✓"; color: #10b981; position: absolute; left: 0; font-weight: 700; }
+    #pricing-modal .pricing-cta { margin-top: auto; }
+    #pricing-modal .pricing-current-summary {
+      background: var(--bg-secondary, #f9fafb);
+      border: 1px solid var(--border-color, #e5e7eb);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+    }
+    #pricing-modal .pricing-current-summary .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 8px;
+      font-weight: 600; font-size: 0.78rem; background: #3b82f6; color: #fff;
+    }
+    #pricing-modal .pricing-usage {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;
+      margin-top: 12px;
+    }
+    #pricing-modal .pricing-usage-item {
+      background: var(--bg-secondary, #f9fafb);
+      border: 1px solid var(--border-color, #e5e7eb);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.78rem;
+    }
+    #pricing-modal .pricing-usage-bar {
+      height: 6px; background: #e5e7eb; border-radius: 999px; overflow: hidden; margin-top: 4px;
+    }
+    #pricing-modal .pricing-usage-bar > span { display:block; height:100%; background:#3b82f6; transition: width 0.3s ease; }
+    #pricing-modal .pricing-usage-bar.warning > span { background: #f59e0b; }
+    #pricing-modal .pricing-usage-bar.over    > span { background: #ef4444; }
+  </style>
+
+  <div id="pricing-modal" class="collab-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pricing-modal-title" style="display:none">
+    <div class="collab-modal collab-modal-large" style="max-width:1080px;">
+      <header class="collab-modal-header">
+        <h2 id="pricing-modal-title" class="collab-modal-title">料金プラン</h2>
+        <button type="button" class="collab-modal-close" onclick="closePricingModal()" aria-label="閉じる">×</button>
+      </header>
+      <div class="collab-modal-body" style="padding:18px 20px;">
+        <p style="margin:0 0 12px;color:var(--text-secondary,#6b7280);font-size:0.85rem;">
+          THEBRANCH の使い方に合わせて最適なプランを選べます。いつでも変更・解約できます。
+        </p>
+        <div id="pricing-current" class="pricing-current-summary" style="display:none;"></div>
+        <div id="pricing-usage" class="pricing-usage"></div>
+        <div id="pricing-grid" class="pricing-grid">
+          <div style="grid-column:1/-1;text-align:center;color:var(--text-secondary,#6b7280);padding:30px;">
+            読み込み中...
+          </div>
+        </div>
+        <p style="margin-top:14px;font-size:0.72rem;color:var(--text-secondary,#9ca3af);">
+          ※ 表示価格は税抜です。Enterprise は要相談（弊社よりご連絡）。
+        </p>
       </div>
     </div>
   </div>
@@ -4128,10 +4350,11 @@
     if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
   }
 
-  // Esc キーで Task#2793 / #2509 モーダルを閉じる
+  // Esc キーで Task#2793 / #2509 / #2503 モーダルを閉じる
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (document.getElementById('chat-modal')?.style.display !== 'none') closeChatModal();
+    if (document.getElementById('pricing-modal')?.style.display !== 'none') closePricingModal();
+    else if (document.getElementById('chat-modal')?.style.display !== 'none') closeChatModal();
     else if (document.getElementById('projects-modal')?.style.display !== 'none') closeProjectsModal();
     else if (document.getElementById('workflows-modal')?.style.display !== 'none') closeWorkflowsModal();
     else if (document.getElementById('templates-modal')?.style.display !== 'none') closeTemplatesModal();
@@ -4144,6 +4367,7 @@
     else if (path === '/workflows') openWorkflowsModal();
     else if (path === '/workflow-templates') openTemplatesModal();
     else if (path === '/agent-chat') openChatModal();
+    else if (path === '/pricing') openPricingModal();
   });
 
   // ==========================================================================
@@ -4450,7 +4674,639 @@
       sendChatMessage();
     }
   });
+
+  // ==========================================================================
+  // Task #2503: サブスクリプション・課金プラン
+  //   - 料金ページ表示（プラン一覧 / 現在の契約 / 利用状況）
+  //   - プラン購読・キャンセル・アップグレード/ダウングレード
+  // ==========================================================================
+  let tbPricingState = { plans: [], current: null, usage: null };
+
+  async function openPricingModal() {
+    const modal = document.getElementById('pricing-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    await reloadPricingData();
+  }
+
+  function closePricingModal() {
+    const modal = document.getElementById('pricing-modal');
+    if (modal) modal.style.display = 'none';
+    document.body.style.overflow = '';
+    if (location.pathname === '/pricing') history.replaceState(null, '', '/');
+  }
+
+  async function reloadPricingData() {
+    const grid = document.getElementById('pricing-grid');
+    if (grid) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#6b7280;padding:30px;">読み込み中...</div>';
+    try {
+      const [plansRes, subRes, usageRes] = await Promise.all([
+        tbAuthFetch('/api/billing/plans'),
+        tbAuthFetch('/api/billing/subscription'),
+        tbAuthFetch('/api/billing/usage'),
+      ]);
+      const plans = (plansRes && plansRes.ok) ? await plansRes.json() : { plans: [] };
+      const sub   = (subRes && subRes.ok)     ? await subRes.json()   : null;
+      const usage = (usageRes && usageRes.ok) ? await usageRes.json() : null;
+      tbPricingState.plans   = plans.plans || [];
+      tbPricingState.current = sub;
+      tbPricingState.usage   = usage;
+    } catch (e) {
+      console.error('[pricing] failed to load:', e);
+      tbPricingState.plans = [];
+    }
+    renderPricingCurrent();
+    renderPricingUsage();
+    renderPricingGrid();
+  }
+
+  function renderPricingCurrent() {
+    const el = document.getElementById('pricing-current');
+    if (!el) return;
+    const c = tbPricingState.current;
+    if (!c || !c.plan) { el.style.display = 'none'; return; }
+    const planName = tbEscapeHtml(c.plan.name || c.plan.code || 'Free');
+    const planCode = c.plan.code || 'free';
+    const sub = c.subscription;
+    const isCancelling = sub && Number(sub.cancel_at_period_end) === 1;
+    let actionsHtml = '';
+    if (planCode !== 'free' && sub && sub.status === 'active' && !isCancelling) {
+      actionsHtml = `<button class="collab-btn collab-btn-outline collab-btn-sm" onclick="cancelMyPlan()" style="color:#b91c1c;">解約</button>`;
+    } else if (isCancelling) {
+      actionsHtml = `<span style="color:#b91c1c;font-size:0.78rem;">期間末で解約予定</span>`;
+    }
+    el.innerHTML = `
+      <span>現在のプラン:</span>
+      <span class="badge">${planName}</span>
+      <span style="color:#6b7280;font-size:0.78rem;">${c.is_default_free ? '※ デフォルト Free（未契約）' : ''}</span>
+      <span style="margin-left:auto;">${actionsHtml}</span>
+    `;
+    el.style.display = 'flex';
+  }
+
+  function renderPricingUsage() {
+    const el = document.getElementById('pricing-usage');
+    if (!el) return;
+    const u = tbPricingState.usage;
+    if (!u || !u.usage) { el.innerHTML = ''; return; }
+    const items = [
+      { key: 'departments',         label: '部署' },
+      { key: 'agents',              label: 'エージェント' },
+      { key: 'workflows',           label: 'ワークフロー' },
+      { key: 'chat_messages_today', label: '本日チャット数' },
+    ];
+    el.innerHTML = items.map(it => {
+      const v = u.usage[it.key] || { current: 0, limit: 0, ratio: 0 };
+      const limitDisp = (v.limit && v.limit >= 999) ? '無制限' : (v.limit ?? '-');
+      const pct = Math.round((v.ratio || 0) * 100);
+      const cls = pct >= 100 ? 'over' : (pct >= 80 ? 'warning' : '');
+      return `
+        <div class="pricing-usage-item">
+          <div style="display:flex;justify-content:space-between;">
+            <strong>${it.label}</strong>
+            <span style="color:#6b7280;">${v.current} / ${limitDisp}</span>
+          </div>
+          <div class="pricing-usage-bar ${cls}"><span style="width:${pct}%"></span></div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderPricingGrid() {
+    const grid = document.getElementById('pricing-grid');
+    if (!grid) return;
+    if (!tbPricingState.plans.length) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#b91c1c;padding:30px;">プラン情報が取得できませんでした。</div>';
+      return;
+    }
+    const currentCode = (tbPricingState.current && tbPricingState.current.plan && tbPricingState.current.plan.code) || 'free';
+    grid.innerHTML = tbPricingState.plans.map(p => {
+      const isCurrent = p.code === currentCode;
+      const isRecommended = p.code === 'pro';
+      const features = (p.features || []).map(f => `<li>${tbEscapeHtml(String(f))}</li>`).join('');
+      let priceHtml;
+      if (Number(p.price_jpy) < 0) {
+        priceHtml = `<div class="pricing-price">要相談</div>`;
+      } else if (Number(p.price_jpy) === 0) {
+        priceHtml = `<div class="pricing-price">¥0 <span class="pricing-period">/月</span></div>`;
+      } else {
+        priceHtml = `<div class="pricing-price">¥${Number(p.price_jpy).toLocaleString()} <span class="pricing-period">/月</span></div>`;
+      }
+      let cta;
+      if (isCurrent) {
+        cta = `<button class="collab-btn collab-btn-outline collab-btn-sm pricing-cta" disabled>現在のプラン</button>`;
+      } else if (p.code === 'enterprise') {
+        cta = `<button class="collab-btn collab-btn-outline collab-btn-sm pricing-cta" onclick="subscribeToPlan('${p.code}')">お問い合わせ</button>`;
+      } else {
+        cta = `<button class="collab-btn collab-btn-primary collab-btn-sm pricing-cta" onclick="subscribeToPlan('${p.code}')">このプランにする</button>`;
+      }
+      const badges = [];
+      if (isCurrent) badges.push('<span class="pricing-badge current">現在</span>');
+      else if (isRecommended) badges.push('<span class="pricing-badge">おすすめ</span>');
+      const cardCls = ['pricing-card'];
+      if (isCurrent) cardCls.push('current');
+      else if (isRecommended) cardCls.push('recommended');
+      return `
+        <div class="${cardCls.join(' ')}">
+          ${badges.join('')}
+          <div class="pricing-name">${tbEscapeHtml(p.name || p.code)}</div>
+          <div class="pricing-tagline">${tbEscapeHtml(p.tagline || '')}</div>
+          ${priceHtml}
+          <ul class="pricing-features">${features}</ul>
+          ${cta}
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function subscribeToPlan(planCode) {
+    if (!planCode) return;
+    if (!confirm(`プラン「${planCode}」に変更します。よろしいですか？`)) return;
+    try {
+      const res = await tbAuthFetch('/api/billing/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_code: planCode }),
+      });
+      if (!res || !res.ok) {
+        const err = res ? (await res.text()) : 'no response';
+        alert('プラン変更に失敗しました: ' + err);
+        return;
+      }
+      const data = await res.json();
+      if (data.contact_required) {
+        alert(data.message || 'Enterprise プランは要相談です。担当よりご連絡します。');
+      } else {
+        alert(`プランを「${planCode}」に変更しました。`);
+      }
+      await reloadPricingData();
+    } catch (e) {
+      console.error('[pricing] subscribe failed:', e);
+      alert('プラン変更でエラーが発生しました: ' + e.message);
+    }
+  }
+
+  async function cancelMyPlan() {
+    if (!confirm('現在のプランを期間末で解約します。よろしいですか？')) return;
+    try {
+      const res = await tbAuthFetch('/api/billing/subscription', { method: 'DELETE' });
+      if (!res || !res.ok) {
+        alert('解約に失敗しました');
+        return;
+      }
+      alert('解約手続きを受け付けました（期間末で停止）。');
+      await reloadPricingData();
+    } catch (e) {
+      console.error('[pricing] cancel failed:', e);
+      alert('解約でエラーが発生しました: ' + e.message);
+    }
+  }
   </script>
   <script src="/js/marketplace.js"></script>
+  <script src="/js/search.js"></script>
+  <script>
+  // ── Department View: リアルタイム部署稼働ビュー (#2568) ──
+  (function() {
+    const TREE_ID = 'dv-session-tree';
+    const STATUS_BADGE = {
+      busy:     '<span class="dv-badge dv-badge-busy">稼働中</span>',
+      approval: '<span class="dv-badge dv-badge-approval">承認待ち</span>',
+      idle:     '<span class="dv-badge dv-badge-idle">待機中</span>',
+      unknown:  '<span class="dv-badge dv-badge-unknown">不明</span>',
+    };
+    const collapsedSessions = new Set();
+
+    function formatActivity(sec) {
+      if (sec < 0) return '不明';
+      if (sec < 60) return `${sec}秒前`;
+      if (sec < 3600) return `${Math.floor(sec / 60)}分前`;
+      return `${Math.floor(sec / 3600)}時間前`;
+    }
+
+    function renderPane(pane) {
+      const badge = STATUS_BADGE[pane.status] || STATUS_BADGE.unknown;
+      const ag = pane.agent;
+      if (!ag) {
+        return `<div class="dv-pane-card" title="${pane.cwd || ''}">
+          <div class="dv-pane-top">${badge}<span class="dv-pane-no-agent">エージェントなし</span></div>
+        </div>`;
+      }
+      const name = ag.persona_name || 'エージェント';
+      const task = ag.task_title ? ag.task_title.slice(0, 40) : '';
+      const prog = ag.progress ? ag.progress.slice(0, 30) : '';
+      const act  = ag.last_activity_sec >= 0 ? formatActivity(ag.last_activity_sec) : '';
+      const paneIdAttr = pane.pane_id ? `data-pane-id="${pane.pane_id}"` : '';
+      return `<div class="dv-pane-card" ${paneIdAttr} title="${pane.cwd || ''}" onclick="dvOpenPaneLog('${pane.pane_id || ''}')">
+        <div class="dv-pane-top">
+          ${badge}
+          <span class="dv-pane-name">${name}</span>
+          <span class="dv-pane-activity">${act}</span>
+        </div>
+        ${task ? `<div class="dv-pane-task">${task}</div>` : ''}
+        ${prog ? `<div class="dv-pane-progress">${prog}</div>` : ''}
+      </div>`;
+    }
+
+    function renderSession(session) {
+      const isCollapsed = collapsedSessions.has(session.name);
+      const toggleIcon = isCollapsed ? '▶' : '▼';
+      const windowsHtml = (session.windows || []).map((w, wi) => {
+        const panesHtml = (w.panes || []).map(renderPane).join('');
+        return `<div class="dv-window-group">
+          <div class="dv-window-label">window:${w.index}</div>
+          <div class="dv-panes-row">${panesHtml}</div>
+        </div>`;
+      }).join('');
+      return `<div class="dv-session-block">
+        <div class="dv-session-header" onclick="dvToggleSession('${session.name}')">
+          <span class="dv-session-toggle">${toggleIcon}</span>
+          <span>${session.name}</span>
+        </div>
+        <div class="dv-session-body${isCollapsed ? ' collapsed' : ''}">
+          ${windowsHtml}
+        </div>
+      </div>`;
+    }
+
+    window.dvToggleSession = function(name) {
+      if (collapsedSessions.has(name)) collapsedSessions.delete(name);
+      else collapsedSessions.add(name);
+      const tree = document.getElementById(TREE_ID);
+      if (tree) {
+        const block = [...tree.querySelectorAll('.dv-session-block')].find(
+          el => el.querySelector('.dv-session-header span:last-child')?.textContent === name
+        );
+        if (block) {
+          const body = block.querySelector('.dv-session-body');
+          const icon = block.querySelector('.dv-session-toggle');
+          if (body) body.classList.toggle('collapsed', collapsedSessions.has(name));
+          if (icon) icon.textContent = collapsedSessions.has(name) ? '▶' : '▼';
+        }
+      }
+    };
+
+    window.dvOpenPaneLog = function(paneId) {
+      if (!paneId) return;
+      const existModal = document.getElementById('pane-log-modal');
+      if (existModal) { existModal.remove(); }
+      const modal = document.createElement('div');
+      modal.id = 'pane-log-modal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9000;display:flex;align-items:center;justify-content:center;';
+      modal.innerHTML = `<div style="background:#1e1e2e;color:#cdd6f4;border-radius:12px;padding:20px;width:90%;max-width:700px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span style="font-weight:600;font-family:monospace;font-size:0.9rem;">${paneId}</span>
+          <button onclick="document.getElementById('pane-log-modal').remove()" style="background:none;border:none;color:#cdd6f4;font-size:1.2rem;cursor:pointer;">✕</button>
+        </div>
+        <pre id="pane-log-content" style="flex:1;overflow:auto;font-size:0.8rem;font-family:monospace;white-space:pre-wrap;margin:0;">接続中...</pre>
+      </div>`;
+      document.body.appendChild(modal);
+      const ws = new WebSocket(`ws://${location.host}/ws/pane/${encodeURIComponent(paneId)}`);
+      ws.onmessage = (e) => {
+        try {
+          const d = JSON.parse(e.data);
+          const el = document.getElementById('pane-log-content');
+          if (el) el.textContent = d.content || '';
+        } catch(_) {}
+      };
+      modal.addEventListener('click', (e) => { if (e.target === modal) { ws.close(); modal.remove(); } });
+    };
+
+    function updateSummary(summary) {
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      set('dv-total-sessions', summary.total_sessions ?? '-');
+      set('dv-active-agents',  summary.active_agents ?? '-');
+      set('dv-inprogress',     summary.task_stats?.in_progress ?? '-');
+      const rate = summary.completion_rate != null ? Math.round(summary.completion_rate * 100) + '%' : '-';
+      set('dv-completion-rate', rate);
+    }
+
+    function updateTree(sessions) {
+      const tree = document.getElementById(TREE_ID);
+      if (!tree) return;
+      if (!sessions || sessions.length === 0) {
+        tree.innerHTML = '<p class="dv-loading">稼働中のセッションがありません</p>';
+        return;
+      }
+      tree.innerHTML = sessions.map(renderSession).join('');
+    }
+
+    let dvConnection = { type: 'none' };
+
+    function handleDvMessage(data) {
+      if (data.type !== 'integrated_update') return;
+      updateSummary(data.summary || {});
+      updateTree(data.sessions || []);
+      const el = document.getElementById('dv-last-updated');
+      if (el) el.textContent = '最終更新: ' + new Date(data.ts).toLocaleTimeString('ja-JP');
+    }
+
+    function startDvSse() {
+      const es = new EventSource('/sse/integrated');
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          handleDvMessage(data);
+        } catch(_) {}
+      };
+      es.onerror = () => {
+        es.close();
+        const tree = document.getElementById(TREE_ID);
+        if (tree) tree.innerHTML = '<p class="dv-loading">接続エラー。再接続中...</p>';
+        setTimeout(startDvSse, 5000);
+      };
+      dvConnection = { type: 'sse', es };
+    }
+
+    function startDvWs() {
+      const ws = new WebSocket(`ws://${location.host}/ws/integrated`);
+      ws.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          handleDvMessage(data);
+        } catch(_) {}
+      };
+      ws.onerror = () => {
+        const tree = document.getElementById(TREE_ID);
+        if (tree) tree.innerHTML = '<p class="dv-loading">WebSocket 接続失敗。SSE で再接続中...</p>';
+        setTimeout(startDvSse, 1000);
+      };
+      ws.onclose = () => {
+        if (dvConnection.type === 'ws') {
+          setTimeout(startDvWs, 5000);
+        }
+      };
+      dvConnection = { type: 'ws', ws };
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startDvWs);
+    } else {
+      startDvWs();
+    }
+  })();
+
+  // ═══════════════════════════════════════════════════════════
+  // Task #2546: Cost Optimization Dashboard
+  // ═══════════════════════════════════════════════════════════
+  </script>
+
+  <!-- Cost Dashboard Modal -->
+  <div id="cost-dashboard-modal" class="modal" style="display: none;">
+    <div class="modal-overlay" onclick="closeCostDashboard()"></div>
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h2>💰 AIエージェント コスト最適化ダッシュボード</h2>
+        <button type="button" class="modal-close" onclick="closeCostDashboard()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="cost-dashboard-container" style="padding: 24px;">
+          <!-- Summary Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 8px; padding: 16px;">
+              <p style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px;">本日のコスト</p>
+              <p style="font-size: 24px; font-weight: 600; color: var(--accent);" id="today-cost">$0.00</p>
+            </div>
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 8px; padding: 16px;">
+              <p style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px;">全期間コスト</p>
+              <p style="font-size: 24px; font-weight: 600; color: var(--warning);" id="all-cost">$0.00</p>
+            </div>
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 8px; padding: 16px;">
+              <p style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px;">API呼び出し数</p>
+              <p style="font-size: 24px; font-weight: 600; color: var(--success);" id="api-calls">0</p>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <div style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border-light);">
+            <button class="cost-tab-btn active" onclick="switchCostTab('timeline')" style="padding: 12px 16px; border: none; background: none; color: var(--text-primary); cursor: pointer; border-bottom: 2px solid var(--accent);">タイムライン</button>
+            <button class="cost-tab-btn" onclick="switchCostTab('projects')" style="padding: 12px 16px; border: none; background: none; color: var(--text-primary); cursor: pointer; border-bottom: 2px solid transparent;">プロジェクト別</button>
+            <button class="cost-tab-btn" onclick="switchCostTab('details')" style="padding: 12px 16px; border: none; background: none; color: var(--text-primary); cursor: pointer; border-bottom: 2px solid transparent;">詳細</button>
+          </div>
+
+          <!-- Timeline Chart -->
+          <div id="timeline-tab" style="display: block;">
+            <canvas id="timeline-chart" style="max-height: 400px;"></canvas>
+          </div>
+
+          <!-- Projects Chart -->
+          <div id="projects-tab" style="display: none;">
+            <canvas id="projects-chart" style="max-height: 400px;"></canvas>
+          </div>
+
+          <!-- Details Table -->
+          <div id="details-tab" style="display: none;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <thead>
+                <tr style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-light);">
+                  <th style="padding: 12px; text-align: left;">セッション</th>
+                  <th style="padding: 12px; text-align: left;">日付</th>
+                  <th style="padding: 12px; text-align: right;">コスト</th>
+                </tr>
+              </thead>
+              <tbody id="session-details-tbody">
+                <tr><td colspan="3" style="padding: 24px; text-align: center; color: var(--text-tertiary);">データ読み込み中...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script>
+    let costCharts = {};
+
+    function openCostDashboard() {
+      const modal = document.getElementById('cost-dashboard-modal');
+      modal.style.display = 'flex';
+      loadCostData();
+    }
+
+    function closeCostDashboard() {
+      document.getElementById('cost-dashboard-modal').style.display = 'none';
+    }
+
+    function switchCostTab(tabName) {
+      document.querySelectorAll('[id$="-tab"]').forEach(el => el.style.display = 'none');
+      document.getElementById(tabName + '-tab').style.display = 'block';
+
+      document.querySelectorAll('.cost-tab-btn').forEach(btn => {
+        btn.style.borderBottomColor = 'transparent';
+        btn.style.color = 'var(--text-primary)';
+      });
+      event.target.style.borderBottomColor = 'var(--accent)';
+      event.target.style.color = 'var(--accent)';
+
+      if (tabName === 'timeline' && !costCharts.timeline) {
+        setTimeout(() => costCharts.timeline?.update?.(), 100);
+      } else if (tabName === 'projects' && !costCharts.projects) {
+        setTimeout(() => costCharts.projects?.update?.(), 100);
+      }
+    }
+
+    async function loadCostData() {
+      try {
+        const response = await fetch('/api/costs');
+        const data = await response.json();
+
+        // Update summary
+        document.getElementById('today-cost').textContent = '$' + data.today_total.toFixed(2);
+        document.getElementById('all-cost').textContent = '$' + data.all_total.toFixed(2);
+        document.getElementById('api-calls').textContent = (data.by_session?.length || 0).toString();
+
+        // Timeline Chart
+        const dateData = data.by_date || [];
+        const sortedDates = dateData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        const timelineCtx = document.getElementById('timeline-chart').getContext('2d');
+        costCharts.timeline = new Chart(timelineCtx, {
+          type: 'line',
+          data: {
+            labels: sortedDates.map(d => new Date(d.date).toLocaleDateString('ja-JP')),
+            datasets: [{
+              label: 'コスト（USD）',
+              data: sortedDates.map(d => d.costUSD),
+              borderColor: 'var(--accent)',
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              tension: 0.3,
+              fill: true,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: true } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+
+        // Projects Chart
+        const projectData = data.by_project || [];
+        const projectsCtx = document.getElementById('projects-chart').getContext('2d');
+        costCharts.projects = new Chart(projectsCtx, {
+          type: 'doughnut',
+          data: {
+            labels: projectData.map(p => p.project),
+            datasets: [{
+              data: projectData.map(p => p.costUSD),
+              backgroundColor: [
+                '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
+                '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'
+              ]
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } }
+          }
+        });
+
+        // Details Table
+        const tbody = document.getElementById('session-details-tbody');
+        tbody.innerHTML = '';
+        const sessions = data.by_session || [];
+        if (sessions.length > 0) {
+          sessions.slice(0, 20).forEach(s => {
+            const row = document.createElement('tr');
+            row.style.borderBottom = '1px solid var(--border-light)';
+            row.innerHTML = `
+              <td style="padding: 12px; font-family: monospace; font-size: 12px;">${s.sessionId.substring(0, 8)}</td>
+              <td style="padding: 12px;">${new Date(s.date).toLocaleDateString('ja-JP')}</td>
+              <td style="padding: 12px; text-align: right; font-weight: 500;">$${s.costUSD.toFixed(6)}</td>
+            `;
+            tbody.appendChild(row);
+          });
+        } else {
+          tbody.innerHTML = '<tr><td colspan="3" style="padding: 24px; text-align: center; color: var(--text-tertiary);">コストデータがありません</td></tr>';
+        }
+      } catch (err) {
+        console.error('Failed to load cost data:', err);
+        document.getElementById('cost-dashboard-container').innerHTML = '<p style="color: var(--error);">コストデータの読み込みに失敗しました</p>';
+      }
+    }
+
+    // Add CSS for modal styling
+    if (!document.getElementById('cost-dashboard-styles')) {
+      const style = document.createElement('style');
+      style.id = 'cost-dashboard-styles';
+      style.textContent = `
+        .modal {
+          display: none;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          z-index: 1000;
+          align-items: center;
+          justify-content: center;
+          overflow: auto;
+        }
+
+        .modal-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 1;
+        }
+
+        .modal-content {
+          position: relative;
+          background: var(--bg-primary);
+          border-radius: 8px;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+          z-index: 2;
+          max-width: 800px;
+          width: 90%;
+          max-height: 90vh;
+          overflow: auto;
+        }
+
+        .modal-lg {
+          max-width: 1000px;
+        }
+
+        .modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 24px;
+          border-bottom: 1px solid var(--border-light);
+        }
+
+        .modal-header h2 {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 600;
+        }
+
+        .modal-close {
+          background: none;
+          border: none;
+          font-size: 24px;
+          cursor: pointer;
+          color: var(--text-secondary);
+        }
+
+        .modal-close:hover {
+          color: var(--text-primary);
+        }
+
+        .modal-body {
+          overflow-y: auto;
+        }
+
+        .cost-tab-btn:hover {
+          color: var(--accent) !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  </script>
 </body>
 </html>

@@ -20,9 +20,7 @@ SALARY_BENCHMARKS = {
 class OnboardingService:
     def __init__(self):
         api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
-        self.client = Anthropic(api_key=api_key)
+        self.client = Anthropic(api_key=api_key) if api_key else None
         self.model = "claude-opus-4-7"
 
     def analyze_vision_for_templates(self, vision_input: str) -> List[Dict[str, Any]]:
@@ -35,47 +33,49 @@ class OnboardingService:
         Returns:
             TemplateSuggestion 형태의 제안 목록 (최소 2개)
         """
-        prompt = """당신은 조직 구조 설계 전문가입니다. 사용자의 비전을 분석하여 가장 적합한 부서 템플릿을 제안해주세요.
+        prompt = """あなたは組織設計の専門家です。ユーザーのビジョンを分析し、最適な部署テンプレートを提案してください。
 
-사용자 비전:
+ユーザーのビジョン:
 "{vision_input}"
 
-다음 부서 템플릿 중에서 비전과 가장 잘 맞는 2-3개를 선택하고, 각각에 대해:
-1. template_id: 1-10 범위의 정수
-2. name: 부서명
-3. category: 부서 카테고리
-4. total_roles: 역할 수
-5. total_processes: 프로세스 수
-6. reason: 이 템플릿을 선택한 이유 (50-100자)
-7. rank: 적합도 순위 (1=가장 적합, 2=중간, 3=대안)
+以下の部署テンプレートカタログから、ビジョンに最も合致する2〜3個を選択し、それぞれについて:
+1. template_id: 1〜10の整数
+2. name: 部署名
+3. category: 部署カテゴリ
+4. total_roles: 役割数
+5. total_processes: プロセス数
+6. reason: このテンプレートを選んだ理由（50〜100文字）
+7. rank: 適合度ランク（1=最適、2=中位、3=代替）
 
-부서 템플릿 카탈로그:
-- ID 1: 마케팅 (Marketing) - 4개 역할, 6개 프로세스
-- ID 2: 영업 (Sales) - 5개 역할, 7개 프로세스
-- ID 3: 엔지니어링 (Engineering) - 6개 역할, 8개 프로세스
-- ID 4: 재무 (Finance) - 4개 역할, 5개 프로세스
-- ID 5: 운영 (Operations) - 5개 역할, 6개 프로세스
-- ID 6: 고객 지원 (Support) - 4개 역할, 6개 프로세스
-- ID 7: 인사 (HR) - 4개 역할, 5개 프로세스
-- ID 8: 법무 (Legal) - 3개 역할, 4개 프로세스
-- ID 9: 제품 (Product) - 5개 역할, 6개 프로세스
-- ID 10: 데이터 분석 (Analytics) - 4개 역할, 5개 프로세스
+部署テンプレートカタログ:
+- ID 1: マーケティング (Marketing) - 4役割、6プロセス
+- ID 2: 営業 (Sales) - 5役割、7プロセス
+- ID 3: エンジニアリング (Engineering) - 6役割、8プロセス
+- ID 4: 財務 (Finance) - 4役割、5プロセス
+- ID 5: オペレーション (Operations) - 5役割、6プロセス
+- ID 6: カスタマーサポート (Support) - 4役割、6プロセス
+- ID 7: 人事 (HR) - 4役割、5プロセス
+- ID 8: 法務 (Legal) - 3役割、4プロセス
+- ID 9: プロダクト (Product) - 5役割、6プロセス
+- ID 10: データ分析 (Analytics) - 4役割、5プロセス
 
-JSON 형식으로 응답하세요:
+JSON形式で回答してください:
 [
   {{
     "template_id": 1,
-    "name": "부서명",
-    "category": "카테고리",
+    "name": "部署名",
+    "category": "カテゴリ",
     "total_roles": 4,
     "total_processes": 6,
-    "reason": "선택 이유",
+    "reason": "選択理由",
     "rank": 1
   }}
 ]
 """.format(vision_input=vision_input)
 
         try:
+            if not self.client:
+                return self._get_default_suggestions()
             message = self.client.messages.create(
                 model=self.model,
                 max_tokens=1024,
@@ -105,7 +105,7 @@ JSON 형식으로 응답하세요:
             return suggestions[:3]  # 최대 3개 반환
 
         except Exception as e:
-            logger.error(f"Vision 분석 실패: {str(e)}")
+            logger.error(f"ビジョン分析失敗: {str(e)}")
             # 기본 제안 반환
             return self._get_default_suggestions()
 
@@ -128,36 +128,38 @@ JSON 형식으로 응답하세요:
         Returns:
             InitialTask 형태의 작업 목록 (3-5개)
         """
-        prompt = """당신은 부서 목표 달성을 위한 작업 계획 전문가입니다. 주어진 정보를 기반으로 초기 작업을 생성해주세요.
+        prompt = """あなたは部署目標達成のためのタスク計画専門家です。以下の情報をもとに初期タスクを生成してください。
 
-부서 정보:
-- 부서명: {dept_name}
+部署情報:
+- 部署名: {dept_name}
 - KPI: {kpi}
-- 월 예산: ${budget}
-- 팀원 수: {members_count}명
+- 月次予算: ${budget}
+- チームメンバー数: {members_count}名
 
-다음 요구사항을 만족하는 3-5개의 초기 작업을 생성하세요:
-1. task_id: "task_001" 형식
-2. title: 작업 제목 (30자 이내)
-3. description: 작업 설명 (50-100자)
-4. budget: 작업 예산 (USD, 전체 예산의 합 ≤ {budget})
-5. deadline: 기한 (YYYY-MM-DD 형식, 30일 이내)
-6. assigned_to: 담당자 역할
+以下の要件を満たす3〜5個の初期タスクを生成してください:
+1. task_id: "task_001" 形式
+2. title: タスクタイトル（30文字以内）
+3. description: タスク説明（50〜100文字）
+4. budget: タスク予算（USD、合計が{budget}以下）
+5. deadline: 期限（YYYY-MM-DD形式、30日以内）
+6. assigned_to: 担当者の役割（日本語）
 
-JSON 형식으로 응답하세요:
+JSON形式で回答してください:
 [
   {{
     "task_id": "task_001",
-    "title": "작업 제목",
-    "description": "작업 설명",
+    "title": "タスクタイトル",
+    "description": "タスク説明",
     "budget": 1000.0,
-    "deadline": "2026-05-15",
-    "assigned_to": "Manager"
+    "deadline": "2026-05-30",
+    "assigned_to": "マネージャー"
   }}
 ]
 """.format(dept_name=dept_name, kpi=kpi, budget=budget, members_count=members_count)
 
         try:
+            if not self.client:
+                return self._get_default_tasks(dept_name, budget, members_count)
             message = self.client.messages.create(
                 model=self.model,
                 max_tokens=1500,
@@ -191,7 +193,7 @@ JSON 형식으로 응답하세요:
             return tasks[:5]  # 최대 5개 반환
 
         except Exception as e:
-            logger.error(f"초기 작업 생성 실패: {str(e)}")
+            logger.error(f"初期タスク生成失敗: {str(e)}")
             # 기본 작업 반환
             return self._get_default_tasks(dept_name, budget, members_count)
 
@@ -233,13 +235,13 @@ JSON 형식으로 응답하세요:
         # 상태 결정
         if monthly_per_person >= market_benchmark:
             status = "ok"
-            message = f"예산이 적절합니다. 인당 ${monthly_per_person:.0f}/월 (벤치마크: ${market_benchmark}/월)"
+            message = f"予算は適切です。1人あたり${monthly_per_person:.0f}/月（ベンチマーク: ${market_benchmark}/月）"
         elif monthly_per_person >= market_benchmark * 0.8:
             status = "warning"
-            message = f"예산이 약간 낮습니다. 인당 ${monthly_per_person:.0f}/월 (권장: ${market_benchmark}/월)"
+            message = f"予算がやや低めです。1人あたり${monthly_per_person:.0f}/月（推奨: ${market_benchmark}/月）"
         else:
             status = "error"
-            message = f"예산이 부족합니다. 인당 ${monthly_per_person:.0f}/월 (최소: ${market_benchmark * 0.8:.0f}/월)"
+            message = f"予算が不足しています。1人あたり${monthly_per_person:.0f}/月（最低: ${market_benchmark * 0.8:.0f}/月）"
 
         return {
             "status": status,
@@ -253,20 +255,20 @@ JSON 형식으로 응답하세요:
         return [
             {
                 "template_id": 1,
-                "name": "마케팅",
+                "name": "マーケティング",
                 "category": "Marketing",
                 "total_roles": 4,
                 "total_processes": 6,
-                "reason": "일반적인 부서 구조로 추천됩니다.",
+                "reason": "汎用的な部署構造として推奨されます。",
                 "rank": 1
             },
             {
                 "template_id": 2,
-                "name": "영업",
+                "name": "営業",
                 "category": "Sales",
                 "total_roles": 5,
                 "total_processes": 7,
-                "reason": "매출 중심 조직에 적합합니다.",
+                "reason": "売上重視の組織に適しています。",
                 "rank": 2
             }
         ]
@@ -288,27 +290,27 @@ JSON 형식으로 응답하세요:
         return [
             {
                 "task_id": "task_001",
-                "title": f"{dept_name} 팀 온보딩 완료",
-                "description": "팀원들의 시스템 접근권 설정 및 기본 교육",
+                "title": f"{dept_name} チームオンボーディング",
+                "description": "チームメンバーのシステムアクセス設定と基礎研修の実施",
                 "budget": round(task_budget, 2),
                 "deadline": deadline_1,
-                "assigned_to": "Manager"
+                "assigned_to": "マネージャー"
             },
             {
                 "task_id": "task_002",
-                "title": "부서 프로세스 수립",
-                "description": "일일/주간/월간 업무 프로세스 정의 및 문서화",
+                "title": "部署業務プロセス策定",
+                "description": "日次・週次・月次の業務プロセスを定義し文書化する",
                 "budget": round(task_budget, 2),
                 "deadline": deadline_2,
-                "assigned_to": "Lead"
+                "assigned_to": "リード"
             },
             {
                 "task_id": "task_003",
-                "title": "성과 지표(KPI) 수립",
-                "description": "부서의 핵심 성과지표를 정의하고 대시보드 구성",
+                "title": "KPI・成果指標の設定",
+                "description": "部署の主要成果指標を定義しダッシュボードを構成する",
                 "budget": round(task_budget, 2),
                 "deadline": deadline_3,
-                "assigned_to": "Analyst"
+                "assigned_to": "アナリスト"
             }
         ]
 

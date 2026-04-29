@@ -1,5 +1,28 @@
 {
   "skills": [".claude/skills/project-add/SKILL.md"],
+  "permissions": {
+    "allow": [
+      "Bash(python3 ~/.claude/skills/task-manager-sqlite/scripts/task.py *)",
+      "Bash(tmux capture-pane *)",
+      "Bash(tmux list-panes *)",
+      "Bash(tmux send-keys *)",
+      "Bash(sqlite3 *)",
+      "Bash(curl *)",
+      "Bash(python3 scripts/orchestrate_loop.py *)",
+      "Bash(tmux ls *)",
+      "Bash(tmux list-sessions *)",
+      "Bash(tmux list-windows *)",
+      "Bash(python3 ~/.claude/skills/task-manager-sqlite/scripts/start_pane.py *)",
+      "Bash(python3 ~/.claude/skills/orchestrate/scripts/pane_status.py *)",
+      "Bash(python3 ~/.claude/skills/task-manager-sqlite/scripts/report_anomaly.py *)",
+      "Bash(tmux new-session *)",
+      "Bash(python3 /Users/delightone/dev/github.com/adachi-koichi/ai-orchestrator/scripts/orchestrate_loop.py *)",
+      "Bash(python3 dashboard/migrate.py)",
+      "Bash(python3 dashboard/app.py)",
+      "Bash(npm run *)",
+      "mcp__plugin_discord_discord__reply"
+    ]
+  },
   "hooks": {
     "Stop": [
       {

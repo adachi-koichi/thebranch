@@ -1,0 +1,545 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}<span data-i18n="page.workflow_editor.title">ワークフロー自動化エディタ</span> - THEBRANCH{% endblock %}
+
+{% block content %}
+<div class="py-5">
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <h1 data-i18n="page.workflow_editor.title">ワークフロー自動化エディタ</h1>
+        <div>
+            <button class="btn btn-secondary me-2" type="button" data-i18n="page.workflow_editor.btn.save">保存</button>
+            <button class="btn btn-outline-secondary" type="button" data-i18n="page.workflow_editor.btn.cancel">キャンセル</button>
+        </div>
+    </div>
+
+    <!-- Stepper Navigation -->
+    <div class="mb-5">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between mb-3">
+                    <!-- Step 1 -->
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center">
+                            <div class="step-indicator step-active" id="step-indicator-1">
+                                <span>1</span>
+                            </div>
+                            <div class="ms-3">
+                                <h6 class="mb-0 fw-bold" data-i18n="page.workflow_editor.step1.title">ステップ1: ワークフロー定義</h6>
+                                <small class="text-muted" data-i18n="page.workflow_editor.step1.subtitle">基本情報を設定</small>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Step 2 -->
+                    <div class="flex-grow-1 ms-3">
+                        <div class="d-flex align-items-center">
+                            <div class="step-indicator" id="step-indicator-2">
+                                <span>2</span>
+                            </div>
+                            <div class="ms-3">
+                                <h6 class="mb-0" data-i18n="page.workflow_editor.step2.title">ステップ2: アクション選択</h6>
+                                <small class="text-muted" data-i18n="page.workflow_editor.step2.subtitle">実行するアクションを選択</small>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Step 3 -->
+                    <div class="flex-grow-1 ms-3">
+                        <div class="d-flex align-items-center">
+                            <div class="step-indicator" id="step-indicator-3">
+                                <span>3</span>
+                            </div>
+                            <div class="ms-3">
+                                <h6 class="mb-0" data-i18n="page.workflow_editor.step3.title">ステップ3: トリガー設定</h6>
+                                <small class="text-muted" data-i18n="page.workflow_editor.step3.subtitle">実行条件を設定</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Progress Bar -->
+                <div class="progress" style="height: 4px;">
+                    <div class="progress-bar" id="progress-bar" role="progressbar" style="width: 33.33%" aria-valuenow="1" aria-valuemin="1" aria-valuemax="3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form Container -->
+    <form id="workflow-form" class="workflow-form">
+        <!-- Step 1: Workflow Definition -->
+        <div class="step-content step-1-content" id="step-1">
+            <div class="card mb-4">
+                <div class="card-header bg-light border-bottom">
+                    <h5 class="mb-0" data-i18n="page.workflow_editor.step1.form_title">ワークフロー基本情報</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label for="workflow-name" class="form-label fw-bold">
+                            <span data-i18n="page.workflow_editor.step1.name">ワークフロー名</span>
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="workflow-name" name="workflow_name"
+                               placeholder="例: 日次レポート生成" required>
+                        <small class="form-text text-muted" data-i18n="page.workflow_editor.step1.name_hint">わかりやすい名前を付けてください</small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="workflow-description" class="form-label fw-bold">
+                            <span data-i18n="page.workflow_editor.step1.description">説明</span>
+                        </label>
+                        <textarea class="form-control" id="workflow-description" name="workflow_description"
+                                  rows="4" placeholder="このワークフローの目的や内容を説明してください"></textarea>
+                        <small class="form-text text-muted" data-i18n="page.workflow_editor.step1.description_hint">このワークフローが何をするかを簡潔に説明</small>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="workflow-category" class="form-label fw-bold">
+                                <span data-i18n="page.workflow_editor.step1.category">カテゴリ</span>
+                                <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="workflow-category" name="workflow_category" required>
+                                <option value="" disabled selected data-i18n="page.workflow_editor.step1.select_category">カテゴリを選択</option>
+                                <option value="analytics" data-i18n="page.workflow_editor.step1.category_analytics">分析</option>
+                                <option value="reporting" data-i18n="page.workflow_editor.step1.category_reporting">レポーティング</option>
+                                <option value="notification" data-i18n="page.workflow_editor.step1.category_notification">通知</option>
+                                <option value="data_processing" data-i18n="page.workflow_editor.step1.category_data_processing">データ処理</option>
+                                <option value="integration" data-i18n="page.workflow_editor.step1.category_integration">連携</option>
+                                <option value="other" data-i18n="page.workflow_editor.step1.category_other">その他</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="workflow-priority" class="form-label fw-bold">
+                                <span data-i18n="page.workflow_editor.step1.priority">優先度</span>
+                                <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="workflow-priority" name="workflow_priority" required>
+                                <option value="" disabled selected data-i18n="page.workflow_editor.step1.select_priority">優先度を選択</option>
+                                <option value="low" data-i18n="page.workflow_editor.step1.priority_low">低</option>
+                                <option value="medium" data-i18n="page.workflow_editor.step1.priority_medium">中</option>
+                                <option value="high" data-i18n="page.workflow_editor.step1.priority_high">高</option>
+                                <option value="critical" data-i18n="page.workflow_editor.step1.priority_critical">緊急</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-outline-secondary" data-i18n="page.workflow_editor.btn.cancel">キャンセル</button>
+                <button type="button" class="btn btn-primary step-next-btn" data-step="1" data-i18n="page.workflow_editor.btn.next">次へ</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Action Selection -->
+        <div class="step-content step-2-content d-none" id="step-2">
+            <div class="card mb-4">
+                <div class="card-header bg-light border-bottom">
+                    <h5 class="mb-0" data-i18n="page.workflow_editor.step2.form_title">実行アクション</h5>
+                </div>
+                <div class="card-body">
+                    <label class="form-label fw-bold mb-3">
+                        <span data-i18n="page.workflow_editor.step2.select_actions">実行するアクションを選択</span>
+                        <span class="text-danger">*</span>
+                    </label>
+
+                    <div class="action-list">
+                        <!-- Action 1 -->
+                        <div class="card mb-3 action-item">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input action-checkbox" type="checkbox" name="actions"
+                                           value="email_notification" id="action-email">
+                                    <label class="form-check-label flex-grow-1" for="action-email">
+                                        <h6 class="mb-1">
+                                            <i class="bi bi-envelope me-2"></i>
+                                            <span data-i18n="page.workflow_editor.step2.action_email">メール通知</span>
+                                        </h6>
+                                        <small class="text-muted" data-i18n="page.workflow_editor.step2.action_email_desc">指定したメールアドレスに通知を送信</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action 2 -->
+                        <div class="card mb-3 action-item">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input action-checkbox" type="checkbox" name="actions"
+                                           value="slack_notification" id="action-slack">
+                                    <label class="form-check-label flex-grow-1" for="action-slack">
+                                        <h6 class="mb-1">
+                                            <i class="bi bi-chat-dots me-2"></i>
+                                            <span data-i18n="page.workflow_editor.step2.action_slack">Slack通知</span>
+                                        </h6>
+                                        <small class="text-muted" data-i18n="page.workflow_editor.step2.action_slack_desc">Slackチャンネルにメッセージを送信</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action 3 -->
+                        <div class="card mb-3 action-item">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input action-checkbox" type="checkbox" name="actions"
+                                           value="report_generation" id="action-report">
+                                    <label class="form-check-label flex-grow-1" for="action-report">
+                                        <h6 class="mb-1">
+                                            <i class="bi bi-file-earmark-text me-2"></i>
+                                            <span data-i18n="page.workflow_editor.step2.action_report">レポート生成</span>
+                                        </h6>
+                                        <small class="text-muted" data-i18n="page.workflow_editor.step2.action_report_desc">レポートを自動生成・出力</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action 4 -->
+                        <div class="card mb-3 action-item">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input action-checkbox" type="checkbox" name="actions"
+                                           value="data_export" id="action-export">
+                                    <label class="form-check-label flex-grow-1" for="action-export">
+                                        <h6 class="mb-1">
+                                            <i class="bi bi-download me-2"></i>
+                                            <span data-i18n="page.workflow_editor.step2.action_export">データエクスポート</span>
+                                        </h6>
+                                        <small class="text-muted" data-i18n="page.workflow_editor.step2.action_export_desc">データをCSV/JSON形式でエクスポート</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action 5 -->
+                        <div class="card mb-3 action-item">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input action-checkbox" type="checkbox" name="actions"
+                                           value="agent_execution" id="action-agent">
+                                    <label class="form-check-label flex-grow-1" for="action-agent">
+                                        <h6 class="mb-1">
+                                            <i class="bi bi-gear me-2"></i>
+                                            <span data-i18n="page.workflow_editor.step2.action_agent">AIエージェント実行</span>
+                                        </h6>
+                                        <small class="text-muted" data-i18n="page.workflow_editor.step2.action_agent_desc">AIエージェントを実行してタスク処理</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="selected-actions" class="mt-4 pt-3 border-top">
+                        <p class="text-muted small" data-i18n="page.workflow_editor.step2.selected_count">選択: <span id="action-count">0</span> 件</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between gap-2">
+                <button type="button" class="btn btn-outline-secondary step-prev-btn" data-step="2" data-i18n="page.workflow_editor.btn.back">戻る</button>
+                <button type="button" class="btn btn-primary step-next-btn" data-step="2" data-i18n="page.workflow_editor.btn.next">次へ</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Trigger Configuration -->
+        <div class="step-content step-3-content d-none" id="step-3">
+            <div class="card mb-4">
+                <div class="card-header bg-light border-bottom">
+                    <h5 class="mb-0" data-i18n="page.workflow_editor.step3.form_title">トリガー設定</h5>
+                </div>
+                <div class="card-body">
+                    <label class="form-label fw-bold mb-3">
+                        <span data-i18n="page.workflow_editor.step3.select_trigger">ワークフロー実行トリガーを選択</span>
+                        <span class="text-danger">*</span>
+                    </label>
+
+                    <div class="trigger-options">
+                        <!-- Trigger 1: Scheduled -->
+                        <div class="card mb-3 trigger-option">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input trigger-radio" type="radio" name="trigger_type"
+                                           value="scheduled" id="trigger-scheduled" required>
+                                    <label class="form-check-label flex-grow-1" for="trigger-scheduled">
+                                        <h6 class="mb-2">
+                                            <i class="bi bi-calendar-event me-2"></i>
+                                            <span data-i18n="page.workflow_editor.step3.trigger_scheduled">スケジュール実行</span>
+                                        </h6>
+                                        <small class="text-muted" data-i18n="page.workflow_editor.step3.trigger_scheduled_desc">指定した日時に定期実行</small>
+                                    </label>
+                                </div>
+                                <div class="trigger-config mt-3 d-none" id="trigger-scheduled-config">
+                                    <div class="mb-3">
+                                        <label for="schedule-frequency" class="form-label">
+                                            <span data-i18n="page.workflow_editor.step3.frequency">実行頻度</span>
+                                        </label>
+                                        <select class="form-select" id="schedule-frequency" name="schedule_frequency">
+                                            <option value="daily" data-i18n="page.workflow_editor.step3.frequency_daily">毎日</option>
+                                            <option value="weekly" data-i18n="page.workflow_editor.step3.frequency_weekly">毎週</option>
+                                            <option value="monthly" data-i18n="page.workflow_editor.step3.frequency_monthly">毎月</option>
+                                            <option value="custom" data-i18n="page.workflow_editor.step3.frequency_custom">カスタム</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="schedule-time" class="form-label">
+                                            <span data-i18n="page.workflow_editor.step3.time">実行時刻</span>
+                                        </label>
+                                        <input type="time" class="form-control" id="schedule-time" name="schedule_time" value="09:00">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Trigger 2: Event-based -->
+                        <div class="card mb-3 trigger-option">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input trigger-radio" type="radio" name="trigger_type"
+                                           value="event_based" id="trigger-event">
+                                    <label class="form-check-label flex-grow-1" for="trigger-event">
+                                        <h6 class="mb-2">
+                                            <i class="bi bi-lightning me-2"></i>
+                                            <span data-i18n="page.workflow_editor.step3.trigger_event">イベントトリガー</span>
+                                        </h6>
+                                        <small class="text-muted" data-i18n="page.workflow_editor.step3.trigger_event_desc">特定のイベント発生時に自動実行</small>
+                                    </label>
+                                </div>
+                                <div class="trigger-config mt-3 d-none" id="trigger-event-config">
+                                    <div class="mb-3">
+                                        <label for="event-type" class="form-label">
+                                            <span data-i18n="page.workflow_editor.step3.event_type">イベントタイプ</span>
+                                        </label>
+                                        <select class="form-select" id="event-type" name="event_type">
+                                            <option value="data_updated" data-i18n="page.workflow_editor.step3.event_data_updated">データ更新</option>
+                                            <option value="agent_completed" data-i18n="page.workflow_editor.step3.event_agent_completed">エージェント完了</option>
+                                            <option value="threshold_reached" data-i18n="page.workflow_editor.step3.event_threshold">閾値到達</option>
+                                            <option value="error_occurred" data-i18n="page.workflow_editor.step3.event_error">エラー発生</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Trigger 3: Manual -->
+                        <div class="card mb-3 trigger-option">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input trigger-radio" type="radio" name="trigger_type"
+                                           value="manual" id="trigger-manual">
+                                    <label class="form-check-label flex-grow-1" for="trigger-manual">
+                                        <h6 class="mb-2">
+                                            <i class="bi bi-play me-2"></i>
+                                            <span data-i18n="page.workflow_editor.step3.trigger_manual">手動実行</span>
+                                        </h6>
+                                        <small class="text-muted" data-i18n="page.workflow_editor.step3.trigger_manual_desc">ユーザーが任意のタイミングで実行</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 p-3 bg-light rounded">
+                        <p class="mb-0 small" data-i18n="page.workflow_editor.step3.note">
+                            <strong>注：</strong> 作成後も設定を変更できます。複雑な機能はワークフロー作成後に追加できます。
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between gap-2">
+                <button type="button" class="btn btn-outline-secondary step-prev-btn" data-step="3" data-i18n="page.workflow_editor.btn.back">戻る</button>
+                <button type="submit" class="btn btn-success" id="workflow-submit-btn" data-i18n="page.workflow_editor.btn.create">ワークフロー作成</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<style>
+.step-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: #e9ecef;
+    color: #6c757d;
+    font-weight: bold;
+    font-size: 16px;
+    border: 2px solid #dee2e6;
+}
+
+.step-indicator.step-active {
+    background-color: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+.step-indicator.step-completed {
+    background-color: #198754;
+    color: white;
+    border-color: #198754;
+}
+
+.action-item {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.action-item:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.075);
+}
+
+.action-item input[type="checkbox"]:checked ~ label {
+    font-weight: 500;
+}
+
+.trigger-option {
+    transition: all 0.2s ease;
+}
+
+.trigger-option input[type="radio"]:checked {
+    background-color: #0d6efd;
+}
+
+.workflow-form {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.step-content {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('workflow-form');
+    const nextBtns = document.querySelectorAll('.step-next-btn');
+    const prevBtns = document.querySelectorAll('.step-prev-btn');
+    const triggerRadios = document.querySelectorAll('.trigger-radio');
+    const actionCheckboxes = document.querySelectorAll('.action-checkbox');
+    let currentStep = 1;
+
+    // Initialize
+    updateStepIndicators();
+
+    // Step navigation
+    nextBtns.forEach(btn => {
+        btn.addEventListener('click', () => goToStep(currentStep + 1));
+    });
+
+    prevBtns.forEach(btn => {
+        btn.addEventListener('click', () => goToStep(currentStep - 1));
+    });
+
+    // Action selection counter
+    actionCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateActionCount);
+    });
+
+    // Trigger configuration visibility
+    triggerRadios.forEach(radio => {
+        radio.addEventListener('change', updateTriggerConfig);
+    });
+
+    // Form submission
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        console.log('Workflow created:', Object.fromEntries(formData));
+        alert('ワークフローが作成されました!');
+        // Reset form or redirect
+        form.reset();
+        goToStep(1);
+    });
+
+    function goToStep(step) {
+        if (step < 1 || step > 3) return;
+
+        // Validate current step before moving
+        if (!validateStep(currentStep)) {
+            return;
+        }
+
+        currentStep = step;
+        updateStepDisplay();
+        updateStepIndicators();
+        updateProgressBar();
+        document.querySelector(`#step-${step}`).scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function updateStepDisplay() {
+        document.querySelectorAll('.step-content').forEach(el => {
+            el.classList.add('d-none');
+        });
+        document.getElementById(`step-${currentStep}`).classList.remove('d-none');
+    }
+
+    function updateStepIndicators() {
+        for (let i = 1; i <= 3; i++) {
+            const indicator = document.getElementById(`step-indicator-${i}`);
+            indicator.classList.remove('step-active', 'step-completed');
+            if (i < currentStep) {
+                indicator.classList.add('step-completed');
+            } else if (i === currentStep) {
+                indicator.classList.add('step-active');
+            }
+        }
+    }
+
+    function updateProgressBar() {
+        const progressBar = document.getElementById('progress-bar');
+        const percentage = (currentStep / 3) * 100;
+        progressBar.style.width = percentage + '%';
+    }
+
+    function updateActionCount() {
+        const count = document.querySelectorAll('.action-checkbox:checked').length;
+        document.getElementById('action-count').textContent = count;
+    }
+
+    function updateTriggerConfig() {
+        document.querySelectorAll('.trigger-config').forEach(el => {
+            el.classList.add('d-none');
+        });
+        const selectedTrigger = document.querySelector('.trigger-radio:checked');
+        if (selectedTrigger) {
+            const configId = `trigger-${selectedTrigger.value}-config`;
+            const configEl = document.getElementById(configId);
+            if (configEl) {
+                configEl.classList.remove('d-none');
+            }
+        }
+    }
+
+    function validateStep(step) {
+        if (step === 1) {
+            const name = document.getElementById('workflow-name').value;
+            const category = document.getElementById('workflow-category').value;
+            const priority = document.getElementById('workflow-priority').value;
+            if (!name || !category || !priority) {
+                alert('必須項目を入力してください');
+                return false;
+            }
+        } else if (step === 2) {
+            const selectedActions = document.querySelectorAll('.action-checkbox:checked').length;
+            if (selectedActions === 0) {
+                alert('少なくとも1つのアクションを選択してください');
+                return false;
+            }
+        }
+        return true;
+    }
+});
+</script>
+{% endblock %}

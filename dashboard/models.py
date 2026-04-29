@@ -633,7 +633,7 @@ class SuggestResponse(BaseModel):
 
 class DetailedSetupRequest(BaseModel):
     onboarding_id: str
-    template_id: int
+    template_id: Optional[int] = None
     dept_name: str
     manager_name: str
     members_count: int
@@ -661,14 +661,15 @@ class InitialTask(BaseModel):
     task_id: str
     title: str
     description: str
-    budget: int
+    budget: float
     deadline: str
     assigned_to: str
 
 
 class ExecuteRequest(BaseModel):
     onboarding_id: str
-    dept_id: int
+    template_id: Optional[int] = None
+    dept_name: Optional[str] = None
 
 
 class ExecuteResponse(BaseModel):
@@ -1333,3 +1334,121 @@ class CrossDeptTaskRequestListResponse(BaseModel):
     """部署間タスク依頼一覧レスポンス"""
     requests: List[CrossDeptTaskRequestResponse]
     total: int
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Agent Messaging & Notification Models (#2547)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class TaskCompletionEventExecutor(BaseModel):
+    """タスク完了イベント実行者情報"""
+    user_id: str
+    username: str
+    role: str
+
+
+class TaskCompletionEventMetadata(BaseModel):
+    """タスク完了イベントメタデータ"""
+    tag_ids: Optional[List[str]] = None
+    category: Optional[str] = None
+    phase: Optional[str] = None
+
+
+class TaskCompletionEvent(BaseModel):
+    """タスク完了イベント"""
+    type: str = "task.completed"
+    timestamp: str
+    task_id: int
+    task_title: Optional[str] = None
+    workflow_id: str
+    team_name: str
+    executor: TaskCompletionEventExecutor
+    status: str = "completed"
+    priority: int = 3
+    completion_time_ms: Optional[int] = None
+    metadata: TaskCompletionEventMetadata
+
+
+class WebhookRetryPolicy(BaseModel):
+    """Webhook リトライポリシー"""
+    max_retries: int = 3
+    retry_backoff_ms: int = 1000
+    timeout_ms: int = 5000
+
+
+class WebhookSubscriptionCreate(BaseModel):
+    """Webhook 登録リクエスト"""
+    name: str
+    event_type: str = "task.completed"
+    target_url: str
+    auth_type: str
+    secret_key: str
+    is_active: bool = True
+    retry_policy: Optional[WebhookRetryPolicy] = None
+    headers: Optional[dict] = None
+
+
+class WebhookSubscriptionResponse(BaseModel):
+    """Webhook 登録レスポンス"""
+    webhook_id: str
+    name: str
+    event_type: str
+    target_url: str
+    is_active: bool
+    created_at: str
+    last_triggered_at: Optional[str] = None
+    trigger_count: int = 0
+
+
+class WebhookListResponse(BaseModel):
+    """Webhook 一覧レスポンス"""
+    webhooks: List[WebhookSubscriptionResponse]
+    total: int
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Subscription Management Models (#2548)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class SubscriptionPlanFeatures(BaseModel):
+    """プランの機能フラグ"""
+    max_agents: int
+    api_calls_per_month: int
+    storage_gb: int
+    email_support: bool
+    priority_support: bool = False
+
+
+class SubscriptionPlan(BaseModel):
+    """プランマスタ情報"""
+    id: str
+    name: str
+    description: Optional[str] = None
+    price_jpy: int
+    features: SubscriptionPlanFeatures
+
+
+class SubscriptionResponse(BaseModel):
+    """サブスクリプション情報"""
+    id: str
+    user_id: str
+    plan: str
+    status: str
+    current_period_start: datetime
+    current_period_end: datetime
+    canceled_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SubscriptionPlanChangeRequest(BaseModel):
+    """プラン変更リクエスト"""
+    plan: str
+
+
+class SubscriptionPlanListResponse(BaseModel):
+    """プランリスト レスポンス"""
+    plans: List[SubscriptionPlan]

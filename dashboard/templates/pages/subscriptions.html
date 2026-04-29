@@ -1,0 +1,389 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}プラン管理 - THEBRANCH{% endblock %}
+
+{% block content %}
+<div class="py-5">
+    <div class="mb-5">
+        <h1 class="mb-2">サブスクリプションプラン</h1>
+        <p class="text-muted">あなたのプランを選択して、THEBRANCH の機能を最大活用しましょう。</p>
+    </div>
+
+    <!-- Current Plan Display -->
+    <div class="alert alert-info mb-4" id="currentPlanAlert" style="display: none;">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>現在のプラン:</strong> <span id="currentPlanName"></span>
+        <span id="currentPlanPrice"></span>
+    </div>
+
+    <!-- Plan Comparison Cards -->
+    <div class="row g-4" id="plansContainer">
+        <!-- Plans will be loaded dynamically -->
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal fade" id="confirmPlanChangeModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">プラン変更確認</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>以下のプランに変更します:</p>
+                    <p class="fs-5 fw-bold mb-3" id="confirmNewPlan"></p>
+                    <div id="confirmDetails"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" id="confirmButton">変更を確定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .plan-card {
+        border: 2px solid #e9ecef;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+
+    .plan-card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        border-color: #0d6efd;
+    }
+
+    .plan-card.current {
+        border-color: #198754;
+        background-color: #f0f8f5;
+    }
+
+    .plan-badge {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background-color: #198754;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: bold;
+    }
+
+    .plan-header {
+        padding-top: 30px;
+    }
+
+    .plan-price {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #0d6efd;
+    }
+
+    .plan-price-period {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+
+    .features-list {
+        list-style: none;
+        padding: 0;
+        margin: 20px 0;
+    }
+
+    .features-list li {
+        padding: 10px 0;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .features-list li:last-child {
+        border-bottom: none;
+    }
+
+    .feature-check {
+        color: #198754;
+        font-weight: bold;
+        width: 20px;
+        text-align: center;
+    }
+
+    .feature-cross {
+        color: #dc3545;
+        font-weight: bold;
+        width: 20px;
+        text-align: center;
+    }
+
+    .feature-value {
+        color: #495057;
+    }
+
+    .plan-button {
+        width: 100%;
+        padding: 10px;
+        font-weight: 500;
+    }
+
+    .loading-spinner {
+        display: none;
+        text-align: center;
+        padding: 20px;
+    }
+
+    .loading-spinner.active {
+        display: block;
+    }
+
+    .error-alert {
+        display: none;
+    }
+
+    .error-alert.active {
+        display: block;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        // Load plans and current subscription
+        const [plansResponse, currentResponse] = await Promise.all([
+            fetch('/api/subscriptions/plans'),
+            fetch('/api/subscriptions/current')
+        ]);
+
+        if (!plansResponse.ok) throw new Error('プランの取得に失敗しました');
+
+        const plansData = await plansResponse.json();
+        const plans = plansData.plans;
+
+        let currentPlan = null;
+        if (currentResponse.ok) {
+            const currentData = await currentResponse.json();
+            currentPlan = currentData.plan;
+            displayCurrentPlan(currentData);
+        }
+
+        // Render plan cards
+        renderPlans(plans, currentPlan);
+    } catch (error) {
+        console.error('Error loading data:', error);
+        showError('プランの読み込みに失敗しました。ページを再読み込みしてください。');
+    }
+});
+
+function displayCurrentPlan(subscription) {
+    const alert = document.getElementById('currentPlanAlert');
+    const planName = document.getElementById('currentPlanName');
+    const planPrice = document.getElementById('currentPlanPrice');
+
+    const planLabels = {
+        'free': 'Free',
+        'pro': 'Pro',
+        'enterprise': 'Enterprise'
+    };
+
+    const planPrices = {
+        'free': '無料',
+        'starter': '¥2,980/月',
+        'pro': '¥9,900/月',
+        'enterprise': 'カスタム'
+    };
+
+    planName.textContent = planLabels[subscription.plan] || subscription.plan;
+    planPrice.textContent = planPrices[subscription.plan] || '';
+    alert.style.display = 'block';
+}
+
+function renderPlans(plans, currentPlan) {
+    const container = document.getElementById('plansContainer');
+    container.innerHTML = '';
+
+    plans.forEach(plan => {
+        const isCurrentPlan = plan.id === currentPlan;
+        const planCard = createPlanCard(plan, isCurrentPlan);
+        container.appendChild(planCard);
+    });
+}
+
+function createPlanCard(plan, isCurrent) {
+    const card = document.createElement('div');
+    card.className = `col-md-4 mb-4`;
+
+    const features = plan.features;
+    const featuresList = [
+        { label: 'エージェント数', value: features.max_agents, display: features.max_agents === 9999 ? '無制限' : features.max_agents },
+        { label: 'API呼び出し/月', value: features.api_calls_per_month, display: features.api_calls_per_month === 9999999 ? '無制限' : features.api_calls_per_month.toLocaleString() },
+        { label: 'ストレージ', value: features.storage_gb, display: features.storage_gb === 10000 ? '1TB' : features.storage_gb + 'GB' },
+        { label: 'メールサポート', value: features.email_support },
+        { label: '優先サポート', value: features.priority_support }
+    ];
+
+    const priceDisplay = plan.price_jpy === 0 ? '無料' : `¥${plan.price_jpy.toLocaleString()}/月`;
+
+    card.innerHTML = `
+        <div class="card plan-card ${isCurrent ? 'current' : ''}">
+            ${isCurrent ? '<div class="plan-badge">現在のプラン</div>' : ''}
+            <div class="card-body">
+                <div class="plan-header">
+                    <h5 class="card-title">${plan.name}</h5>
+                    <div class="plan-price">${plan.price_jpy === 0 ? '¥0' : `¥${plan.price_jpy.toLocaleString()}`}</div>
+                    <div class="plan-price-period">${plan.price_jpy === 0 ? '' : '/月'}</div>
+                    ${plan.description ? `<p class="text-muted small mt-2">${plan.description}</p>` : ''}
+                </div>
+
+                <ul class="features-list">
+                    ${featuresList.map(feature => {
+                        if (typeof feature.value === 'boolean') {
+                            return `
+                                <li>
+                                    <span class="${feature.value ? 'feature-check' : 'feature-cross'}">
+                                        ${feature.value ? '<i class="fas fa-check"></i>' : '<i class="fas fa-times"></i>'}
+                                    </span>
+                                    <span>${feature.label}</span>
+                                </li>
+                            `;
+                        } else {
+                            return `
+                                <li>
+                                    <span class="feature-check"><i class="fas fa-check"></i></span>
+                                    <span class="feature-value">${feature.label}: ${feature.display}</span>
+                                </li>
+                            `;
+                        }
+                    }).join('')}
+                </ul>
+
+                <button
+                    class="btn plan-button ${getPlanButtonClass(plan.id, isCurrent)}"
+                    ${isCurrent ? 'disabled' : ''}
+                    onclick="initiatePlanChange('${plan.id}', '${plan.name}')">
+                    ${getPlanButtonText(plan.id, isCurrent)}
+                </button>
+            </div>
+        </div>
+    `;
+
+    return card;
+}
+
+function getPlanButtonClass(planId, isCurrent) {
+    if (isCurrent) return 'btn-secondary';
+    if (planId === 'enterprise') return 'btn-outline-primary';
+    return 'btn-primary';
+}
+
+function getPlanButtonText(planId, isCurrent) {
+    if (isCurrent) return '現在のプラン';
+    if (planId === 'enterprise') return 'お問い合わせ';
+    return 'プランを選択';
+}
+
+function initiatePlanChange(planId, planName) {
+    if (planId === 'enterprise') {
+        window.location.href = 'mailto:support@thebranch.io?subject=Enterpriseプランについてのお問い合わせ';
+        return;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('confirmPlanChangeModal'));
+    document.getElementById('confirmNewPlan').textContent = planName;
+
+    const confirmDetails = document.getElementById('confirmDetails');
+    confirmDetails.innerHTML = `
+        <div class="alert alert-warning">
+            <small>
+                変更を確定するとプランが即座に切り替わります。<br>
+                課金は次の月額請求日から適用されます。
+            </small>
+        </div>
+    `;
+
+    const confirmButton = document.getElementById('confirmButton');
+    confirmButton.onclick = () => changePlan(planId, modal);
+
+    modal.show();
+}
+
+async function changePlan(newPlanId, modal) {
+    const confirmButton = document.getElementById('confirmButton');
+    const originalText = confirmButton.textContent;
+    confirmButton.disabled = true;
+    confirmButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>処理中...';
+
+    try {
+        const response = await fetch('/api/subscriptions/plan', {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ plan: newPlanId })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            if (response.status === 400) {
+                showError(`プラン変更エラー: ${data.detail}`);
+            } else if (response.status === 401) {
+                showError('認証エラー: ログインしてください');
+            } else {
+                showError(`エラー: ${data.detail || 'プラン変更に失敗しました'}`);
+            }
+            return;
+        }
+
+        // Success
+        modal.hide();
+        showSuccess(`${data.plan} プランに変更しました！`);
+
+        // Reload page after 2 seconds
+        setTimeout(() => {
+            location.reload();
+        }, 1500);
+    } catch (error) {
+        console.error('Error:', error);
+        showError('プラン変更中にエラーが発生しました。');
+    } finally {
+        confirmButton.disabled = false;
+        confirmButton.textContent = originalText;
+    }
+}
+
+function showError(message) {
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-danger alert-dismissible fade show';
+    alert.innerHTML = `
+        <i class="fas fa-exclamation-circle me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    const container = document.querySelector('main');
+    container.insertBefore(alert, container.firstChild);
+
+    setTimeout(() => alert.remove(), 5000);
+}
+
+function showSuccess(message) {
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-success alert-dismissible fade show';
+    alert.innerHTML = `
+        <i class="fas fa-check-circle me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    const container = document.querySelector('main');
+    container.insertBefore(alert, container.firstChild);
+
+    setTimeout(() => alert.remove(), 5000);
+}
+</script>
+
+{% endblock %}
